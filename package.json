@@ -1,0 +1,13 @@
+{
+  "name": "priority-chat",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Priority Chat — a branded read-only chat app over Priority ERP, powered by an MCP server.",
+  "scripts": {
+    "dev": "pnpm --filter @priority-chat/web dev",
+    "build": "pnpm --filter @priority-chat/web build",
+    "start": "pnpm --filter @priority-chat/web start",
+    "lint": "pnpm --filter @priority-chat/web lint"
+  },
+  "packageManager": "pnpm@10.33.0"
+}

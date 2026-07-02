@@ -1,6 +1,6 @@
 "use client";
 
-import { Moon, Sun, Languages, PanelLeft, Sparkles } from "lucide-react";
+import { Moon, Sun, Languages, PanelLeft, Sparkles, LogOut } from "lucide-react";
 
 export function TopBar({
   dark,
@@ -8,13 +8,18 @@ export function TopBar({
   rtl,
   onToggleRtl,
   onToggleSidebar,
+  modeLabel,
+  onDisconnect,
 }: {
   dark: boolean;
   onToggleDark: () => void;
   rtl: boolean;
   onToggleRtl: () => void;
   onToggleSidebar: () => void;
+  modeLabel: string;
+  onDisconnect?: () => void;
 }) {
+  const live = modeLabel.startsWith("Live");
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[color:var(--border)] bg-[color:var(--surface)] px-3">
       <div className="flex items-center gap-2">
@@ -39,9 +44,24 @@ export function TopBar({
       </div>
 
       <div className="flex items-center gap-1.5">
-        <span className="hidden rounded-full border border-[color:var(--border)] bg-[color:var(--surface-2)] px-2.5 py-1 text-xs text-[color:var(--muted)] sm:inline">
-          Claude · Sonnet
+        <span className="hidden items-center gap-1.5 rounded-full border border-[color:var(--border)] bg-[color:var(--surface-2)] px-2.5 py-1 text-xs text-[color:var(--muted)] sm:inline-flex">
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              live ? "bg-[color:var(--pos)]" : "bg-[color:var(--faint)]"
+            }`}
+          />
+          {modeLabel}
         </span>
+        {onDisconnect && (
+          <button
+            onClick={onDisconnect}
+            aria-label="Disconnect"
+            title="Disconnect from Priority"
+            className="grid h-8 w-8 place-items-center rounded-lg text-[color:var(--muted)] hover:bg-[color:var(--surface-2)]"
+          >
+            <LogOut size={16} className="rtl:rotate-180" />
+          </button>
+        )}
         <button
           onClick={onToggleRtl}
           aria-label="Toggle direction"

@@ -1,76 +1,109 @@
 # Priority Chat
 
-A branded, **read-only** chat assistant for the **Priority ERP** system, powered by an
-**MCP server**. Business users (sales, finance, warehouse) ask questions in plain language
-— "show open sales orders for customer 10001 this month" — and get clean, readable results
-(tables, record cards, KPI tiles, charts), each with the exact Priority form it came from.
+A branded, **read-only** chat assistant for the **Priority ERP** system. Business users
+(sales, finance, warehouse) ask questions in plain language — "show open sales orders for
+customer 10001" — and get clean, readable results (tables, record cards, KPI tiles, charts),
+each with the exact Priority form it came from.
 
-> **Status: Phase A — visual prototype.** The GUI is fully working against realistic
-> **mocked** Priority data so the experience can be reviewed before wiring the live API.
-> No LLM and no network calls yet. See the roadmap below.
+> **Status:** runs in two modes.
+> - **Demo mode** (default, nothing to configure): the full UX against realistic **mock** data.
+> - **Live mode**: connects to a **real Priority** environment over its **OData REST API**,
+>   authenticated via **OAuth2 (PKCE)**, running a curated set of **read-only** queries.
 
-## Why MCP
+## Run it (demo mode)
 
-The core is a reusable **MCP server** that exposes Priority's OData REST API as read-only
-tools. The chat app is just one consumer of it — the same tools also work in Claude Desktop
-and Claude Code.
+```bash
+# from the repo root
+pnpm install
+pnpm dev            # then open http://localhost:3000
+```
+
+On Windows without pnpm, use npm inside the app folder:
+
+```cmd
+cd apps\web
+npm install
+npm run dev
+```
+
+Try the starter prompts, or type `show customers`, `open orders for customer 10001`,
+`A/R aging`, `parts below reorder point`, `sales trend last 6 months`. Toggle dark mode and
+RTL/Hebrew from the header.
+
+## Connect to real Priority (live mode)
+
+1. **Copy the env template** and fill it in:
+   ```bash
+   cp apps/web/.env.example apps/web/.env.local
+   ```
+   `.env.local` is gitignored — your credentials never leave your machine and are never sent
+   to the browser.
+
+2. **Set your OData service root** (`PRIORITY_ODATA_URL`). Format:
+   `https://{domain}/odata/Priority/{tabula.ini}/{company}`.
+
+3. **Choose how to authenticate** (in `.env.local`):
+   - **OAuth2 (recommended):** set `PRIORITY_OIDC_ISSUER` (your Priority domain),
+     `PRIORITY_OAUTH_CLIENT_ID`, and `SESSION_SECRET`. In Priority, register an OAuth client
+     and add the redirect URI **`http://localhost:3000/api/auth/callback`**. The app reads the
+     authorize/token endpoints from `{issuer}/accounts/.well-known/openid-configuration`.
+   - **Quick test:** paste a valid bearer token into `PRIORITY_ACCESS_TOKEN` to skip the login
+     flow and see live data immediately.
+
+4. **Restart** (`pnpm dev`). The app now shows a **Connect to Priority** screen (OAuth) or goes
+   straight to live data (static token). Sign in, then ask your questions.
+
+> **Field names:** Priority forms can be customised per site. The query definitions in
+> `apps/web/lib/priority/queries.ts` use sensible default field names and fall back to whatever
+> fields your data actually returns — tune them to your environment's `$metadata` as needed.
+
+## Architecture
 
 ```
-GUI (Next.js) ──▶ chat backend (Claude agent loop) ──▶ MCP server ──▶ Priority OData API
+Browser (chat UI, widgets)
+    │  POST /api/query          (never sees credentials)
+    ▼
+Next.js route handlers (server, Node runtime)
+    ├─ /api/auth/*   OAuth2 PKCE login + encrypted httpOnly session cookie
+    └─ /api/query    predefined read-only query → OData → rendered answer
+    ▼
+lib/priority/  ── read-only OData connector (GET-only, $top-capped)
+    ▼
+Priority ERP (OData REST API)
 ```
+
+Key modules:
+- `lib/priority/client.ts` — read-only OData client (issues **GET only**, caps `$top`).
+- `lib/priority/oauth.ts` + `session.ts` — discovery-based OAuth2 PKCE; tokens stored in an
+  AES-256-GCM encrypted, httpOnly cookie (server-side only).
+- `lib/priority/queries.ts` — the catalogue of predefined queries + defensive widget mappers.
+- `lib/types.ts` — the result-shape contract shared by the API and the UI widgets.
+- `components/widgets/` — the "generative UI" (table, record card, KPI tiles, chart).
+
+## Security
+
+- **Read-only by design:** the connector only ever issues HTTP GET; there is no create/update/
+  delete path. Every query is `$top`-capped.
+- **Credentials stay server-side:** Priority tokens live in an encrypted httpOnly cookie or in
+  `.env.local` — never in browser JavaScript, never committed.
+- Live mode respects the signed-in user's own Priority permissions.
 
 ## Repository layout
 
 ```
-apps/web              → Next.js GUI + (later) chat backend      ← this is what runs today
-packages/mcp-server   → TS MCP server, Priority read-only tools  (Phase B)
-packages/priority     → OData connector: auth, client, mapping   (Phase B)
-packages/shared       → result-shape types shared by widgets     (graduates from apps/web/lib/types.ts)
+apps/web/
+  app/                Next.js app + API route handlers
+  components/         chat UI, shell, generative widgets
+  lib/
+    priority/         OData connector, OAuth2, session, query catalogue (server-only)
+    types.ts          shared result-shape contract
+    mock.ts           demo-mode data + engine
 ```
-
-## Run the prototype
-
-```bash
-pnpm install
-pnpm dev
-# open http://localhost:3000
-```
-
-Try the suggested starter questions, or ask things like:
-
-- `A/R aging` — KPI tiles for accounts-receivable
-- `open orders for customer 10001` — sortable data table
-- `customer 10001 overview` — record card
-- `parts below reorder point` — inventory table
-- `sales trend last 6 months` — bar chart
-- `top customers this quarter` — bar chart
-
-Toggle **dark mode** and **RTL/Hebrew** from the top-right of the header.
-
-## What's in the prototype
-
-- **Generative result widgets** — the assistant returns structured data and the UI picks the
-  right widget (`components/widgets/`), driven by a shared contract in `apps/web/lib/types.ts`.
-- **Source chips** — every answer shows the Priority form + timestamp; hover for the OData query.
-- **Simulated streaming** — tool-call indicator, then word-by-word prose, then the widget.
-- **Themeable** — all colors are CSS variables in `app/globals.css`; swap the accent to rebrand.
-- **RTL / Hebrew** first-class for the Israeli Priority market.
-
-The mock "assistant" lives in `apps/web/lib/mock.ts` and is deliberately isolated so Phase C
-can swap it for a real Claude + MCP loop without touching the rendering layer.
 
 ## Roadmap
 
-- **Phase A ✅** — visual prototype (this).
-- **Phase B** — TS MCP server + Priority OData connector (PAT auth) with read-only tools
-  (`query_orders`, `query_customers`, `query_invoices`, `query_inventory`, capped generic
-  `odata_query`, `describe_entities`); test against the Priority sandbox (`usdemo`).
-- **Phase C** — wire the chat backend to the MCP server via a Claude agent loop; replace mocks
-  with live data.
-- **Phase D** — saved queries, entity explorer wired to `$metadata`, per-user Priority auth,
-  Hebrew field labels from metadata, polish.
-
-## Security (v1)
-
-Read-only by design: MCP tools are GET-only, the generic query rejects non-read verbs, `$top`
-is capped, and Priority credentials (PAT) stay server-side — never in the browser.
+- ✅ Visual prototype (demo mode).
+- ✅ Live read-only mode: OData connector + OAuth2 PKCE + predefined query catalogue.
+- Extend the query catalogue (aggregations for aging/trends, purchase orders, suppliers).
+- Optional AI layer: drop in a Claude agent loop for free-text questions over any entity.
+- Package the connector as a standalone **MCP server** for use in Claude Desktop / Claude Code.

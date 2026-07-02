@@ -14,22 +14,29 @@ import type { ODataQuery } from "./client";
  * preferred field is absent they fall back to whatever fields the row actually
  * has, so you still see real data. Tune the entity/field names here to match
  * your environment's $metadata.
+ *
+ * Bilingual: every query carries Hebrew keywords and labels, and the summary
+ * text is generated in the language of the question (ctx.lang).
  */
 
 type Row = Record<string, unknown>;
+export type Lang = "en" | "he";
 
 export interface QueryContext {
-  /** Optional Priority form/label overrides. */
   now: string;
+  lang: Lang;
 }
 
 export interface QueryDef {
   id: string;
   /** Human label (used for the source chip + entity explorer). */
   label: string;
+  labelHe: string;
+  /** Short description of what the query does — also shown to the AI resolver. */
+  description: string;
   /** Priority OData entity/form name. */
   form: string;
-  /** Keywords used to match free text to this query. */
+  /** Keywords (English + Hebrew) used to match free text to this query. */
   keywords: string[];
   /** Build the OData request. `arg` is an optional extracted parameter (e.g. a customer no.). */
   build: (arg?: string) => ODataQuery;
@@ -55,7 +62,6 @@ function resolveColumns(rows: Row[], preferred?: TableColumn[]): TableColumn[] {
   const present = new Set(Object.keys(rows[0]));
   const chosen = (preferred ?? []).filter((c) => present.has(c.key));
   if (chosen.length > 0) return chosen;
-  // Fallback: first up-to-6 primitive fields.
   return Object.keys(rows[0])
     .filter((k) => {
       const t = typeof rows[0][k];
@@ -80,16 +86,18 @@ function tableAnswer(
   summary: string
 ): AssistantAnswer {
   const cols = resolveColumns(rows, def.columns);
+  const label = ctx.lang === "he" ? def.labelHe : def.label;
+  const rowsWord = ctx.lang === "he" ? "שורות" : "rows";
   return {
     text: summary,
     widget: {
       kind: "table",
-      title: def.label,
+      title: label,
       columns: cols,
       rows: toTableRows(rows, cols),
-      footnote: `${rows.length} row${rows.length === 1 ? "" : "s"}`,
+      footnote: `${rows.length} ${rowsWord}`,
     },
-    source: { form: def.form, label: def.label, asOf: ctx.now },
+    source: { form: def.form, label, asOf: ctx.now },
   };
 }
 
@@ -99,14 +107,35 @@ function pickFields(row: Row, prefer: string[]): RecordField[] {
   return use.map((k) => ({ label: k, value: fmt(row[k]) }));
 }
 
+/** Bilingual "found N X" summary. */
+function foundSummary(
+  ctx: QueryContext,
+  n: number,
+  en: { singular: string; plural: string; suffix?: string },
+  he: { singular: string; plural: string; suffix?: string }
+): string {
+  if (ctx.lang === "he") {
+    if (n === 0) return `לא נמצאו ${he.plural}${he.suffix ?? ""}.`;
+    if (n === 1) return `נמצאה ${he.singular} אחת${he.suffix ?? ""}.`;
+    return `נמצאו **${n}** ${he.plural}${he.suffix ?? ""}.`;
+  }
+  if (n === 0) return `No ${en.plural} matched${en.suffix ?? ""}.`;
+  return `Found **${n}** ${n === 1 ? en.singular : en.plural}${en.suffix ?? ""}.`;
+}
+
 // ---- query catalogue --------------------------------------------------------
 
 export const QUERIES: QueryDef[] = [
   {
     id: "customers",
     label: "Customers",
+    labelHe: "לקוחות",
+    description: "List customers, optionally filtered by customer number.",
     form: "CUSTOMERS",
-    keywords: ["customer", "customers", "client", "accounts"],
+    keywords: [
+      "customer", "customers", "client", "accounts",
+      "לקוח", "לקוחות", "כרטיס לקוח",
+    ],
     columns: [
       { key: "CUSTNAME", label: "Customer" },
       { key: "CUSTDES", label: "Name" },
@@ -123,30 +152,48 @@ export const QUERIES: QueryDef[] = [
         QUERIES[0],
         rows,
         ctx,
-        rows.length
-          ? `Found **${rows.length}** customer${rows.length === 1 ? "" : "s"}.`
-          : "No customers matched."
+        foundSummary(ctx, rows.length,
+          { singular: "customer", plural: "customers" },
+          { singular: "לקוח", plural: "לקוחות" })
       ),
   },
   {
     id: "customer_detail",
     label: "Customer",
+    labelHe: "כרטיס לקוח",
+    description:
+      "Show one customer's details (balance, terms, contact) by customer number. Requires a customer number argument.",
     form: "CUSTOMERS",
-    keywords: ["customer detail", "overview", "profile"],
+    keywords: [
+      "customer detail", "overview", "profile",
+      "פרטי לקוח", "כרטיס", "יתרת לקוח",
+    ],
     build: (arg) => ({ entity: `CUSTOMERS('${arg ?? ""}')` }),
     map: (rows, ctx, arg) => {
       const row = rows[0];
       if (!row) {
-        return { text: `No customer found for **${arg}**.` };
+        return {
+          text:
+            ctx.lang === "he"
+              ? `לא נמצא לקוח **${arg}**.`
+              : `No customer found for **${arg}**.`,
+        };
       }
       const title =
         (row["CUSTDES"] as string) || (row["CUSTNAME"] as string) || "Customer";
       return {
-        text: `Overview of customer **${arg}**.`,
+        text:
+          ctx.lang === "he"
+            ? `פרטי לקוח **${arg}**.`
+            : `Overview of customer **${arg}**.`,
         widget: {
           kind: "record",
           title,
-          subtitle: row["CUSTNAME"] ? `Customer ${row["CUSTNAME"]}` : undefined,
+          subtitle: row["CUSTNAME"]
+            ? ctx.lang === "he"
+              ? `לקוח ${row["CUSTNAME"]}`
+              : `Customer ${row["CUSTNAME"]}`
+            : undefined,
           fields: pickFields(row, [
             "CUSTNAME",
             "CUSTDES",
@@ -158,15 +205,25 @@ export const QUERIES: QueryDef[] = [
             "STATE",
           ]),
         },
-        source: { form: "CUSTOMERS", label: "Customer", asOf: ctx.now },
+        source: {
+          form: "CUSTOMERS",
+          label: ctx.lang === "he" ? "כרטיס לקוח" : "Customer",
+          asOf: ctx.now,
+        },
       };
     },
   },
   {
     id: "orders",
     label: "Sales Orders",
+    labelHe: "הזמנות לקוח",
+    description:
+      "List sales orders, newest first. Optional argument: customer number to filter by.",
     form: "ORDERS",
-    keywords: ["order", "orders", "sales order", "so"],
+    keywords: [
+      "order", "orders", "sales order", "so",
+      "הזמנה", "הזמנות", "הזמנות לקוח", "הזמנות פתוחות",
+    ],
     columns: [
       { key: "ORDNAME", label: "Order" },
       { key: "CUSTNAME", label: "Customer" },
@@ -185,18 +242,22 @@ export const QUERIES: QueryDef[] = [
         QUERIES[2],
         rows,
         ctx,
-        rows.length
-          ? `Found **${rows.length}** sales order${rows.length === 1 ? "" : "s"}${
-              arg ? ` for customer ${arg}` : ""
-            }.`
-          : `No sales orders found${arg ? ` for customer ${arg}` : ""}.`
+        foundSummary(ctx, rows.length,
+          { singular: "sales order", plural: "sales orders", suffix: arg ? ` for customer ${arg}` : "" },
+          { singular: "הזמנה", plural: "הזמנות", suffix: arg ? ` ללקוח ${arg}` : "" })
       ),
   },
   {
     id: "invoices",
     label: "A/R Invoices",
+    labelHe: "חשבוניות מס",
+    description:
+      "List accounts-receivable invoices, newest first. Optional argument: customer number.",
     form: "AINVOICES",
-    keywords: ["invoice", "invoices", "receivable", "a/r", "ar", "billing"],
+    keywords: [
+      "invoice", "invoices", "receivable", "a/r", "ar", "billing",
+      "חשבונית", "חשבוניות", "חשבוניות מס", "חוב", "גבייה",
+    ],
     columns: [
       { key: "IVNUM", label: "Invoice" },
       { key: "CUSTNAME", label: "Customer" },
@@ -214,16 +275,22 @@ export const QUERIES: QueryDef[] = [
         QUERIES[3],
         rows,
         ctx,
-        rows.length
-          ? `Found **${rows.length}** invoice${rows.length === 1 ? "" : "s"}.`
-          : "No invoices matched."
+        foundSummary(ctx, rows.length,
+          { singular: "invoice", plural: "invoices" },
+          { singular: "חשבונית", plural: "חשבוניות" })
       ),
   },
   {
     id: "parts",
     label: "Parts / Inventory",
+    labelHe: "פריטים / מלאי",
+    description:
+      "List parts from the part catalogue. Optional argument: part number.",
     form: "LOGPART",
-    keywords: ["part", "parts", "inventory", "stock", "item", "sku"],
+    keywords: [
+      "part", "parts", "inventory", "stock", "item", "sku",
+      "פריט", "פריטים", "מלאי", "מקט", 'מק"ט', "קטלוג",
+    ],
     columns: [
       { key: "PARTNAME", label: "Part" },
       { key: "PARTDES", label: "Description" },
@@ -240,22 +307,33 @@ export const QUERIES: QueryDef[] = [
         QUERIES[4],
         rows,
         ctx,
-        rows.length
-          ? `Found **${rows.length}** part${rows.length === 1 ? "" : "s"}.`
-          : "No parts matched."
+        foundSummary(ctx, rows.length,
+          { singular: "part", plural: "parts" },
+          { singular: "פריט", plural: "פריטים" })
       ),
   },
 ];
 
 export function listQueries() {
-  return QUERIES.map((q) => ({ id: q.id, label: q.label, form: q.form }));
+  return QUERIES.map((q) => ({
+    id: q.id,
+    label: q.label,
+    labelHe: q.labelHe,
+    description: q.description,
+    form: q.form,
+  }));
 }
 
 export function getQuery(id: string): QueryDef | undefined {
   return QUERIES.find((q) => q.id === id);
 }
 
-/** Map free text → a query id + optional argument (e.g. a customer/part number). */
+/** True when the text contains Hebrew characters. */
+export function detectLang(text: string): Lang {
+  return /[֐-׿]/.test(text) ? "he" : "en";
+}
+
+/** Map free text → a query id + optional argument (keyword fallback, EN + HE). */
 export function resolveIntent(
   text: string
 ): { id: string; arg?: string } | null {
@@ -263,10 +341,14 @@ export function resolveIntent(
   const num = text.match(/\b\d{3,}\b/)?.[0];
   const has = (...ks: string[]) => ks.some((k) => q.includes(k));
 
-  if (has("customer", "client") && num) return { id: "customer_detail", arg: num };
-  if (has("order", "sales order")) return { id: "orders", arg: num };
-  if (has("invoice", "receivable", "a/r", "ar ", "billing")) return { id: "invoices", arg: num };
-  if (has("part", "inventory", "stock", "item", "sku")) return { id: "parts", arg: num };
-  if (has("customer", "client", "accounts")) return { id: "customers", arg: undefined };
+  if (has("customer", "client", "לקוח") && num)
+    return { id: "customer_detail", arg: num };
+  if (has("order", "sales order", "הזמנ")) return { id: "orders", arg: num };
+  if (has("invoice", "receivable", "a/r", "ar ", "billing", "חשבונית", "חשבוניות", "גביי", "חוב"))
+    return { id: "invoices", arg: num };
+  if (has("part", "inventory", "stock", "item", "sku", "פריט", "מלאי", "מקט", 'מק"ט', "קטלוג"))
+    return { id: "parts", arg: num };
+  if (has("customer", "client", "accounts", "לקוח"))
+    return { id: "customers", arg: undefined };
   return null;
 }

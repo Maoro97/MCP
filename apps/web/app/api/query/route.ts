@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getConfig, isConfigured } from "@/lib/priority/env";
 import { getAuthHeader } from "@/lib/priority/auth";
 import { odataGet, PriorityError } from "@/lib/priority/client";
-import { getQuery, resolveIntent, listQueries } from "@/lib/priority/queries";
+import { getQuery, resolveIntent, listQueries, detectLang } from "@/lib/priority/queries";
+import { aiResolveIntent, aiAvailable } from "@/lib/priority/ai";
 import type { AssistantAnswer } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 // Runs a predefined, read-only query against live Priority and returns a
-// rendered AssistantAnswer (prose + widget + source).
+// rendered AssistantAnswer (prose + widget + source). Hebrew questions get
+// Hebrew answers. If ANTHROPIC_API_KEY is set, Claude picks the query
+// (it never sees ERP data — only the question and the catalogue).
 export async function POST(req: NextRequest) {
   const cfg = getConfig();
   if (!isConfigured(cfg)) {
@@ -20,12 +23,15 @@ export async function POST(req: NextRequest) {
     intent?: string;
     arg?: string;
   };
+  const lang = detectLang(body.text ?? "");
 
-  // Resolve which query to run.
+  // Resolve which query to run: explicit intent > AI resolver > keywords.
   let intentId = body.intent;
   let arg = body.arg;
   if (!intentId && body.text) {
-    const r = resolveIntent(body.text);
+    const r = aiAvailable()
+      ? await aiResolveIntent(body.text)
+      : resolveIntent(body.text);
     if (r) {
       intentId = r.id;
       arg = r.arg;
@@ -34,11 +40,16 @@ export async function POST(req: NextRequest) {
 
   const def = intentId ? getQuery(intentId) : undefined;
   if (!def) {
-    const names = listQueries().map((q) => q.label).join(", ");
+    const names = listQueries()
+      .map((q) => (lang === "he" ? q.labelHe : q.label))
+      .join(", ");
     const answer: AssistantAnswer = {
       text:
-        `I can run these read-only queries against your Priority data: **${names}**. ` +
-        `Try e.g. *"open orders for customer 10001"*, *"show customers"*, or *"parts"*.`,
+        lang === "he"
+          ? `אפשר לשאול אותי על הנתונים הבאים מ-Priority (קריאה בלבד): **${names}**. ` +
+            `נסו למשל: *"הצג הזמנות ללקוח 10001"*, *"הצג לקוחות"* או *"פריטים"*.`
+          : `I can run these read-only queries against your Priority data: **${names}**. ` +
+            `Try e.g. *"open orders for customer 10001"*, *"show customers"*, or *"parts"*.`,
     };
     return NextResponse.json({ answer });
   }
@@ -54,7 +65,7 @@ export async function POST(req: NextRequest) {
       hour: "2-digit",
       minute: "2-digit",
     });
-    const answer = def.map(rows, { now }, arg);
+    const answer = def.map(rows, { now, lang }, arg);
     return NextResponse.json({ answer });
   } catch (e) {
     if (e instanceof PriorityError) {

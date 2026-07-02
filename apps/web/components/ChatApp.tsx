@@ -191,7 +191,7 @@ export function ChatApp() {
           <>
             <div ref={scrollRef} className="flex-1 overflow-y-auto">
               {messages.length === 0 ? (
-                <EmptyState onPick={send} />
+                <EmptyState onPick={send} rtl={rtl} />
               ) : (
                 <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
                   {messages.map((m) => (

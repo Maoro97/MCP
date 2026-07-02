@@ -53,6 +53,25 @@ export const ROLE_PROMPTS: RolePrompt[] = [
   },
 ];
 
+/** Hebrew starter questions, shown when the UI is in RTL mode. */
+export const ROLE_PROMPTS_HE: RolePrompt[] = [
+  {
+    role: "מכירות",
+    prompts: [
+      "הצג הזמנות פתוחות ללקוח 10001 החודש",
+      "אילו לקוחות הזמינו הכי הרבה ברבעון?",
+    ],
+  },
+  {
+    role: "כספים",
+    prompts: ["מה גיול החובות שלי כרגע?", "הצג חשבוניות בפיגור מעל ₪10,000"],
+  },
+  {
+    role: "מחסן",
+    prompts: ["אילו פריטים מתחת לנקודת הזמנה?", "הצג מלאי לפריט 6801-A"],
+  },
+];
+
 export const SAVED_QUERIES = [
   "Open orders this week",
   "Top 10 customers by revenue",
@@ -316,17 +335,20 @@ export function runMockEngine(query: string): EngineResult {
   const q = query.toLowerCase();
   const has = (...ks: string[]) => ks.some((k) => q.includes(k));
 
-  if (has("aging", "a/r", "receivable", "ar aging")) return arAging();
-  if (has("overdue") || (has("invoice") && has("10,000", "10000", "10k", "over")))
+  if (has("aging", "a/r", "receivable", "ar aging", "גיול")) return arAging();
+  if (has("overdue", "פיגור") || (has("invoice", "חשבוני") && has("10,000", "10000", "10k", "over", "מעל")))
     return overdueInvoices();
-  if (has("reorder", "below", "stock", "inventory", "part")) return belowReorder();
-  if (has("trend", "last 6", "revenue", "sales trend", "over time")) return salesTrend();
-  if (has("top") && has("customer")) return topCustomers();
-  if (has("order") && has("open", "10001", "customer", "this month")) return openOrders();
-  if (has("customer") && has("10001", "overview", "detail", "profile")) return customerOverview();
-  if (has("order")) return openOrders();
-  if (has("customer")) return customerOverview();
-  if (has("invoice")) return overdueInvoices();
+  if (has("reorder", "below", "stock", "inventory", "part", "מלאי", "פריט", "נקודת הזמנה"))
+    return belowReorder();
+  if (has("trend", "last 6", "revenue", "sales trend", "over time", "מגמ", "הכנסות")) return salesTrend();
+  if (has("top", "הכי הרבה", "רבעון") && has("customer", "לקוח")) return topCustomers();
+  if (has("order", "הזמנ") && has("open", "10001", "customer", "this month", "פתוח", "לקוח", "החודש"))
+    return openOrders();
+  if (has("customer", "לקוח") && has("10001", "overview", "detail", "profile", "כרטיס", "פרטי"))
+    return customerOverview();
+  if (has("order", "הזמנ")) return openOrders();
+  if (has("customer", "לקוח")) return customerOverview();
+  if (has("invoice", "חשבוני")) return overdueInvoices();
 
   return fallback(query);
 }

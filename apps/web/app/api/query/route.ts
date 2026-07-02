@@ -58,12 +58,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ answer });
   } catch (e) {
     if (e instanceof PriorityError) {
-      const status = e.status === 401 ? 401 : 200;
-      const payload =
-        e.status === 401
-          ? { error: "not_connected" }
-          : { answer: { text: `⚠️ ${e.message}` } as AssistantAnswer };
-      return NextResponse.json(payload, { status });
+      if (e.status === 401) {
+        return NextResponse.json({ error: "not_connected" }, { status: 401 });
+      }
+      // Surface Priority's own error body — it usually names the exact
+      // form/field problem, which is what a consultant needs to tune queries.
+      const detail = e.detail
+        ? `\n\nPriority says: ${e.detail.replace(/\s+/g, " ").trim()}`
+        : "";
+      return NextResponse.json(
+        { answer: { text: `⚠️ ${e.message}${detail}` } as AssistantAnswer },
+        { status: 200 }
+      );
     }
     return NextResponse.json(
       { answer: { text: "⚠️ Something went wrong running that query." } },

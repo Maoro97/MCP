@@ -227,8 +227,8 @@ export const QUERIES: QueryDef[] = [
     columns: [
       { key: "PARTNAME", label: "Part" },
       { key: "PARTDES", label: "Description" },
-      { key: "PARTARC", label: "Family" },
-      { key: "UNAME", label: "Unit" },
+      { key: "FAMILYNAME", label: "Family" },
+      { key: "UNITNAME", label: "Unit" },
     ],
     build: (arg) => ({
       entity: "LOGPART",

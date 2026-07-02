@@ -312,6 +312,83 @@ export const QUERIES: QueryDef[] = [
           { singular: "פריט", plural: "פריטים" })
       ),
   },
+  {
+    id: "customer_contacts",
+    label: "Customer Contacts",
+    labelHe: "אנשי קשר",
+    description:
+      "List a customer's ACTIVE contact persons (name, status, cellphone) from the CUSTPERSONNEL son screen. Requires a customer number argument.",
+    form: "CUSTPERSONNEL",
+    keywords: [
+      "contact", "contacts", "contact person", "cellphone", "phone",
+      "איש קשר", "אנשי קשר", "נייד", "טלפון", "סלולרי",
+    ],
+    columns: [
+      { key: "NAME", label: "Name" },
+      { key: "STATDES", label: "Status" },
+      { key: "CELLPHONE", label: "Cellphone" },
+    ],
+    // Son screens are reached by expanding the parent form.
+    build: (arg) => ({
+      entity: `CUSTOMERS('${arg ?? ""}')`,
+      select: "CUSTNAME,CUSTDES",
+      expand: "CUSTPERSONNEL_SUBFORM",
+    }),
+    map: (rows, ctx, arg) => {
+      const customer = rows[0];
+      if (!customer) {
+        return {
+          text:
+            ctx.lang === "he"
+              ? `לא נמצא לקוח **${arg}**.`
+              : `No customer found for **${arg}**.`,
+        };
+      }
+      const all = (customer["CUSTPERSONNEL_SUBFORM"] as Row[] | undefined) ?? [];
+      // Keep active contacts. STATDES wording is site-specific, so filter
+      // defensively: drop rows explicitly marked inactive; keep the rest.
+      const contacts = all.filter((c) => {
+        const s = String(c["STATDES"] ?? "").toLowerCase();
+        if (!s) return true;
+        if (s.includes("לא פעיל") || s.includes("inactive") || s.includes("not active"))
+          return false;
+        return true;
+      });
+      const custName =
+        (customer["CUSTDES"] as string) || (customer["CUSTNAME"] as string) || arg;
+      const def = getQuery("customer_contacts")!;
+      const cols = resolveColumns(contacts, def.columns);
+      const label = ctx.lang === "he" ? def.labelHe : def.label;
+      return {
+        text:
+          ctx.lang === "he"
+            ? contacts.length
+              ? `נמצאו **${contacts.length}** אנשי קשר פעילים ללקוח **${custName}**.`
+              : `לא נמצאו אנשי קשר פעילים ללקוח **${custName}**.`
+            : contacts.length
+              ? `Found **${contacts.length}** active contact${contacts.length === 1 ? "" : "s"} for **${custName}**.`
+              : `No active contacts found for **${custName}**.`,
+        widget: contacts.length
+          ? {
+              kind: "table",
+              title:
+                ctx.lang === "he"
+                  ? `אנשי קשר · ${custName}`
+                  : `Contacts · ${custName}`,
+              columns: cols,
+              rows: toTableRows(contacts, cols),
+              footnote:
+                all.length !== contacts.length
+                  ? ctx.lang === "he"
+                    ? `${contacts.length} פעילים מתוך ${all.length}`
+                    : `${contacts.length} active of ${all.length} total`
+                  : undefined,
+            }
+          : undefined,
+        source: { form: "CUSTPERSONNEL", label, asOf: ctx.now },
+      };
+    },
+  },
 ];
 
 export function listQueries() {
@@ -341,6 +418,8 @@ export function resolveIntent(
   const num = text.match(/\b\d{3,}\b/)?.[0];
   const has = (...ks: string[]) => ks.some((k) => q.includes(k));
 
+  if (has("contact", "איש קשר", "אנשי קשר", "נייד", "סלולרי") && num)
+    return { id: "customer_contacts", arg: num };
   if (has("customer", "client", "לקוח") && num)
     return { id: "customer_detail", arg: num };
   if (has("order", "sales order", "הזמנ")) return { id: "orders", arg: num };

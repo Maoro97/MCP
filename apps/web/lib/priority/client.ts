@@ -89,10 +89,19 @@ export async function odataGet<T = Record<string, unknown>>(
   }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    // Prefer Priority's own human-readable message (often Hebrew) over the
+    // raw JSON envelope with \uXXXX escapes.
+    let detail = body.slice(0, 500);
+    try {
+      const parsed = JSON.parse(body) as { error?: { message?: string } };
+      if (parsed.error?.message) detail = parsed.error.message;
+    } catch {
+      // not JSON — keep the raw snippet
+    }
     throw new PriorityError(
       `Priority returned ${res.status} for ${q.entity}.`,
       res.status,
-      body.slice(0, 500)
+      detail
     );
   }
 

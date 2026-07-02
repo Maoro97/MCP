@@ -61,7 +61,7 @@ interface ODataResponse<T> {
  */
 export async function odataGet<T = Record<string, unknown>>(
   cfg: PriorityConfig,
-  token: string,
+  authHeader: string,
   q: ODataQuery
 ): Promise<T[]> {
   const url = buildUrl(cfg, q);
@@ -70,7 +70,7 @@ export async function odataGet<T = Record<string, unknown>>(
     res = await fetch(url, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: authHeader,
         Accept: "application/json",
       },
       // Never cache ERP data.

@@ -13,9 +13,9 @@ export async function GET() {
   if (!isConfigured(cfg)) {
     return NextResponse.json({ mode: "demo" });
   }
-  const { connected, name } = await isConnected(cfg);
+  const { connected, name, method } = await isConnected(cfg);
   if (connected) {
-    return NextResponse.json({ mode: "live", name });
+    return NextResponse.json({ mode: "live", name, method });
   }
   return NextResponse.json({ mode: "connect", canOAuth: canOAuth(cfg) });
 }

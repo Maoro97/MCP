@@ -19,6 +19,7 @@ const nextId = () => `m${++idSeq}`;
 export function ChatApp() {
   const [mode, setMode] = useState<Mode>("loading");
   const [userName, setUserName] = useState<string | undefined>();
+  const [authMethod, setAuthMethod] = useState<string | undefined>();
   const [canOAuth, setCanOAuth] = useState(false);
   const [authError, setAuthError] = useState<string | undefined>();
 
@@ -44,6 +45,7 @@ export function ChatApp() {
       .then((d) => {
         setMode(d.mode);
         setUserName(d.name);
+        setAuthMethod(d.method);
         setCanOAuth(Boolean(d.canOAuth));
       })
       .catch(() => setMode("demo"));
@@ -176,7 +178,7 @@ export function ChatApp() {
           onToggleRtl={() => setRtl((v) => !v)}
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
           modeLabel={modeLabel}
-          onDisconnect={mode === "live" && userName !== "Static token" ? disconnect : undefined}
+          onDisconnect={mode === "live" && authMethod === "oauth" ? disconnect : undefined}
         />
 
         {mode === "loading" ? (

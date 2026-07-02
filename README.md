@@ -42,13 +42,18 @@ RTL/Hebrew from the header.
 2. **Set your OData service root** (`PRIORITY_ODATA_URL`). Format:
    `https://{domain}/odata/Priority/{tabula.ini}/{company}`.
 
-3. **Choose how to authenticate** (in `.env.local`):
-   - **OAuth2 (recommended):** set `PRIORITY_OIDC_ISSUER` (your Priority domain),
+3. **Choose how to authenticate** (in `.env.local`, pick one):
+   - **API username + password (simplest):** set `PRIORITY_API_USERNAME` and
+     `PRIORITY_API_PASSWORD` — the API User Name from the Personnel File form in Priority
+     (separate from the regular login name).
+   - **Personal Access Token (v19.1+):** set `PRIORITY_PAT` — created in the
+     "REST Interface Access Tokens" form. Sent as Basic auth with the literal password `PAT`,
+     per Priority's spec.
+   - **OAuth2 (per-user sign-in):** set `PRIORITY_OIDC_ISSUER` (your Priority domain),
      `PRIORITY_OAUTH_CLIENT_ID`, and `SESSION_SECRET`. In Priority, register an OAuth client
      and add the redirect URI **`http://localhost:3000/api/auth/callback`**. The app reads the
      authorize/token endpoints from `{issuer}/accounts/.well-known/openid-configuration`.
-   - **Quick test:** paste a valid bearer token into `PRIORITY_ACCESS_TOKEN` to skip the login
-     flow and see live data immediately.
+   - **Raw bearer token (testing):** `PRIORITY_ACCESS_TOKEN`.
 
 4. **Restart** (`pnpm dev`). The app now shows a **Connect to Priority** screen (OAuth) or goes
    straight to live data (static token). Sign in, then ask your questions.

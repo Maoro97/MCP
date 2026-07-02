@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getConfig, isConfigured } from "@/lib/priority/env";
-import { getAccessToken } from "@/lib/priority/auth";
+import { getAuthHeader } from "@/lib/priority/auth";
 import { odataGet, PriorityError } from "@/lib/priority/client";
 import { getQuery, resolveIntent, listQueries } from "@/lib/priority/queries";
 import type { AssistantAnswer } from "@/lib/types";
@@ -43,13 +43,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ answer });
   }
 
-  const token = await getAccessToken(cfg);
-  if (!token) {
+  const auth = await getAuthHeader(cfg);
+  if (!auth) {
     return NextResponse.json({ error: "not_connected" }, { status: 401 });
   }
 
   try {
-    const rows = await odataGet(cfg, token, def.build(arg));
+    const rows = await odataGet(cfg, auth, def.build(arg));
     const now = new Date().toLocaleTimeString(undefined, {
       hour: "2-digit",
       minute: "2-digit",

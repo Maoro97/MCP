@@ -29,6 +29,11 @@ export interface PriorityConfig {
   sessionSecret?: string;
   /** Dev fallback: a bearer token to use directly, skipping the OAuth flow. */
   staticAccessToken?: string;
+  /** Personal Access Token (Priority v19.1+). Sent as Basic {pat}:PAT. */
+  personalAccessToken?: string;
+  /** Basic-auth API credentials (API User Name from the Personnel File form). */
+  apiUsername?: string;
+  apiPassword?: string;
   /** Max rows any single query may pull back (read-only safety cap). */
   maxTop: number;
 }
@@ -43,6 +48,9 @@ export function getConfig(): PriorityConfig {
     appBaseUrl: opt("APP_BASE_URL") ?? "http://localhost:3000",
     sessionSecret: opt("SESSION_SECRET"),
     staticAccessToken: opt("PRIORITY_ACCESS_TOKEN"),
+    personalAccessToken: opt("PRIORITY_PAT"),
+    apiUsername: opt("PRIORITY_API_USERNAME"),
+    apiPassword: opt("PRIORITY_API_PASSWORD"),
     maxTop: Number(opt("PRIORITY_MAX_TOP") ?? "50"),
   };
 }

@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/*
+  FitLog design tokens — dark-first (gym environment).
+  Chart colors are the validated dark-surface categorical palette
+  (CVD-safe adjacent order; every colored mark also carries a text label).
+*/
+
+@theme {
+  --color-bg: #0a0a0b; /* page plane (OLED-friendly) */
+  --color-surface: #151518; /* cards / chart surface */
+  --color-surface2: #1d1d21; /* inputs, chips, tracks */
+  --color-line: #26262b; /* hairline borders, gridlines */
+  --color-ink: #f4f4f5; /* primary text */
+  --color-muted: #a1a1aa; /* secondary text */
+  --color-faint: #71717a; /* axis labels, placeholders */
+
+  /* series / module accents (validated vs #151518) */
+  --color-cal: #008300; /* calories ring */
+  --color-protein: #3987e5;
+  --color-carbs: #c98500;
+  --color-fat: #d55181;
+  --color-water: #199e70;
+  --color-train: #d95926;
+
+  --color-accent: #3987e5; /* primary actions */
+  --color-danger: #e66767;
+
+  --radius-card: 16px;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* numeric columns that must align (tables, set logs) */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.animate-sheet {
+  animation: sheet-up 160ms ease-out;
+}
+
+input,
+select {
+  outline: none;
+}
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+::placeholder {
+  color: var(--color-faint);
+}

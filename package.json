@@ -7,7 +7,10 @@
     "dev": "pnpm --filter @priority-chat/web dev",
     "build": "pnpm --filter @priority-chat/web build",
     "start": "pnpm --filter @priority-chat/web start",
-    "lint": "pnpm --filter @priority-chat/web lint"
+    "lint": "pnpm --filter @priority-chat/web lint",
+    "dev:fitlog": "pnpm --filter fitlog dev",
+    "build:fitlog": "pnpm --filter fitlog build",
+    "start:fitlog": "pnpm --filter fitlog start"
   },
   "packageManager": "pnpm@10.33.0"
 }

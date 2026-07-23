@@ -159,7 +159,7 @@ GRID = """
  .sub{color:var(--muted);font-size:14px;margin:0 0 14px}
  .bar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;padding:8px 0 12px;border-bottom:1px solid var(--line);margin-bottom:12px}
  .pill{border-radius:999px;padding:6px 13px;font-weight:700;font-size:14px}
- .pill.tot{background:#eef2f7;color:#334155}.pill.ok{background:#dcfce7;color:#166534}.pill.bad{background:#fee2e2;color:#991b1b}
+ .pill.tot{background:#eef2f7;color:#334155}.pill.ok{background:#dcfce7;color:#166534}.pill.bad{background:#fee2e2;color:#991b1b}.pill.warn{background:#fef3c7;color:#92400e}
  button{border:0;border-radius:9px;padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer}
  .b-check{background:#475569;color:#fff}.b-gen{background:var(--green);color:#fff}.b-check:hover{background:#334155}.b-gen:hover{background:#15803d}
  .spacer{flex:1}a.back{color:var(--blue);text-decoration:none;font-weight:600;font-size:14px}
@@ -179,6 +179,8 @@ GRID = """
  td input{border:0;background:transparent;width:100%;min-width:105px;padding:8px 10px;font:inherit;color:inherit;outline:none}
  td.bad{background:#fef2f2;position:relative}td.bad input{color:#b91c1c;font-weight:600}
  td.bad::after{content:"!";position:absolute;top:2px;left:4px;color:#dc2626;font-weight:800;font-size:11px}
+ td.warn{background:#fffbeb;position:relative}td.warn input{color:#b45309;font-weight:600}
+ td.warn::after{content:"⚠";position:absolute;top:1px;left:3px;font-size:10px}
  td input:focus{background:#eef3ff;box-shadow:inset 0 0 0 2px var(--blue)}
  td.const input{background:#f8fafc;color:#64748b}
  tr.rowbad td.rownum{background:#fee2e2;color:#991b1b;font-weight:700}
@@ -200,14 +202,16 @@ GRID = """
   <span class="pill tot" id="p-tot">סה״כ 0</span>
   <span class="pill ok" id="p-ok">תקינות 0</span>
   <span class="pill bad" id="p-bad">שגויות 0</span>
+  <span class="pill warn" id="p-warn">אזהרות 0</span>
   <button class="b-check" onclick="revalidate()">🔄 בדוק מחדש</button>
   <button class="b-gen" onclick="generate()">⬇ צור קובץ טעינה</button>
-  <label class="chk" id="filterwrap"><input type="checkbox" id="onlyerr" onchange="render()"> הצג רק שגויות</label>
+  <label class="chk" id="filterwrap"><input type="checkbox" id="onlyerr" onchange="render()"> הצג רק שורות לטיפול</label>
   <span class="spacer"></span><a class="back" href="/">→ קובץ חדש</a>
  </div>
  <div id="banner"></div><div id="messages"></div>
  <div class="legend">
   <span><i style="background:#fef2f2;border:1px solid #fecaca"></i>תא שגוי לתיקון</span>
+  <span><i style="background:#fffbeb;border:1px solid #fde68a"></i>אזהרה (לא פוסל — כלול בטעינה)</span>
   <span><i style="background:#f8fafc;border:1px solid #e3e8f0"></i>ערך קבוע (לא לעריכה)</span>
   <span class="hint">🗑 מוחק שורה · ⋮⋮ גרור כותרת עמודה כדי לשנות את סדר הייצוא · התאריך תמיד dd/mm/yy</span>
  </div>
@@ -231,7 +235,10 @@ function overall(){
 function displayed(){
   const onlyErr = $('onlyerr').checked;
   const out=[];
-  GRID.rows.forEach((r,gi)=>{ if(!onlyErr || !r.valid) out.push([gi,r]); });
+  GRID.rows.forEach((r,gi)=>{
+    const attention = !r.valid || r.cells.some(c=>c.warning);
+    if(!onlyErr || attention) out.push([gi,r]);
+  });
   return out;
 }
 function render(){
@@ -253,8 +260,8 @@ function render(){
        '<td class="rownum">'+r.excel_row+'</td>';
     for(const ci of colOrder){
       const cell=r.cells[ci], c=cols[ci];
-      const cls=(cell.error?'bad ':'')+(c.constant?'const':'');
-      const title=cell.error?' title="'+esc(cell.error)+'"':'';
+      const cls=(cell.error?'bad ':(cell.warning?'warn ':''))+(c.constant?'const':'');
+      const title=cell.error?' title="'+esc(cell.error)+'"':(cell.warning?' title="'+esc(cell.warning)+'"':'');
       const ro=c.constant?' readonly':'';
       h+='<td class="'+cls+'"'+title+'><input value="'+esc(cell.value)+'"'+ro+
          ' oninput="upd('+gi+','+ci+',this.value)"></td>';
@@ -276,6 +283,9 @@ function renderPager(n,pages){
 function updateCounts(){
   const o=overall();
   $('p-tot').textContent='סה״כ '+o.total; $('p-ok').textContent='תקינות '+o.valid; $('p-bad').textContent='שגויות '+o.invalid;
+  const warned=GRID.rows.filter(r=>r.cells.some(c=>c.warning)).length;
+  $('p-warn').textContent='אזהרות '+warned;
+  $('p-warn').style.display = warned? '' : 'none';
 }
 function upd(gi,ci,val){ GRID.rows[gi].cells[ci].value=val; }
 function delRow(gi){ GRID.rows.splice(gi,1); render(); }
@@ -300,6 +310,9 @@ function renderBanner(){
     b+='<div class="banner">📁 קובץ גדול: '+GRID.server_valid.toLocaleString()+
        ' שורות תקינות נשמרו בשרת ויכללו בקובץ הטעינה. כאן מוצגות רק '+GRID.rows.length+
        ' השורות שדורשות תיקון'+(GRID.overflow>0?(' (ועוד '+GRID.overflow+' שורות שגויות שלא נכנסות לתצוגה)'):'')+'.</div>';
+  if(GRID.total_warn>0)
+    b+='<div class="msg warnbox">⚠ '+GRID.total_warn+' שורות עם אזהרות פורמט (טלפון/דוא"ל לא תקין). '+
+       'האזהרות אינן פוסלות — השורות ייכללו בקובץ הטעינה, אך מומלץ לבדוק ולתקן.</div>';
   if(GRID.warn_count>0)
     b+='<div class="msg warnbox">⚠ אזהרות קידוד ('+GRID.warn_count+'): תווים שלא ניתנים ל-windows-1255 יוחלפו ב-?. '+
        esc((GRID.warnings||[]).slice(0,2).join(' | '))+(GRID.warn_count>2?' ...':'')+'</div>';
@@ -381,33 +394,44 @@ def process():
         return _upload_error(f"שגיאה בלתי צפויה בעיבוד הקובץ:\n{e}")
 
     key_fields = mapping.get("key_fields") or []
-    valid_rows = [r for r in rows_out if r["valid"]]
-    invalid_rows = [r for r in rows_out if not r["valid"]]
     total = len(rows_out)
+
+    def _has_warn(r):
+        return any(c.get("warning") for c in r["cells"])
+
+    invalid_rows = [r for r in rows_out if not r["valid"]]
+    valid_rows = [r for r in rows_out if r["valid"]]
 
     if total <= FULL_GRID_LIMIT:
         # קובץ קטן — כל השורות בטבלה
         displayed, server_valid = rows_out, []
         reserved, overflow_items = set(), []
     else:
-        # קובץ גדול — מציגים רק שגויות; התקינות נשמרות בשרת
-        displayed = invalid_rows[:DISPLAY_CAP]
-        server_valid = core.grid_valid_records(valid_rows)
-        reserved = {core.row_key(r["cells"], key_fields) for r in valid_rows} if key_fields else set()
+        # קובץ גדול — מציגים לתיקון את השורות השגויות + שורות עם אזהרות;
+        # שאר השורות התקינות נשמרות בשרת ונכללות בקובץ הטעינה.
+        attention = invalid_rows + [r for r in valid_rows if _has_warn(r)]
+        displayed = attention[:DISPLAY_CAP]
+        shown = {id(r) for r in displayed}
+        hidden_valid = [r for r in valid_rows if id(r) not in shown]
+        server_valid = core.grid_valid_records(hidden_valid)
+        # reserved = מפתחות השורות התקינות ה*שמורות בלבד* (לא המוצגות) — כדי
+        # ששורה מוצגת שנשלחת חזרה לא תתנגש עם עצמה
+        reserved = {core.row_key(r["cells"], key_fields) for r in hidden_valid} if key_fields else set()
         overflow_items = [
             (r["excel_row"], {c["target"]: c["value"] for c in r["cells"]}, _first_reason(r["cells"]))
-            for r in invalid_rows[DISPLAY_CAP:]
+            for r in invalid_rows if id(r) not in shown
         ]
 
     run_id = _store_run(screen, server_valid, reserved, overflow_items)
     warnings, warn_count = _sample_warnings(mapping, core.grid_valid_records(valid_rows))
+    total_warn = sum(1 for r in rows_out if _has_warn(r))
 
     payload = {
         "screen": screen, "run_id": run_id, "interface": mapping.get("interface_name"),
         "mode": "errors" if total > FULL_GRID_LIMIT else "all",
         "columns": _columns_meta(mapping), "key_fields": key_fields,
         "rows": displayed, "server_valid": len(server_valid),
-        "overflow": len(overflow_items), "total": total,
+        "overflow": len(overflow_items), "total": total, "total_warn": total_warn,
         "warnings": warnings, "warn_count": warn_count,
     }
     return render_template_string(GRID, screen=screen, grid=payload)

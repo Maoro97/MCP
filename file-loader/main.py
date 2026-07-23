@@ -136,9 +136,19 @@ def evaluate_grid(mapping, input_rows, reserved_keys=None, excel_rows=None):
             value, err = process_value(row.get(col["target"]), col, date_format)
             if not err:
                 err = validators.validate_cell(value, col)
+            # בדיקת פורמט (טלפון/דוא"ל וכו') — כברירת מחדל אזהרה, לא פסילה
+            warning = None
+            fmt = validators.validate_format(value, col)
+            if fmt:
+                msg, severity = fmt
+                if severity == "error" and not err:
+                    err = msg
+                elif severity != "error":
+                    warning = msg
             if err:
                 row_valid = False
-            cells.append({"target": col["target"], "value": value, "error": err})
+            cells.append({"target": col["target"], "value": value,
+                          "error": err, "warning": warning})
         excel_row = excel_rows[i] if excel_rows else i + 2
         rows_out.append({"excel_row": excel_row, "cells": cells, "valid": row_valid})
 
@@ -190,8 +200,11 @@ def grid_valid_records(rows_out):
 
 
 def _expected_sources(mapping):
-    """שמות עמודות המקור מהמיפוי — לצורך זיהוי אוטומטי של שורת הכותרת."""
-    return [c["source"] for c in mapping["columns"] if c.get("source")]
+    """כל שמות עמודות המקור (כולל כינויים) — לצורך זיהוי אוטומטי של שורת הכותרת."""
+    names = []
+    for c in mapping["columns"]:
+        names.extend(_source_aliases(c.get("source")))
+    return names
 
 
 def prepare(screen, source, sheet=None, header_row=None):
@@ -367,28 +380,40 @@ def read_excel(source, sheet, header_row=None, expected_sources=None):
     return df
 
 
+def _source_aliases(source):
+    """מחזיר את שמות המקור האפשריים לעמודה (source יכול להיות שם בודד או רשימת כינויים)."""
+    if source is None:
+        return []
+    return list(source) if isinstance(source, (list, tuple)) else [source]
+
+
 def build_column_lookup(df, columns):
     """
     בונה מיפוי בין ה-source שבקובץ המיפוי לבין העמודה בפועל באקסל.
-    זורק שגיאה ברורה אם עמודת מקור חסרה מהאקסל.
+    source יכול להיות שם עמודה בודד, או רשימת כינויים (aliases) — כך שאותו
+    מיפוי מתאים למספר פורמטים של קבצים (הכלי בוחר את הכינוי הראשון שקיים בקובץ).
+    עמודת חובה שאף כינוי שלה לא נמצא — זורקת שגיאה. עמודת רשות שחסרה — פשוט
+    תישאר ריקה (עם ברירת המחדל אם הוגדרה).
     """
     lookup = {_norm_header(c): c for c in df.columns}
     resolved = {}
-    missing = []
+    missing_required = []
     for col in columns:
-        source = col.get("source")
-        if source is None:
+        aliases = _source_aliases(col.get("source"))
+        if not aliases:
             continue  # עמודת ערך קבוע — אין מקור
-        actual = lookup.get(_norm_header(source))
-        if actual is None:
-            missing.append(source)
-        else:
+        actual = next((lookup[_norm_header(a)] for a in aliases if _norm_header(a) in lookup), None)
+        if actual is not None:
             resolved[col["target"]] = actual
-    if missing:
+        elif col.get("required"):
+            missing_required.append((col["target"], aliases))
+    if missing_required:
+        lines = "\n  - ".join(
+            f"{t} (חיפשנו: {', '.join(a)})" for t, a in missing_required
+        )
         raise UserError(
-            "העמודות הבאות מוגדרות בקובץ המיפוי אך לא נמצאו בקובץ האקסל:\n  - "
-            + "\n  - ".join(missing)
-            + "\n\nעמודות שקיימות באקסל: "
+            "שדות חובה שלא נמצאה להם עמודה מתאימה בקובץ האקסל:\n  - " + lines
+            + "\n\nעמודות שקיימות בקובץ: "
             + ", ".join(_norm_header(c) for c in df.columns)
         )
     return resolved
@@ -419,6 +444,9 @@ def process_value(raw, column, date_format):
         if ctype == "number":
             value = transforms.to_number_string(value, column.get("decimals"))
         value = transforms.apply_named_transforms(value, column.get("transform"))
+        # שדה טלפון (format: phone) — משאירים ספרות בלבד ("צריך להיות רק מספר")
+        if column.get("format") == "phone" and value != "":
+            value = transforms.NAMED_TRANSFORMS["digits_only"](value)
 
     # מיפוי ערכים (value_map)
     value_map = column.get("value_map")
@@ -470,6 +498,7 @@ def process_rows(df, mapping, resolved):
         values = []
         row_dict = {}
         reason = None
+        warnings = []
 
         for col in columns:
             actual = resolved.get(col["target"])
@@ -482,6 +511,14 @@ def process_rows(df, mapping, resolved):
                 if e:
                     reason = e
 
+            fmt = validators.validate_format(value, col)
+            if fmt:
+                msg, severity = fmt
+                if severity == "error" and reason is None:
+                    reason = msg
+                elif severity != "error":
+                    warnings.append(msg)
+
             values.append(value)
             row_dict[col["target"]] = value
 
@@ -491,6 +528,7 @@ def process_rows(df, mapping, resolved):
                 "values": values,
                 "row_dict": row_dict,
                 "reason": reason,
+                "warnings": warnings,
                 "original": row,
             }
         )
@@ -719,6 +757,11 @@ def run(args):
     enc_warnings = check_encoding(
         valid_records, mapping["columns"], mapping.get("encoding", "windows-1255")
     )
+    # אזהרות נתונים (למשל טלפון/דוא"ל לא תקין) — לא פוסלות, רק מתריעות
+    data_warnings = [
+        f"שורה {r['excel_row']}: {w}" for r in records for w in r.get("warnings", [])
+    ]
+    enc_warnings = enc_warnings + data_warnings
 
     out_path = None
     rejected_path = None

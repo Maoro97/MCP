@@ -92,6 +92,65 @@ def validate_cell(value: str, column: dict):
     return None
 
 
+# ---------------------------------------------------------------------------
+# בדיקות פורמט (format) — למשל טלפון/דוא"ל. ברירת המחדל: אזהרה (לא פסילה).
+# להוספת בדיקה חדשה: כתוב פונקציה שמחזירה True/False, והוסף אותה ל-FORMAT_CHECKS.
+# ---------------------------------------------------------------------------
+def is_valid_il_phone(digits: str) -> bool:
+    """
+    בדיקת מספר טלפון ישראלי (על מחרוזת ספרות בלבד):
+    - נייד: 10 ספרות שמתחילות ב-05 או 07
+    - קווי: 9 ספרות שמתחילות ב-0 וספרה שנייה 2/3/4/8/9
+    - מוקדים: 1-800 / 1-700 / 1-599
+    - קידומת בינ"ל 972 מנורמלת ל-0
+    """
+    d = digits
+    if not d.isdigit():
+        return False
+    if d.startswith("972"):
+        d = "0" + d[3:]
+    if len(d) == 10 and d[:2] in ("05", "07"):
+        return True
+    if len(d) == 9 and d[0] == "0" and d[1] in "234689":
+        return True
+    if d[:4] in ("1800", "1700", "1599") and len(d) in (9, 10):
+        return True
+    return False
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def is_valid_email(value: str) -> bool:
+    return bool(_EMAIL_RE.match(value))
+
+
+# כל בדיקה: (פונקציה, טקסט האזהרה)
+FORMAT_CHECKS = {
+    "phone": (is_valid_il_phone, "מספר טלפון לא תקין"),
+    "email": (is_valid_email, "כתובת דוא\"ל לא תקינה"),
+}
+
+
+def validate_format(value: str, column: dict):
+    """
+    מריץ בדיקת פורמט (אם הוגדרה בעמודה) ומחזיר (הודעה, חומרה) או None.
+    חומרה: 'warning' (ברירת מחדל — לא פוסל את השורה) או 'error' (פוסל).
+    ערך ריק נחשב תקין (חובה נבדק בנפרד).
+    """
+    fmt = column.get("format")
+    if not fmt or value == "":
+        return None
+    check = FORMAT_CHECKS.get(fmt)
+    if not check:
+        return None
+    func, label = check
+    if func(value):
+        return None
+    severity = column.get("format_severity", "warning")
+    return f"{label} בשדה '{column['target']}': '{value}'", severity
+
+
 def check_duplicates(rows, key_fields, columns):
     """
     בודק כפילויות על שדות המפתח (key_fields) בין כל השורות התקינות.

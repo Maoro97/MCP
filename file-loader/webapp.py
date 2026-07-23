@@ -236,6 +236,8 @@ GRID = """
  th .tgt{font-weight:700}th .src{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
  th.col{cursor:grab;user-select:none;transition:.15s}th.col:active{cursor:grabbing}
  th.col .grip{color:var(--muted);opacity:.5;font-size:12px;margin-left:5px}
+ .rez{position:absolute;left:0;top:0;height:100%;width:9px;cursor:col-resize;z-index:4}
+ .rez:hover,.rez.active{background:linear-gradient(to left,var(--brand),transparent)}
  th.col.dragover{background:rgba(99,102,241,.14);box-shadow:inset 0 0 0 2px var(--brand)}
  th.col.dragging{opacity:.4}
  th.rownum,td.rownum{background:var(--surface-2);color:var(--muted);text-align:center;font-size:12px;min-width:44px;padding:6px}
@@ -290,7 +292,7 @@ GRID = """
   <span><i class="sw-warn"></i>אזהרה (לא פוסל — כלול בטעינה)</span>
   <span><i class="sw-const"></i>ערך קבוע (לא לעריכה)</span>
   <span><i class="sw-ign"></i>מיוצא למרות בעיה (🚫)</span>
-  <span class="hint">🗑 מוחק שורה · 🚫 מייצא למרות בעיה · ⋮⋮ גרור כותרת לשינוי סדר · תאריך תמיד dd/mm/yy</span>
+  <span class="hint">🗑 מוחק שורה · 🚫 מייצא למרות בעיה · ⋮⋮ גרור כותרת לשינוי סדר · ↔ גרור את קצה הכותרת לשינוי רוחב · תאריך dd/mm/yy</span>
  </div>
  <div class="tablewrap"><table id="grid"></table></div>
  <div class="pager" id="pager"></div>
@@ -300,7 +302,27 @@ const GRID = {{ grid|tojson }};
 const PAGE_SIZE = 100;
 let page = 0;
 let colOrder = GRID.columns.map((_, i) => i);   // סדר תצוגה/ייצוא של העמודות
+let colWidths = {};                             // רוחב מותאם לעמודה (ci -> px)
 const $ = id => document.getElementById(id);
+
+// --- שינוי רוחב עמודה בגרירה ---
+function applyWidth(ci,w){
+  document.querySelectorAll('input[data-ci="'+ci+'"]').forEach(i=>i.style.minWidth=w+'px');
+  const th=document.querySelector('th[data-ci="'+ci+'"]'); if(th) th.style.minWidth=w+'px';
+}
+function startResize(e,ci){
+  e.preventDefault(); e.stopPropagation();
+  const handle=e.currentTarget, th=handle.parentElement;
+  th.setAttribute('draggable','false'); handle.classList.add('active');
+  const startX=e.clientX, startW=th.offsetWidth;
+  document.body.style.userSelect='none'; document.body.style.cursor='col-resize';
+  function mv(ev){ const w=Math.max(60,Math.min(760, startW+(startX-ev.clientX)));
+    colWidths[ci]=w; applyWidth(ci,w); }
+  function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up);
+    th.setAttribute('draggable','true'); handle.classList.remove('active');
+    document.body.style.userSelect=''; document.body.style.cursor=''; }
+  document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 function overall(){
@@ -326,9 +348,11 @@ function render(){
   const slice=disp.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE);
   let h='<thead><tr><th class="act"></th><th class="rownum">#</th>';
   for(const ci of colOrder){ const c=cols[ci];
-    h+='<th class="col" draggable="true" data-ci="'+ci+'" ondragstart="dragStart(event,'+ci+
+    const w=colWidths[ci]?' style="min-width:'+colWidths[ci]+'px"':'';
+    h+='<th class="col" draggable="true" data-ci="'+ci+'"'+w+' ondragstart="dragStart(event,'+ci+
        ')" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropCol(event,'+ci+
-       ')" ondragend="dragEnd(event)"><span class="grip">⋮⋮</span><span class="tgt">'+esc(c.target)+
+       ')" ondragend="dragEnd(event)"><span class="rez" title="גרור לשינוי רוחב" onmousedown="startResize(event,'+ci+
+       ')"></span><span class="grip">⋮⋮</span><span class="tgt">'+esc(c.target)+
        '</span><span class="src">'+(c.constant?'ערך קבוע':esc(c.source||''))+'</span></th>';
   }
   h+='</tr></thead><tbody>';
@@ -347,7 +371,8 @@ function render(){
       else if(cell.warning) cls='warn '+cls;
       const title=cell.error?' title="'+esc(cell.error)+'"':(cell.warning?' title="'+esc(cell.warning)+'"':'');
       const ro=c.constant?' readonly':'';
-      h+='<td class="'+cls+'"'+title+'><input value="'+esc(cell.value)+'"'+ro+
+      const wst=colWidths[ci]?' style="min-width:'+colWidths[ci]+'px"':'';
+      h+='<td class="'+cls+'"'+title+'><input data-ci="'+ci+'" value="'+esc(cell.value)+'"'+ro+wst+
          ' oninput="upd('+gi+','+ci+',this.value)"></td>';
     }
     h+='</tr>';

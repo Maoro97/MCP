@@ -135,7 +135,7 @@ columns:                           # הסדר כאן = סדר העמודות ב�
 | `interface_name` | — | שם ה-Interface בפריוריטי (תיעוד) |
 | `delimiter` | `tab` | מפריד העמודות: `tab` / `comma` / `pipe` |
 | `encoding` | `windows-1255` | קידוד הפלט: `windows-1255` / `utf-8` |
-| `date_format` | `%d/%m/%y` | פורמט התאריך בפלט (תחביר `strftime` של Python) |
+| `date_format` | `%d/%m/%y` | פורמט התאריך בפלט. ברירת המחדל היא **תמיד `dd/mm/yy`** (למשל `23/07/26`) — חלה גם אם המפתח הזה מושמט |
 | `include_header` | `false` | האם לכתוב שורת כותרת (שמות ה-target) בפלט |
 | `key_fields` | — | רשימת שדות `target` לבדיקת כפילויות |
 

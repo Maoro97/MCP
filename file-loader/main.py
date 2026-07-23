@@ -37,6 +37,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MAPPINGS_DIR = os.path.join(HERE, "mappings")
 OUTPUT_DIR = os.path.join(HERE, "output")
 
+# פורמט התאריך בפלט — תמיד dd/mm/yy (למשל 23/07/26).
+# זהו מקור האמת היחיד: אם קובץ מיפוי לא מציין date_format, זה מה שיחול.
+DEFAULT_DATE_FORMAT = "%d/%m/%y"
+
 # מפרידים אפשריים בקובץ הפלט
 _DELIMITERS = {"tab": "\t", "comma": ",", "pipe": "|"}
 # קידודים נתמכים (שם ידידותי -> שם קידוד של פייתון)
@@ -282,7 +286,7 @@ def process_rows(df, mapping, resolved):
     כל רשומה: dict עם excel_row, values (רשימה מסודרת), row_dict, reason, original.
     """
     columns = mapping["columns"]
-    date_format = mapping.get("date_format", "%d/%m/%y")
+    date_format = mapping.get("date_format", DEFAULT_DATE_FORMAT)
 
     records = []
     for pos, (_, row) in enumerate(df.iterrows()):

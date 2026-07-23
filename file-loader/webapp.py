@@ -91,25 +91,65 @@ UPLOAD = """
 <!doctype html><html lang="he" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>הכנת קובץ טעינה — Priority ERP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
- :root{--bg:#f4f6fb;--card:#fff;--line:#e3e8f0;--ink:#1e2a3a;--muted:#6b7a90;--blue:#2563eb;--green:#16a34a;--red:#dc2626}
- *{box-sizing:border-box}body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
- .wrap{max-width:760px;margin:0 auto;padding:30px 18px 60px}h1{font-size:24px;margin:0 0 4px}
- header p{color:var(--muted);margin:0 0 22px}
- .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:18px}
- label{display:block;font-weight:600;margin:0 0 6px}
- select,input[type=text],input[type=number]{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font-size:15px;font-family:inherit;background:#fff}
- .row{display:flex;gap:16px;flex-wrap:wrap}.row>div{flex:1;min-width:200px;margin-bottom:16px}
- .drop{border:2px dashed #c3ccdb;border-radius:12px;padding:26px;text-align:center;cursor:pointer;background:#fafbfe;transition:.15s}
- .drop.over{border-color:var(--blue);background:#eef3ff}.drop b{color:var(--blue)}.drop small{display:block;color:var(--muted);margin-top:6px}
- .fname{margin-top:10px;font-weight:600;color:var(--green)}
- button{background:var(--blue);color:#fff;border:0;border-radius:10px;padding:12px 26px;font-size:16px;font-weight:600;cursor:pointer;margin-top:10px}
- button:hover{background:#1d4ed8}.muted{color:var(--muted);font-size:14px}
- .err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:12px;padding:16px 18px;white-space:pre-wrap}
- code{background:#eef1f7;padding:2px 6px;border-radius:5px}a.back{color:var(--blue);text-decoration:none;font-weight:600}
+ :root{
+  --bg:#eef2f9;--surface:#ffffff;--surface-2:#f7f9fc;--border:#e5eaf2;
+  --text:#0f172a;--muted:#64748b;
+  --brand:#4f46e5;--brand-2:#6366f1;--brand-700:#4338ca;
+  --green:#059669;--red:#dc2626;--radius:18px;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 8px 24px rgba(16,24,40,.07);
+  --shadow-lg:0 20px 50px rgba(37,40,90,.16);
+ }
+ @media (prefers-color-scheme:dark){:root{
+  --bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;
+  --text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--brand-2:#a5b4fc;--brand-700:#6366f1;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.4);--shadow-lg:0 24px 60px rgba(0,0,0,.55);
+ }}
+ *{box-sizing:border-box}
+ body{margin:0;min-height:100vh;color:var(--text);line-height:1.6;
+  font-family:"Assistant",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Arial,sans-serif;
+  background:
+   radial-gradient(1100px 500px at 100% -10%,rgba(99,102,241,.18),transparent 60%),
+   radial-gradient(900px 500px at -10% 0%,rgba(16,185,129,.12),transparent 55%),
+   var(--bg);}
+ .wrap{max-width:720px;margin:0 auto;padding:56px 20px 60px}
+ .hero{text-align:center;margin-bottom:26px}
+ .logo{width:60px;height:60px;border-radius:18px;margin:0 auto 16px;display:grid;place-items:center;
+  font-size:30px;color:#fff;background:linear-gradient(140deg,var(--brand-2),var(--brand));
+  box-shadow:0 10px 24px rgba(79,70,229,.4)}
+ h1{font-size:28px;font-weight:800;margin:0 0 6px;letter-spacing:-.02em}
+ .hero p{color:var(--muted);margin:0;font-size:16px}
+ .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:26px;box-shadow:var(--shadow)}
+ label{display:block;font-weight:600;margin:0 0 7px;font-size:14px}
+ select,input[type=text],input[type=number]{width:100%;padding:11px 13px;border:1.5px solid var(--border);
+  border-radius:12px;font-size:15px;font-family:inherit;background:var(--surface-2);color:var(--text);transition:.15s}
+ select:focus,input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 4px rgba(99,102,241,.15);background:var(--surface)}
+ .row{display:flex;gap:14px;flex-wrap:wrap}.row>div{flex:1;min-width:180px;margin-bottom:18px}
+ .drop{border:2px dashed var(--border);border-radius:14px;padding:34px 20px;text-align:center;cursor:pointer;
+  background:var(--surface-2);transition:.18s;margin-bottom:6px}
+ .drop:hover{border-color:var(--brand-2)}
+ .drop.over{border-color:var(--brand);background:rgba(99,102,241,.08);transform:scale(1.01)}
+ .drop .ico{font-size:30px;display:block;margin-bottom:8px}
+ .drop b{color:var(--brand)}.drop small{display:block;color:var(--muted);margin-top:6px}
+ .fname{margin-top:12px;font-weight:700;color:var(--green)}
+ button{width:100%;background:linear-gradient(140deg,var(--brand-2),var(--brand));color:#fff;border:0;
+  border-radius:12px;padding:14px;font-size:16px;font-weight:700;cursor:pointer;margin-top:14px;
+  box-shadow:0 8px 20px rgba(79,70,229,.32);transition:.15s;font-family:inherit}
+ button:hover{transform:translateY(-1px);box-shadow:0 12px 26px rgba(79,70,229,.42)}
+ button:active{transform:translateY(0)}
+ .muted{color:var(--muted);font-size:13.5px;text-align:center;margin-top:18px}
+ .err{background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.3);color:#dc2626;border-radius:12px;padding:16px 18px;white-space:pre-wrap}
+ code{background:var(--surface-2);border:1px solid var(--border);padding:2px 7px;border-radius:6px;font-size:13px}
+ a.back{color:var(--brand);text-decoration:none;font-weight:700}
 </style></head><body><div class="wrap">
- <header><h1>הכנת קובץ טעינה ל-Priority ERP</h1>
- <p>העלה קובץ אקסל ובחר מסך יעד — תקבל טבלת טעינה לתיקון שגיאות לפני הפקת הקובץ.</p></header>
+ <div class="hero">
+  <div class="logo">📥</div>
+  <h1>הכנת קובץ טעינה ל-Priority ERP</h1>
+  <p>העלה קובץ אקסל, בחר מסך יעד, ותקבל טבלת טעינה חכמה לפני הפקת הקובץ.</p>
+ </div>
  {% if error %}
   <div class="card"><div class="err">❌ {{ error }}</div>
    <p style="margin-top:14px"><a class="back" href="/">→ חזרה</a></p></div>
@@ -126,12 +166,12 @@ UPLOAD = """
      <input type="number" id="header_row" name="header_row" min="1" placeholder="זיהוי אוטומטי"></div>
    </div>
    <label>קובץ האקסל</label>
-   <div class="drop" id="drop"><b>גרור לכאן קובץ</b> או לחץ לבחירה<small>קבצי .xlsx בלבד</small>
+   <div class="drop" id="drop"><span class="ico">📄</span><b>גרור לכאן קובץ</b> או לחץ לבחירה<small>קבצי .xlsx בלבד</small>
     <input type="file" id="file" name="file" accept=".xlsx" hidden required>
     <div class="fname" id="fname"></div></div>
-   <button type="submit">טען לטבלה</button>{% endif %}
+   <button type="submit">טען לטבלה ←</button>{% endif %}
   </form>
-  <p class="muted">הכל רץ מקומית על המחשב שלך — הקובץ לא נשלח לשום שרת חיצוני.
+  <p class="muted">🔒 הכל רץ מקומית על המחשב שלך — הקובץ לא נשלח לשום שרת חיצוני.<br>
    הכלי מזהה אוטומטית את שורת הכותרת גם כשהיא לא בשורה הראשונה.</p>
  {% endif %}
 </div><script>
@@ -152,77 +192,105 @@ GRID = """
 <!doctype html><html lang="he" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>טבלת טעינה — {{ screen }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
- :root{--bg:#f4f6fb;--card:#fff;--line:#e3e8f0;--ink:#1e2a3a;--muted:#6b7a90;--blue:#2563eb;--green:#16a34a;--red:#dc2626;--amber:#d97706}
- *{box-sizing:border-box}body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--ink)}
- .wrap{max-width:1400px;margin:0 auto;padding:18px 16px 80px}h1{font-size:21px;margin:0 0 2px}
- .sub{color:var(--muted);font-size:14px;margin:0 0 14px}
- .bar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;padding:8px 0 12px;border-bottom:1px solid var(--line);margin-bottom:12px}
- .pill{border-radius:999px;padding:6px 13px;font-weight:700;font-size:14px}
- .pill.tot{background:#eef2f7;color:#334155}.pill.ok{background:#dcfce7;color:#166534}.pill.bad{background:#fee2e2;color:#991b1b}.pill.warn{background:#fef3c7;color:#92400e}
- button{border:0;border-radius:9px;padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer}
- .b-check{background:#475569;color:#fff}.b-gen{background:var(--green);color:#fff}.b-check:hover{background:#334155}.b-gen:hover{background:#15803d}
- .spacer{flex:1}a.back{color:var(--blue);text-decoration:none;font-weight:600;font-size:14px}
- .chk{display:flex;align-items:center;gap:6px;font-size:13px;color:#334155}.chk input{width:16px;height:16px}
- .banner{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:10px;padding:10px 14px;margin:8px 0;font-size:14px}
- .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:#fff}
- table{border-collapse:collapse;width:100%;font-size:14px}
- th,td{border-bottom:1px solid var(--line);border-left:1px solid var(--line);padding:0;text-align:right;white-space:nowrap}
- th{background:#f7f9fc;padding:8px 10px;position:sticky;top:0;z-index:2}
- th .tgt{font-weight:700}th .src{display:block;font-weight:400;color:var(--muted);font-size:12px}
- th.col{cursor:grab;user-select:none}th.col:active{cursor:grabbing}
- th.col .grip{color:#94a3b8;font-size:12px;margin-left:5px}
- th.col.dragover{background:#dbeafe;box-shadow:inset 0 0 0 2px var(--blue)}
- th.col.dragging{opacity:.45}
- th.rownum,td.rownum{background:#f1f5f9;color:#64748b;text-align:center;font-size:12px;min-width:42px;padding:6px}
- th.act,td.act{text-align:center;min-width:38px;padding:2px}
- td input{border:0;background:transparent;width:100%;min-width:105px;padding:8px 10px;font:inherit;color:inherit;outline:none}
- td.bad{background:#fef2f2;position:relative}td.bad input{color:#b91c1c;font-weight:600}
- td.bad::after{content:"!";position:absolute;top:2px;left:4px;color:#dc2626;font-weight:800;font-size:11px}
- td.warn{background:#fffbeb;position:relative}td.warn input{color:#b45309;font-weight:600}
+ :root{
+  --bg:#eef2f9;--surface:#ffffff;--surface-2:#f7f9fc;--border:#e5eaf2;--text:#0f172a;--muted:#64748b;
+  --brand:#4f46e5;--brand-2:#6366f1;--red:#dc2626;
+  --bad-bg:#fef2f2;--bad-fg:#dc2626;--warn-bg:#fffbeb;--warn-fg:#b45309;
+  --ok-bg:#dcfce7;--ok-fg:#166534;--ign-bg:#e0e7ff;--ign-fg:#4338ca;--tot-bg:#eef2f7;--tot-fg:#334155;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 10px 30px rgba(16,24,40,.07);
+ }
+ @media (prefers-color-scheme:dark){:root{
+  --bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;--text:#e8edf6;--muted:#93a1b8;
+  --brand:#818cf8;--brand-2:#a5b4fc;
+  --bad-bg:rgba(220,38,38,.15);--bad-fg:#f87171;--warn-bg:rgba(217,119,6,.16);--warn-fg:#fbbf24;
+  --ok-bg:rgba(5,150,105,.18);--ok-fg:#34d399;--ign-bg:rgba(99,102,241,.22);--ign-fg:#a5b4fc;
+  --tot-bg:rgba(148,163,184,.16);--tot-fg:#cbd5e1;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 34px rgba(0,0,0,.45);
+ }}
+ *{box-sizing:border-box}
+ body{margin:0;color:var(--text);font-family:"Assistant",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Arial,sans-serif;
+  background:radial-gradient(1000px 420px at 100% -8%,rgba(99,102,241,.14),transparent 60%),var(--bg)}
+ .wrap{max-width:1460px;margin:0 auto;padding:22px 18px 90px}
+ h1{font-size:23px;font-weight:800;margin:0 0 3px;letter-spacing:-.01em}
+ .sub{color:var(--muted);font-size:14px;margin:0 0 16px}
+ .bar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;padding:12px 14px;margin-bottom:14px;
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow)}
+ .pill{border-radius:999px;padding:6px 14px;font-weight:700;font-size:13.5px}
+ .pill.tot{background:var(--tot-bg);color:var(--tot-fg)}.pill.ok{background:var(--ok-bg);color:var(--ok-fg)}
+ .pill.bad{background:var(--bad-bg);color:var(--bad-fg)}.pill.warn{background:var(--warn-bg);color:var(--warn-fg)}
+ .pill.ign{background:var(--ign-bg);color:var(--ign-fg)}
+ button{border:0;border-radius:11px;padding:9px 15px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s}
+ .b-check{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}.b-check:hover{background:var(--border)}
+ .b-gen{background:linear-gradient(140deg,#10b981,#059669);color:#fff;box-shadow:0 6px 16px rgba(5,150,105,.32)}
+ .b-gen:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(5,150,105,.42)}
+ .spacer{flex:1}a.back{color:var(--brand);text-decoration:none;font-weight:700;font-size:14px}
+ .chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer}.chk input{width:16px;height:16px;accent-color:var(--brand)}
+ .banner{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);color:var(--brand);border-radius:12px;padding:11px 15px;margin:8px 0;font-size:14px}
+ .tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}
+ table{border-collapse:separate;border-spacing:0;width:100%;font-size:14px}
+ th,td{border-bottom:1px solid var(--border);border-left:1px solid var(--border);padding:0;text-align:right;white-space:nowrap}
+ th{background:var(--surface-2);padding:10px 12px;position:sticky;top:0;z-index:2}
+ th .tgt{font-weight:700}th .src{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
+ th.col{cursor:grab;user-select:none;transition:.15s}th.col:active{cursor:grabbing}
+ th.col .grip{color:var(--muted);opacity:.5;font-size:12px;margin-left:5px}
+ th.col.dragover{background:rgba(99,102,241,.14);box-shadow:inset 0 0 0 2px var(--brand)}
+ th.col.dragging{opacity:.4}
+ th.rownum,td.rownum{background:var(--surface-2);color:var(--muted);text-align:center;font-size:12px;min-width:44px;padding:6px}
+ th.act,td.act{text-align:center;min-width:66px;padding:2px}
+ tbody tr:hover td:not(.bad):not(.warn):not(.ign-cell){background:rgba(99,102,241,.045)}
+ td input{border:0;background:transparent;width:100%;min-width:110px;padding:9px 11px;font:inherit;color:inherit;outline:none;border-radius:6px}
+ td.bad{background:var(--bad-bg);position:relative}td.bad input{color:var(--bad-fg);font-weight:600}
+ td.bad::after{content:"!";position:absolute;top:2px;left:5px;color:var(--red);font-weight:800;font-size:11px}
+ td.warn{background:var(--warn-bg);position:relative}td.warn input{color:var(--warn-fg);font-weight:600}
  td.warn::after{content:"⚠";position:absolute;top:1px;left:3px;font-size:10px}
- td input:focus{background:#eef3ff;box-shadow:inset 0 0 0 2px var(--blue)}
- td.const input{background:#f8fafc;color:#64748b}
- tr.rowbad td.rownum{background:#fee2e2;color:#991b1b;font-weight:700}
- .del{background:#fee2e2;color:#b91c1c;border-radius:6px;padding:4px 7px;font-size:13px;cursor:pointer;font-weight:700}
- .del:hover{background:#fecaca}
- .ign{background:#e0e7ff;color:#3730a3;border-radius:6px;padding:4px 7px;font-size:13px;cursor:pointer;font-weight:700;margin-right:4px}
- .ign:hover{background:#c7d2fe}
- .pill.ign{background:#e0e7ff;color:#3730a3}
- tr.rowign td.rownum{background:#e0e7ff;color:#3730a3;font-weight:700}
- tr.rowign td input{color:#475569}
- td.ign-cell{background:#f5f3ff}
- .legend{display:flex;gap:16px;color:var(--muted);font-size:13px;margin:10px 2px;flex-wrap:wrap}
- .legend i{display:inline-block;width:13px;height:13px;border-radius:3px;vertical-align:middle;margin-left:5px}
- .msg{border-radius:10px;padding:11px 15px;margin:10px 0;font-weight:600}
- .msg.ok{background:#dcfce7;color:#166534}.msg.err{background:#fef2f2;color:#991b1b}
- .msg.warnbox{background:#fffbeb;color:#92400e;border:1px solid #fde68a;font-weight:500}
- .pager{display:flex;gap:8px;align-items:center;justify-content:center;margin:12px 0;font-size:14px;color:#334155}
- .pager button{background:#e2e8f0;color:#334155;padding:6px 12px}.pager button:disabled{opacity:.4;cursor:default}
- .dl{display:inline-block;background:var(--green);color:#fff;text-decoration:none;border-radius:9px;padding:10px 18px;font-weight:600;margin:6px 8px 6px 0}
- .dl.rej{background:var(--red)}.dl.rep{background:#475569}.hint{color:var(--muted);font-size:13px}
+ td input:focus{background:var(--surface);box-shadow:inset 0 0 0 2px var(--brand)}
+ td.const input{background:var(--surface-2);color:var(--muted)}
+ tr.rowbad td.rownum{background:var(--bad-bg);color:var(--bad-fg);font-weight:700}
+ .del,.ign{border-radius:8px;padding:5px 8px;font-size:13px;cursor:pointer;font-weight:700;transition:.12s;line-height:1;display:inline-block}
+ .del{background:var(--bad-bg);color:var(--bad-fg)}.del:hover{filter:brightness(.95)}
+ .ign{background:var(--ign-bg);color:var(--ign-fg);margin-right:4px}.ign:hover{filter:brightness(.96)}
+ tr.rowign td.rownum{background:var(--ign-bg);color:var(--ign-fg);font-weight:700}
+ tr.rowign td input{color:var(--muted)}
+ td.ign-cell{background:var(--ign-bg)}
+ .legend{display:flex;gap:14px;color:var(--muted);font-size:12.5px;margin:12px 4px;flex-wrap:wrap;align-items:center}
+ .legend i{display:inline-block;width:12px;height:12px;border-radius:4px;vertical-align:middle;margin-left:5px;border:1px solid var(--border)}
+ .legend i.sw-bad{background:var(--bad-bg)}.legend i.sw-warn{background:var(--warn-bg)}
+ .legend i.sw-const{background:var(--surface-2)}.legend i.sw-ign{background:var(--ign-bg)}
+ .msg{border-radius:12px;padding:11px 15px;margin:10px 0;font-weight:600}
+ .msg.ok{background:var(--ok-bg);color:var(--ok-fg)}.msg.err{background:var(--bad-bg);color:var(--bad-fg)}
+ .msg.warnbox{background:var(--warn-bg);color:var(--warn-fg);border:1px solid rgba(217,119,6,.3);font-weight:500}
+ .pager{display:flex;gap:10px;align-items:center;justify-content:center;margin:16px 0;font-size:14px;color:var(--muted)}
+ .pager button{background:var(--surface);color:var(--text);border:1px solid var(--border)}.pager button:disabled{opacity:.4;cursor:default}
+ .dl{display:inline-block;color:#fff;text-decoration:none;border-radius:11px;padding:11px 20px;font-weight:700;margin:6px 8px 6px 0;box-shadow:var(--shadow);transition:.15s;background:linear-gradient(140deg,#10b981,#059669)}
+ .dl:hover{transform:translateY(-1px)}
+ .dl.rej{background:linear-gradient(140deg,#f43f5e,#dc2626)}.dl.rep{background:linear-gradient(140deg,#64748b,#475569)}
+ .hint{color:var(--muted);font-size:13px}
 </style></head><body><div class="wrap">
- <h1>טבלת טעינה — מסך {{ screen }}</h1>
- <p class="sub">תקן תאים אדומים (רחף לראות סיבה), מחק שורות מיותרות, לחץ <b>בדוק מחדש</b>, ואז <b>צור קובץ טעינה</b>.</p>
+ <h1>📋 טבלת טעינה — מסך {{ screen }}</h1>
+ <p class="sub">תקן תאים מסומנים (רחף לראות סיבה), מחק או התעלם משורות, סדר עמודות בגרירה — ואז הפק את קובץ הטעינה.</p>
  <div class="bar">
   <span class="pill tot" id="p-tot">סה״כ 0</span>
   <span class="pill ok" id="p-ok">תקינות 0</span>
   <span class="pill bad" id="p-bad">שגויות 0</span>
   <span class="pill warn" id="p-warn">אזהרות 0</span>
   <span class="pill ign" id="p-ign">מיוצאות למרות בעיה 0</span>
+  <span class="spacer"></span>
+  <label class="chk" id="filterwrap"><input type="checkbox" id="onlyerr" onchange="render()"> הצג רק שורות לטיפול</label>
+  <button class="b-check" onclick="ignoreAllWarnings()" title="סמן את כל שורות האזהרה כמיוצאות">🚫 התעלם מאזהרות</button>
   <button class="b-check" onclick="revalidate()">🔄 בדוק מחדש</button>
   <button class="b-gen" onclick="generate()">⬇ צור קובץ טעינה</button>
-  <button class="b-check" onclick="ignoreAllWarnings()" title="סמן את כל שורות האזהרה כמיוצאות">🚫 התעלם מאזהרות</button>
-  <label class="chk" id="filterwrap"><input type="checkbox" id="onlyerr" onchange="render()"> הצג רק שורות לטיפול</label>
-  <span class="spacer"></span><a class="back" href="/">→ קובץ חדש</a>
+  <a class="back" href="/">＋ קובץ חדש</a>
  </div>
  <div id="banner"></div><div id="messages"></div>
  <div class="legend">
-  <span><i style="background:#fef2f2;border:1px solid #fecaca"></i>תא שגוי לתיקון</span>
-  <span><i style="background:#fffbeb;border:1px solid #fde68a"></i>אזהרה (לא פוסל — כלול בטעינה)</span>
-  <span><i style="background:#f8fafc;border:1px solid #e3e8f0"></i>ערך קבוע (לא לעריכה)</span>
-  <span><i style="background:#e0e7ff;border:1px solid #c7d2fe"></i>מיוצא למרות בעיה (🚫)</span>
-  <span class="hint">🗑 מוחק שורה · 🚫 מייצא שורה למרות שגיאה/אזהרה · ⋮⋮ גרור כותרת לשינוי סדר · תאריך תמיד dd/mm/yy</span>
+  <span><i class="sw-bad"></i>תא שגוי לתיקון</span>
+  <span><i class="sw-warn"></i>אזהרה (לא פוסל — כלול בטעינה)</span>
+  <span><i class="sw-const"></i>ערך קבוע (לא לעריכה)</span>
+  <span><i class="sw-ign"></i>מיוצא למרות בעיה (🚫)</span>
+  <span class="hint">🗑 מוחק שורה · 🚫 מייצא למרות בעיה · ⋮⋮ גרור כותרת לשינוי סדר · תאריך תמיד dd/mm/yy</span>
  </div>
  <div class="tablewrap"><table id="grid"></table></div>
  <div class="pager" id="pager"></div>

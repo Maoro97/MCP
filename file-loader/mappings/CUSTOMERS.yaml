@@ -1,0 +1,60 @@
+# ============================================================================
+# קובץ מיפוי לדוגמה — מסך לקוחות (CUSTOMERS)
+# ----------------------------------------------------------------------------
+# קובץ זה הוא "מקור האמת" היחיד להכנת קובץ הטעינה למסך הזה.
+# הסדר של העמודות תחת columns קובע את סדר העמודות בקובץ הפלט —
+# והוא חייב להתאים בדיוק להגדרת ה-Interface בפריוריטי!
+# ============================================================================
+
+screen: CUSTOMERS
+interface_name: XXXX_LOADCUST      # שם ה-Interface בפריוריטי (לתיעוד בלבד)
+
+# --- הגדרות פורמט הפלט ---
+delimiter: tab                     # מפריד עמודות: tab / comma / pipe
+encoding: windows-1255             # קידוד הפלט: windows-1255 (און-פרם) / utf-8
+date_format: "%d/%m/%y"            # פורמט התאריך בקובץ הפלט (לדוגמה 23/07/26)
+include_header: false              # האם להוסיף שורת כותרת בקובץ הפלט
+key_fields: [CUSTNAME]             # שדות לבדיקת כפילויות (מזהה ייחודי)
+
+# --- מיפוי העמודות (הסדר = סדר העמודות בפלט) ---
+columns:
+  # מספר לקוח — מפתח ייחודי, חובה, עד 15 תווים
+  - source: "מספר לקוח"
+    target: CUSTNAME
+    required: true
+    max_length: 15
+    transform: [strip]
+
+  # שם לקוח — חובה, עד 48 תווים
+  - source: "שם לקוח"
+    target: CUSTDES
+    required: true
+    max_length: 48
+    transform: [strip]
+
+  # תאריך פתיחה — שדה תאריך (יומר גם ממספר סריאלי של אקסל)
+  - source: "תאריך פתיחה"
+    target: XXXX_OPENDATE
+    type: date
+
+  # מספר עוסק / ח.פ. — מספר, עד 9 ספרות
+  - source: "מספר עוסק"
+    target: CUSTAX
+    type: number
+    max_length: 9
+
+  # טלפון — טקסט, ניקוי רווחים, עד 20 תווים
+  - source: "טלפון"
+    target: PHONE
+    max_length: 20
+    transform: [strip, remove_spaces]
+
+  # חייב מע"מ — מיפוי ערכים לערכי פריוריטי (Y/N), ברירת מחדל Y
+  - source: "חייב מעמ"
+    target: VATFLAG
+    value_map: {"כן": "Y", "לא": "N"}
+    default: "Y"
+
+  # סטטוס — ערך קבוע לכל השורות (אין source)
+  - target: STATDES
+    default: "פעיל"

@@ -21,3 +21,8 @@ npm-debug.log*
 .DS_Store
 *.tsbuildinfo
 next-env.d.ts
+
+# python
+__pycache__/
+*.pyc
+file-loader/sample_customers.xlsx

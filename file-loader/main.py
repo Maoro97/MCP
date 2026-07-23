@@ -77,15 +77,48 @@ def load_mapping(screen: str) -> dict:
     return mapping
 
 
-def _list_available_screens() -> str:
+def available_screens() -> list:
+    """מחזיר רשימת שמות המסכים הזמינים (לפי קבצי המיפוי) — לשימוש ה-CLI והוובי."""
     if not os.path.isdir(MAPPINGS_DIR):
-        return ""
+        return []
     names = [
         os.path.splitext(f)[0]
         for f in os.listdir(MAPPINGS_DIR)
         if f.endswith((".yaml", ".yml"))
     ]
-    return ", ".join(sorted(names))
+    return sorted(names)
+
+
+def _list_available_screens() -> str:
+    return ", ".join(available_screens())
+
+
+def prepare(screen, source, sheet=None):
+    """
+    ליבת העיבוד המשותפת ל-CLI ולממשק הוובי.
+    מקבל שם מסך, מקור אקסל (נתיב או file-like) ושם גיליון, ומחזיר dict עם
+    כל תוצאות העיבוד — בלי לכתוב קבצים לדיסק (הקורא מחליט מה לעשות איתן).
+    """
+    mapping = load_mapping(screen)
+    df = read_excel(source, sheet)
+    resolved = build_column_lookup(df, mapping["columns"])
+
+    records = process_rows(df, mapping, resolved)
+    valid_records = [r for r in records if r["reason"] is None]
+    rejected_records = [r for r in records if r["reason"] is not None]
+    enc_warnings = check_encoding(
+        valid_records, mapping["columns"], mapping.get("encoding", "windows-1255")
+    )
+
+    return {
+        "mapping": mapping,
+        "df": df,
+        "records": records,
+        "valid": valid_records,
+        "rejected": rejected_records,
+        "warnings": enc_warnings,
+        "total": len(records),
+    }
 
 
 def _validate_mapping(mapping, path):
@@ -127,27 +160,30 @@ def _validate_mapping(mapping, path):
 # ---------------------------------------------------------------------------
 # קריאת קובץ האקסל
 # ---------------------------------------------------------------------------
-def read_excel(input_path: str, sheet):
-    if not os.path.exists(input_path):
-        raise UserError(f"קובץ הקלט לא נמצא: {input_path}")
+def read_excel(source, sheet):
+    """
+    קורא קובץ אקסל. source יכול להיות נתיב (str) או אובייקט קובץ בזיכרון
+    (file-like) — כך שאותה פונקציה משרתת גם את ה-CLI וגם את הממשק הוובי.
+    """
+    name = source if isinstance(source, str) else "הקובץ שהועלה"
+    if isinstance(source, str) and not os.path.exists(source):
+        raise UserError(f"קובץ הקלט לא נמצא: {source}")
     try:
         # dtype=object שומר על הטיפוסים המקוריים (תאריכים, מספרים, טקסט)
         df = pd.read_excel(
-            input_path,
+            source,
             sheet_name=sheet if sheet is not None else 0,
             dtype=object,
             engine="openpyxl",
         )
     except ValueError as e:
         # לרוב: שם גיליון שגוי
-        raise UserError(
-            f"לא ניתן לקרוא את הגיליון '{sheet}' מהקובץ '{input_path}'.\n{e}"
-        )
+        raise UserError(f"לא ניתן לקרוא את הגיליון '{sheet}' מ{name}.\n{e}")
     except Exception as e:  # noqa: BLE001 — נציג הודעה ידידותית במקום stack trace
-        raise UserError(f"שגיאה בקריאת קובץ האקסל '{input_path}':\n{e}")
+        raise UserError(f"שגיאה בקריאת קובץ האקסל ({name}):\n{e}")
 
     if df.empty:
-        raise UserError(f"הגיליון בקובץ '{input_path}' ריק — אין שורות לעיבוד.")
+        raise UserError(f"הגיליון ב{name} ריק — אין שורות לעיבוד.")
     return df
 
 
@@ -330,15 +366,11 @@ def _encodable(ch, py_enc) -> bool:
 # ---------------------------------------------------------------------------
 # כתיבת קובץ הטעינה
 # ---------------------------------------------------------------------------
-def write_load_file(valid_records, mapping, screen):
+def build_load_content(valid_records, mapping) -> str:
+    """בונה את תוכן קובץ הטעינה כמחרוזת (שורות מופרדות ב-CRLF)."""
     delimiter = _DELIMITERS[mapping.get("delimiter", "tab")]
-    encoding = _ENCODINGS[mapping.get("encoding", "windows-1255")]
     include_header = bool(mapping.get("include_header", False))
     columns = mapping["columns"]
-    ext = _EXTENSIONS[mapping.get("delimiter", "tab")]
-
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    out_path = os.path.join(OUTPUT_DIR, f"{screen}_load.{ext}")
 
     lines = []
     if include_header:
@@ -346,14 +378,31 @@ def write_load_file(valid_records, mapping, screen):
     for rec in valid_records:
         lines.append(delimiter.join(rec["values"]))
 
-    # שורות מופרדות ב-CRLF (תקן קבצי טעקסט ב-Windows / פריוריטי און-פרם)
+    # שורות מופרדות ב-CRLF (תקן קבצי טקסט ב-Windows / פריוריטי און-פרם)
     content = "\r\n".join(lines)
     if lines:
         content += "\r\n"
+    return content
 
-    # errors='replace' — תווים שלא ניתנים לקידוד יוחלפו ב-'?' (כבר הוזהר עליהם)
-    with open(out_path, "w", encoding=encoding, errors="replace", newline="") as f:
-        f.write(content)
+
+def load_content_bytes(content: str, mapping) -> bytes:
+    """מקודד את תוכן קובץ הטעינה לקידוד היעד (errors='replace' לתווים חריגים)."""
+    encoding = _ENCODINGS[mapping.get("encoding", "windows-1255")]
+    return content.encode(encoding, errors="replace")
+
+
+def load_file_extension(mapping) -> str:
+    return _EXTENSIONS[mapping.get("delimiter", "tab")]
+
+
+def write_load_file(valid_records, mapping, screen):
+    ext = load_file_extension(mapping)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    out_path = os.path.join(OUTPUT_DIR, f"{screen}_load.{ext}")
+
+    content = build_load_content(valid_records, mapping)
+    with open(out_path, "wb") as f:
+        f.write(load_content_bytes(content, mapping))
 
     return out_path
 
@@ -368,19 +417,23 @@ def write_rejected_file(rejected_records, df, screen):
     """
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     out_path = os.path.join(OUTPUT_DIR, f"{screen}_rejected.xlsx")
+    build_rejected_df(rejected_records, df).to_excel(
+        out_path, index=False, engine="openpyxl"
+    )
+    return out_path
 
+
+def build_rejected_df(rejected_records, df):
+    """בונה DataFrame של השורות הפסולות: עמודות המקור + 'שורה במקור' + 'סיבת פסילה'."""
     rows = []
     for rec in rejected_records:
         data = rec["original"].to_dict()
         data["סיבת פסילה"] = rec["reason"]
         data["שורה במקור"] = rec["excel_row"]
         rows.append(data)
-
     # שמירה על סדר העמודות המקורי + העמודות שהוספנו בסוף
     cols = list(df.columns) + ["שורה במקור", "סיבת פסילה"]
-    out_df = pd.DataFrame(rows, columns=cols)
-    out_df.to_excel(out_path, index=False, engine="openpyxl")
-    return out_path
+    return pd.DataFrame(rows, columns=cols)
 
 
 # ---------------------------------------------------------------------------

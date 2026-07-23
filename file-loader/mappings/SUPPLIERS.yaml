@@ -1,0 +1,56 @@
+# ============================================================================
+# קובץ מיפוי לדוגמה — מסך ספקים (SUPPLIERS)
+# הסדר של columns כאן = סדר העמודות בקובץ הפלט (חייב להתאים ל-Interface).
+# ============================================================================
+
+screen: SUPPLIERS
+interface_name: XXXX_LOADSUP       # שם ה-Interface בפריוריטי (תיעוד בלבד)
+
+delimiter: tab
+encoding: windows-1255
+date_format: "%d/%m/%y"
+include_header: false
+key_fields: [SUPNAME]              # מספר ספק = מזהה ייחודי
+
+columns:
+  # מספר ספק — מפתח, חובה, עד 15 תווים
+  - source: "מספר ספק"
+    target: SUPNAME
+    required: true
+    max_length: 15
+    transform: [strip]
+
+  # שם ספק — חובה, עד 48 תווים
+  - source: "שם ספק"
+    target: SUPDES
+    required: true
+    max_length: 48
+    transform: [strip]
+
+  # מספר עוסק מורשה / ח.פ. — מספר, עד 9 ספרות
+  - source: "עוסק מורשה"
+    target: VATNUM
+    type: number
+    max_length: 9
+
+  # טלפון — ניקוי רווחים, עד 20 תווים
+  - source: "טלפון"
+    target: PHONE
+    max_length: 20
+    transform: [strip, remove_spaces]
+
+  # דוא"ל — עד 50 תווים
+  - source: "אימייל"
+    target: EMAIL
+    max_length: 50
+    transform: [strip, lower]
+
+  # מטבע — מיפוי לקוד מטבע, ברירת מחדל שקל
+  - source: "מטבע"
+    target: CURRENCY
+    value_map: {"שקל": "ILS", 'ש"ח': "ILS", "דולר": "USD", "אירו": "EUR", "יורו": "EUR"}
+    default: "ILS"
+
+  # תנאי תשלום — ערך קבוע לכל השורות
+  - target: PAYCODE
+    default: "שוטף+30"

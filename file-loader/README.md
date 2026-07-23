@@ -61,6 +61,28 @@ python webapp.py
 
 ---
 
+## קבצי דוגמה לניסיון (`examples/`)
+
+בתיקייה `examples/` יש קבצי אקסל מוכנים לגרירה לממשק או להרצה מה-CLI:
+
+| קובץ | מסך (`--screen`) | מה הוא מדגים |
+|---|---|---|
+| `customers_clean.xlsx` | `CUSTOMERS` | 5 לקוחות תקינים — נטענים במלואם |
+| `customers_messy.xlsx` | `CUSTOMERS` | ניקיון אוטומטי + כל סוגי הפסילות |
+| `items.xlsx` | `ITEMS` | פריטים/מק"ט — מיפוי יחידות מידה, מחיר, ברקוד |
+| `suppliers.xlsx` | `SUPPLIERS` | ספקים — קודי מטבע, אימייל, טלפון |
+
+לדוגמה:
+
+```bash
+python main.py --input examples/items.xlsx --screen ITEMS
+```
+
+את הקבצים אפשר לשחזר בכל עת עם `python make_examples.py`.
+בנוסף ל-`CUSTOMERS`, מצורפים קבצי מיפוי לדוגמה גם ל-`ITEMS` (מסך PART) ול-`SUPPLIERS`.
+
+---
+
 ## קבצי הפלט (בתיקיית `output/`)
 
 | קובץ | מתי נוצר | תוכן |

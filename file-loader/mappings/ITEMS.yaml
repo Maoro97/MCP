@@ -1,0 +1,58 @@
+# ============================================================================
+# קובץ מיפוי לדוגמה — מסך פריטים / מק"ט (PART)
+# הסדר של columns כאן = סדר העמודות בקובץ הפלט (חייב להתאים ל-Interface).
+# ============================================================================
+
+screen: PART
+interface_name: XXXX_LOADPART      # שם ה-Interface בפריוריטי (תיעוד בלבד)
+
+delimiter: tab
+encoding: windows-1255
+date_format: "%d/%m/%y"
+include_header: false
+key_fields: [PARTNAME]             # מק"ט = מזהה ייחודי
+
+columns:
+  # מק"ט — מפתח, חובה, עד 20 תווים
+  - source: "מקט"
+    target: PARTNAME
+    required: true
+    max_length: 20
+    transform: [strip, remove_spaces]
+
+  # תאור הפריט — חובה, עד 48 תווים
+  - source: "תאור פריט"
+    target: PARTDES
+    required: true
+    max_length: 48
+    transform: [strip]
+
+  # משפחת מוצר — עד 16 תווים
+  - source: "משפחה"
+    target: FAMILYNAME
+    max_length: 16
+    transform: [strip]
+
+  # יחידת מידה — מיפוי לערכי פריוריטי, ברירת מחדל יח'
+  - source: "יחידת מידה"
+    target: UNITNAME
+    value_map: {"יחידה": "יח'", "יח'": "יח'", "קג": "ק\"ג", 'ק"ג': "ק\"ג", "מטר": "מ'", "ליטר": "ל'"}
+    default: "יח'"
+
+  # ברקוד — טקסט, ספרות בלבד, עד 20 תווים
+  - source: "ברקוד"
+    target: BARCODE
+    max_length: 20
+    transform: [digits_only]
+
+  # מחיר מחירון — מספר עם 2 ספרות אחרי הנקודה
+  - source: "מחיר"
+    target: PRICE
+    type: number
+    decimals: 2
+
+  # סטטוס פעיל/לא פעיל — 0=פעיל, 1=לא פעיל, ברירת מחדל פעיל
+  - source: "לא פעיל"
+    target: INACTIVE
+    value_map: {"פעיל": "0", "לא פעיל": "1", "כן": "1", "לא": "0"}
+    default: "0"

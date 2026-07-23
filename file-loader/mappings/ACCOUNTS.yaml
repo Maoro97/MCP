@@ -1,0 +1,73 @@
+# ============================================================================
+# קובץ מיפוי — טעינת אינדקס חשבונות/לקוחות מיצוא חשבשבת אל פריוריטי
+# מתאים לקובץ שבו שורת הכותרת אינה בשורה הראשונה (יש שורות כותרת/תאריך מעל).
+# הכלי מזהה אוטומטית את שורת הכותרת לפי שמות העמודות שמופיעים כאן ב-source.
+# אם הזיהוי לא מדויק — אפשר לציין header_row מפורש (מספר שורה, החל מ-1).
+# ============================================================================
+
+screen: CUSTOMERS
+interface_name: XXXX_LOADCUST
+# header_row: 3            # אופציונלי — לכפות שורת כותרת מפורשת (כאן היא מזוהה אוטומטית)
+
+delimiter: tab
+encoding: windows-1255
+date_format: "%d/%m/%y"
+include_header: false
+key_fields: [CUSTNAME]     # מפתח חשבון = מזהה ייחודי
+
+columns:
+  # מפתח חשבון — מזהה הלקוח בפריוריטי, חובה, עד 20 תווים
+  - source: "מפתח חשבון"
+    target: CUSTNAME
+    required: true
+    max_length: 20
+    transform: [strip, remove_spaces]
+
+  # שם חשבון — שם הלקוח, חובה, עד 48 תווים
+  - source: "שם חשבון"
+    target: CUSTDES
+    required: true
+    max_length: 48
+    transform: [strip]
+
+  # כתובת — עד 48 תווים
+  - source: "כתובת"
+    target: ADDRESS
+    max_length: 48
+    transform: [strip]
+
+  # עיר — עד 24 תווים
+  - source: "עיר"
+    target: STATEA
+    max_length: 24
+    transform: [strip]
+
+  # טלפון — ניקוי רווחים, עד 20 תווים
+  - source: "טלפון"
+    target: PHONE
+    max_length: 20
+    transform: [strip, remove_spaces]
+
+  # טלפון נייד — ניקוי רווחים, עד 20 תווים
+  - source: "טלפון נייד"
+    target: CELLPHONE
+    max_length: 20
+    transform: [strip, remove_spaces]
+
+  # דואר אלקטרוני — עד 50 תווים, אותיות קטנות
+  - source: "דואר אלקטרוני"
+    target: EMAIL
+    max_length: 50
+    transform: [strip, lower]
+
+  # חשבון פעיל — מיפוי לדגל פעיל/לא פעיל, ברירת מחדל פעיל
+  - source: "חשבון פעיל"
+    target: XXXX_ACTIVE
+    value_map: {"פעיל": "Y", "לא פעיל": "N", "לא": "N"}
+    default: "Y"
+
+  # קוד מיון — מספר, עד 10 ספרות
+  - source: "קוד מיון"
+    target: XXXX_SORTCODE
+    type: number
+    max_length: 10

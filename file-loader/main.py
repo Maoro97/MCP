@@ -110,19 +110,23 @@ def rows_from_dataframe(df, mapping, resolved):
     return rows
 
 
-def evaluate_grid(mapping, input_rows):
+def evaluate_grid(mapping, input_rows, reserved_keys=None, excel_rows=None):
     """
     ליבת "טבלת הטעינה" — מקבלת שורות של {target: ערך} (גולמי מהאקסל או
     ערוך מהמשתמש), מריצה עיבוד + ולידציה על *כל תא בנפרד*, ומחזירה רשימת
     שורות עם הערך המעובד וסיבת השגיאה לכל תא. כפילויות מסמנות את תאי המפתח.
 
+    reserved_keys: קבוצת מפתחות (tuples) של שורות תקינות ששמורות כבר בשרת
+                   (בקבצים גדולים מוצגות למשתמש רק השורות השגויות) — שורה
+                   שמפתחה מתנגש איתן תסומן ככפולה.
+    excel_rows:    מספרי השורות המקוריים בקובץ (למצב "שגויות בלבד").
+
     כל שורה: {excel_row, valid, cells:[{target, value, error}]}
-    הפונקציה משמשת גם לטעינה הראשונית וגם לכל "בדיקה מחדש" אחרי עריכה —
-    אותה לוגיקה בדיוק כמו ה-CLI, כך שהתוצאה עקבית.
     """
     columns = mapping["columns"]
     date_format = mapping.get("date_format", DEFAULT_DATE_FORMAT)
     key_fields = mapping.get("key_fields") or []
+    reserved_keys = reserved_keys or set()
 
     rows_out = []
     for i, row in enumerate(input_rows):
@@ -135,7 +139,8 @@ def evaluate_grid(mapping, input_rows):
             if err:
                 row_valid = False
             cells.append({"target": col["target"], "value": value, "error": err})
-        rows_out.append({"excel_row": i + 2, "cells": cells, "valid": row_valid})
+        excel_row = excel_rows[i] if excel_rows else i + 2
+        rows_out.append({"excel_row": excel_row, "cells": cells, "valid": row_valid})
 
     # בדיקת כפילויות בין השורות שתקינות עד כה — סימון תאי המפתח
     if key_fields:
@@ -149,7 +154,31 @@ def evaluate_grid(mapping, input_rows):
             for c in rows_out[idx]["cells"]:
                 if c["target"] in key_fields:
                     c["error"] = reason
+
+        # התנגשות מול שורות תקינות שכבר שמורות בשרת
+        if reserved_keys:
+            for r in rows_out:
+                if not r["valid"]:
+                    continue
+                key = tuple(
+                    next(c["value"] for c in r["cells"] if c["target"] == k)
+                    for k in key_fields
+                )
+                if key in reserved_keys:
+                    r["valid"] = False
+                    for c in r["cells"]:
+                        if c["target"] in key_fields:
+                            c["error"] = (
+                                f"כפילות במפתח ({', '.join(key_fields)}): "
+                                f"'{' | '.join(key)}' כבר קיים בשורות התקינות שנטענו"
+                            )
     return rows_out
+
+
+def row_key(cells, key_fields):
+    """מחזיר את המפתח (tuple) של שורת טבלה לפי key_fields."""
+    lut = {c["target"]: c["value"] for c in cells}
+    return tuple(lut.get(k, "") for k in key_fields)
 
 
 def grid_valid_records(rows_out):
@@ -160,14 +189,23 @@ def grid_valid_records(rows_out):
     ]
 
 
-def prepare(screen, source, sheet=None):
+def _expected_sources(mapping):
+    """שמות עמודות המקור מהמיפוי — לצורך זיהוי אוטומטי של שורת הכותרת."""
+    return [c["source"] for c in mapping["columns"] if c.get("source")]
+
+
+def prepare(screen, source, sheet=None, header_row=None):
     """
     ליבת העיבוד המשותפת ל-CLI ולממשק הוובי.
     מקבל שם מסך, מקור אקסל (נתיב או file-like) ושם גיליון, ומחזיר dict עם
     כל תוצאות העיבוד — בלי לכתוב קבצים לדיסק (הקורא מחליט מה לעשות איתן).
     """
     mapping = load_mapping(screen)
-    df = read_excel(source, sheet)
+    df = read_excel(
+        source, sheet,
+        header_row=header_row if header_row is not None else mapping.get("header_row"),
+        expected_sources=_expected_sources(mapping),
+    )
     resolved = build_column_lookup(df, mapping["columns"])
 
     records = process_rows(df, mapping, resolved)
@@ -227,19 +265,72 @@ def _validate_mapping(mapping, path):
 # ---------------------------------------------------------------------------
 # קריאת קובץ האקסל
 # ---------------------------------------------------------------------------
-def read_excel(source, sheet):
+def detect_header_row(raw, expected_sources, scan=30):
+    """
+    מזהה את שורת הכותרת בקובץ שבו הכותרת אינה בהכרח בשורה הראשונה
+    (קבצי יצוא רבים מוסיפים שורות כותרת/תאריך/לוגו מעל). האסטרטגיה:
+    בוחרים את השורה (מבין הראשונות) שמכילה הכי הרבה משמות העמודות שבמיפוי.
+    אם אין התאמה — נופלים לשורה הראשונה שאינה ריקה.
+    מחזיר אינדקס (0-based).
+    """
+    expected = {_norm_header(s) for s in (expected_sources or []) if s}
+    limit = min(scan, len(raw))
+
+    best_idx, best_score = None, 0
+    for i in range(limit):
+        vals = {
+            _norm_header(v)
+            for v in raw.iloc[i].tolist()
+            if v is not None and str(v).strip() != ""
+        }
+        if not vals:
+            continue
+        score = len(expected & vals)
+        if score > best_score:
+            best_score, best_idx = score, i
+
+    if best_idx is not None and best_score >= 1:
+        return best_idx
+
+    # אין התאמה לשמות המיפוי — נשתמש בשורה הראשונה שאינה ריקה
+    for i in range(limit):
+        if any(v is not None and str(v).strip() != "" for v in raw.iloc[i].tolist()):
+            return i
+    return 0
+
+
+def _build_unique_headers(header_vals):
+    """הופך את שורת הכותרת לרשימת שמות עמודות ייחודיים ולא ריקים."""
+    names, seen = [], {}
+    for j, v in enumerate(header_vals):
+        name = _norm_header(v) if v is not None and str(v).strip() != "" else f"עמודה_{j + 1}"
+        if name in seen:
+            seen[name] += 1
+            name = f"{name}_{seen[name]}"
+        else:
+            seen[name] = 0
+        names.append(name)
+    return names
+
+
+def read_excel(source, sheet, header_row=None, expected_sources=None):
     """
     קורא קובץ אקסל. source יכול להיות נתיב (str) או אובייקט קובץ בזיכרון
     (file-like) — כך שאותה פונקציה משרתת גם את ה-CLI וגם את הממשק הוובי.
+
+    תומך בקבצים שבהם שורת הכותרת אינה הראשונה:
+    - header_row (1-based) — לכפות שורת כותרת מפורשת.
+    - אחרת — זיהוי אוטומטי לפי expected_sources (שמות העמודות במיפוי).
     """
     name = source if isinstance(source, str) else "הקובץ שהועלה"
     if isinstance(source, str) and not os.path.exists(source):
         raise UserError(f"קובץ הקלט לא נמצא: {source}")
     try:
-        # dtype=object שומר על הטיפוסים המקוריים (תאריכים, מספרים, טקסט)
-        df = pd.read_excel(
+        # קוראים ללא כותרת (header=None) כדי לאתר בעצמנו את שורת הכותרת
+        raw = pd.read_excel(
             source,
             sheet_name=sheet if sheet is not None else 0,
+            header=None,
             dtype=object,
             engine="openpyxl",
         )
@@ -249,8 +340,30 @@ def read_excel(source, sheet):
     except Exception as e:  # noqa: BLE001 — נציג הודעה ידידותית במקום stack trace
         raise UserError(f"שגיאה בקריאת קובץ האקסל ({name}):\n{e}")
 
-    if df.empty:
+    if raw.empty:
         raise UserError(f"הגיליון ב{name} ריק — אין שורות לעיבוד.")
+
+    # מיקום שורת הכותרת
+    if header_row is not None:
+        hidx = int(header_row) - 1
+        if hidx < 0 or hidx >= len(raw):
+            raise UserError(
+                f"שורת הכותרת שצוינה ({header_row}) מחוץ לטווח הקובץ "
+                f"(יש {len(raw)} שורות)."
+            )
+    else:
+        hidx = detect_header_row(raw, expected_sources)
+
+    columns = _build_unique_headers(raw.iloc[hidx].tolist())
+    df = raw.iloc[hidx + 1:].copy()
+    df.columns = columns
+    # מסירים שורות ריקות לגמרי (נפוץ בסופי קבצי יצוא)
+    df = df.dropna(how="all").reset_index(drop=True)
+
+    if df.empty:
+        raise UserError(
+            f"לא נמצאו שורות נתונים מתחת לשורת הכותרת (שורה {hidx + 1}) ב{name}."
+        )
     return df
 
 
@@ -570,7 +683,11 @@ def write_report_file(report_text, enc_warnings, screen):
 # ---------------------------------------------------------------------------
 def run(args):
     mapping = load_mapping(args.screen)
-    df = read_excel(args.input, args.sheet)
+    df = read_excel(
+        args.input, args.sheet,
+        header_row=args.header_row if args.header_row is not None else mapping.get("header_row"),
+        expected_sources=_expected_sources(mapping),
+    )
     resolved = build_column_lookup(df, mapping["columns"])
 
     records = process_rows(df, mapping, resolved)
@@ -614,6 +731,10 @@ def main():
         help="שם המסך — נטען מ-mappings/<SCREEN>.yaml",
     )
     parser.add_argument("--sheet", default=None, help="שם הגיליון (ברירת מחדל: הראשון)")
+    parser.add_argument(
+        "--header-row", type=int, default=None, dest="header_row",
+        help="מספר שורת הכותרת (החל מ-1). ברירת מחדל: זיהוי אוטומטי",
+    )
     parser.add_argument(
         "--dry-run", action="store_true",
         help="ולידציה בלבד — בלי לייצר קובץ טעינה",

@@ -184,8 +184,14 @@ GRID = """
  td input:focus{background:#eef3ff;box-shadow:inset 0 0 0 2px var(--blue)}
  td.const input{background:#f8fafc;color:#64748b}
  tr.rowbad td.rownum{background:#fee2e2;color:#991b1b;font-weight:700}
- .del{background:#fee2e2;color:#b91c1c;border-radius:6px;padding:4px 8px;font-size:13px;cursor:pointer;font-weight:700}
+ .del{background:#fee2e2;color:#b91c1c;border-radius:6px;padding:4px 7px;font-size:13px;cursor:pointer;font-weight:700}
  .del:hover{background:#fecaca}
+ .ign{background:#e0e7ff;color:#3730a3;border-radius:6px;padding:4px 7px;font-size:13px;cursor:pointer;font-weight:700;margin-right:4px}
+ .ign:hover{background:#c7d2fe}
+ .pill.ign{background:#e0e7ff;color:#3730a3}
+ tr.rowign td.rownum{background:#e0e7ff;color:#3730a3;font-weight:700}
+ tr.rowign td input{color:#475569}
+ td.ign-cell{background:#f5f3ff}
  .legend{display:flex;gap:16px;color:var(--muted);font-size:13px;margin:10px 2px;flex-wrap:wrap}
  .legend i{display:inline-block;width:13px;height:13px;border-radius:3px;vertical-align:middle;margin-left:5px}
  .msg{border-radius:10px;padding:11px 15px;margin:10px 0;font-weight:600}
@@ -203,8 +209,10 @@ GRID = """
   <span class="pill ok" id="p-ok">תקינות 0</span>
   <span class="pill bad" id="p-bad">שגויות 0</span>
   <span class="pill warn" id="p-warn">אזהרות 0</span>
+  <span class="pill ign" id="p-ign">מיוצאות למרות בעיה 0</span>
   <button class="b-check" onclick="revalidate()">🔄 בדוק מחדש</button>
   <button class="b-gen" onclick="generate()">⬇ צור קובץ טעינה</button>
+  <button class="b-check" onclick="ignoreAllWarnings()" title="סמן את כל שורות האזהרה כמיוצאות">🚫 התעלם מאזהרות</button>
   <label class="chk" id="filterwrap"><input type="checkbox" id="onlyerr" onchange="render()"> הצג רק שורות לטיפול</label>
   <span class="spacer"></span><a class="back" href="/">→ קובץ חדש</a>
  </div>
@@ -213,7 +221,8 @@ GRID = """
   <span><i style="background:#fef2f2;border:1px solid #fecaca"></i>תא שגוי לתיקון</span>
   <span><i style="background:#fffbeb;border:1px solid #fde68a"></i>אזהרה (לא פוסל — כלול בטעינה)</span>
   <span><i style="background:#f8fafc;border:1px solid #e3e8f0"></i>ערך קבוע (לא לעריכה)</span>
-  <span class="hint">🗑 מוחק שורה · ⋮⋮ גרור כותרת עמודה כדי לשנות את סדר הייצוא · התאריך תמיד dd/mm/yy</span>
+  <span><i style="background:#e0e7ff;border:1px solid #c7d2fe"></i>מיוצא למרות בעיה (🚫)</span>
+  <span class="hint">🗑 מוחק שורה · 🚫 מייצא שורה למרות שגיאה/אזהרה · ⋮⋮ גרור כותרת לשינוי סדר · תאריך תמיד dd/mm/yy</span>
  </div>
  <div class="tablewrap"><table id="grid"></table></div>
  <div class="pager" id="pager"></div>
@@ -228,7 +237,7 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','
 
 function overall(){
   let good=0,bad=0;
-  for(const r of GRID.rows){ if(r.valid) good++; else bad++; }
+  for(const r of GRID.rows){ if(r.valid || r.ignore) good++; else bad++; }
   return {total:GRID.server_valid+GRID.rows.length+GRID.overflow,
           valid:GRID.server_valid+good, invalid:bad+GRID.overflow};
 }
@@ -236,7 +245,8 @@ function displayed(){
   const onlyErr = $('onlyerr').checked;
   const out=[];
   GRID.rows.forEach((r,gi)=>{
-    const attention = !r.valid || r.cells.some(c=>c.warning);
+    // "לטיפול" = יש בעיה ולא סומן להתעלמות
+    const attention = !r.ignore && (!r.valid || r.cells.some(c=>c.warning));
     if(!onlyErr || attention) out.push([gi,r]);
   });
   return out;
@@ -255,12 +265,18 @@ function render(){
   }
   h+='</tr></thead><tbody>';
   for(const [gi,r] of slice){
-    h+='<tr class="'+(r.valid?'':'rowbad')+'">'+
-       '<td class="act"><span class="del" title="מחק שורה" onclick="delRow('+gi+')">🗑</span></td>'+
-       '<td class="rownum">'+r.excel_row+'</td>';
+    const problem = !r.valid || r.cells.some(c=>c.warning);
+    const rowcls = r.ignore ? 'rowign' : (r.valid ? '' : 'rowbad');
+    let act='<span class="del" title="מחק שורה" onclick="delRow('+gi+')">🗑</span>';
+    if(problem) act+='<span class="ign" title="'+(r.ignore?'בטל התעלמות':'התעלם מהבעיה — ייצא בכל זאת')+
+       '" onclick="toggleIgnore('+gi+')">'+(r.ignore?'↩':'🚫')+'</span>';
+    h+='<tr class="'+rowcls+'"><td class="act">'+act+'</td><td class="rownum">'+r.excel_row+'</td>';
     for(const ci of colOrder){
       const cell=r.cells[ci], c=cols[ci];
-      const cls=(cell.error?'bad ':(cell.warning?'warn ':''))+(c.constant?'const':'');
+      let cls=c.constant?'const':'';
+      if(r.ignore){ if(cell.error||cell.warning) cls+=' ign-cell'; }
+      else if(cell.error) cls='bad '+cls;
+      else if(cell.warning) cls='warn '+cls;
       const title=cell.error?' title="'+esc(cell.error)+'"':(cell.warning?' title="'+esc(cell.warning)+'"':'');
       const ro=c.constant?' readonly':'';
       h+='<td class="'+cls+'"'+title+'><input value="'+esc(cell.value)+'"'+ro+
@@ -283,12 +299,20 @@ function renderPager(n,pages){
 function updateCounts(){
   const o=overall();
   $('p-tot').textContent='סה״כ '+o.total; $('p-ok').textContent='תקינות '+o.valid; $('p-bad').textContent='שגויות '+o.invalid;
-  const warned=GRID.rows.filter(r=>r.cells.some(c=>c.warning)).length;
-  $('p-warn').textContent='אזהרות '+warned;
-  $('p-warn').style.display = warned? '' : 'none';
+  const warned=GRID.rows.filter(r=>!r.ignore && r.cells.some(c=>c.warning)).length;
+  $('p-warn').textContent='אזהרות '+warned; $('p-warn').style.display = warned? '' : 'none';
+  const ign=GRID.rows.filter(r=>r.ignore).length;
+  $('p-ign').textContent='מיוצאות למרות בעיה '+ign; $('p-ign').style.display = ign? '' : 'none';
 }
 function upd(gi,ci,val){ GRID.rows[gi].cells[ci].value=val; }
 function delRow(gi){ GRID.rows.splice(gi,1); render(); }
+function toggleIgnore(gi){ GRID.rows[gi].ignore=!GRID.rows[gi].ignore; render(); }
+function ignoreAllWarnings(){
+  let n=0;
+  GRID.rows.forEach(r=>{ if(!r.ignore && r.valid && r.cells.some(c=>c.warning)){ r.ignore=true; n++; } });
+  render();
+  flash(n?'ok':'err', n? (n+' שורות אזהרה סומנו — ייכללו בייצוא ללא התראה.') : 'אין שורות אזהרה להתעלמות.');
+}
 
 // --- גרירת עמודות לשינוי סדר הייצוא ---
 let dragFromCi=null;
@@ -322,18 +346,24 @@ function collect(){
   return {screen:GRID.screen, run_id:GRID.run_id,
     rows:GRID.rows.map(r=>{const o={};r.cells.forEach(c=>o[c.target]=c.value);return o;}),
     excel_rows:GRID.rows.map(r=>r.excel_row),
+    ignore:GRID.rows.map(r=>!!r.ignore),                 // שורות שסומנו להתעלמות
     order:colOrder.map(ci=>GRID.columns[ci].target)};   // סדר עמודות לייצוא
+}
+function keepIgnore(newRows){   // שמירת סימוני ההתעלמות אחרי רענון מהשרת
+  const old=GRID.rows;
+  newRows.forEach((r,i)=>{ if(old[i]) r.ignore=old[i].ignore; });
+  return newRows;
 }
 async function revalidate(){
   const res=await post('/grid/validate',collect()); if(!res)return;
-  GRID.rows=res.rows; render();
+  GRID.rows=keepIgnore(res.rows); render();
   const o=overall();
   flash(o.invalid===0?'ok':'err', o.invalid===0?'✓ כל השורות תקינות — אפשר לייצר קובץ טעינה.':
         'נותרו '+o.invalid+' שורות עם שגיאות לתיקון.');
 }
 async function generate(){
   const res=await post('/grid/generate',collect()); if(!res)return;
-  if(res.rows){ GRID.rows=res.rows; GRID.server_valid=res.server_valid; GRID.overflow=res.overflow; render(); }
+  if(res.rows){ GRID.rows=keepIgnore(res.rows); GRID.server_valid=res.server_valid; GRID.overflow=res.overflow; render(); }
   let html='';
   if(res.valid>0){ html+='<a class="dl" href="/download/'+res.run_id+'/load">⬇ הורדת קובץ הטעינה ('+esc(res.load_name)+')</a>';
     html+='<a class="dl rep" href="/download/'+res.run_id+'/report">⬇ דוח</a>'; }
@@ -470,6 +500,13 @@ def grid_generate():
         return jsonify(error=str(e)), 400
     except Exception as e:  # noqa: BLE001
         return jsonify(error=f"שגיאה בהפקה: {e}"), 400
+
+    # "התעלם מבעיה" — שורות שסומנו ידנית ייכללו בייצוא למרות שגיאה/אזהרה
+    ignore = data.get("ignore") or []
+    for i, r in enumerate(rows_out):
+        if i < len(ignore) and ignore[i]:
+            r["valid"] = True
+            r["forced"] = True
 
     now_valid = [r for r in rows_out if r["valid"]]
     still_invalid = [r for r in rows_out if not r["valid"]]

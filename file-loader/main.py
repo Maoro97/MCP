@@ -464,31 +464,55 @@ def _source_aliases(source):
     return list(source) if isinstance(source, (list, tuple)) else [source]
 
 
-def build_column_lookup(df, columns):
+def resolve_columns(df, columns, overrides=None):
     """
-    בונה מיפוי בין ה-source שבקובץ המיפוי לבין העמודה בפועל באקסל.
-    source יכול להיות שם עמודה בודד, או רשימת כינויים (aliases) — כך שאותו
-    מיפוי מתאים למספר פורמטים של קבצים (הכלי בוחר את הכינוי הראשון שקיים בקובץ).
-    עמודת חובה שאף כינוי שלה לא נמצא — זורקת שגיאה. עמודת רשות שחסרה — פשוט
-    תישאר ריקה (עם ברירת המחדל אם הוגדרה).
+    פותר לכל עמודת מיפוי איזו עמודה באקסל מזינה אותה.
+    - source יכול להיות שם בודד או רשימת כינויים (aliases) — נבחר הכינוי הראשון
+      שקיים בקובץ.
+    - overrides: {target: שם_עמודה_באקסל} — בחירה ידנית של המשתמש (גוברת על הזיהוי
+      האוטומטי). ערך ריק = "לא ממופה" במפורש.
+
+    מחזיר (resolved, unmatched_required, unmatched_optional) — בלי לזרוק שגיאה,
+    כדי שהממשק יוכל להציג טבלה ולתת למשתמש לבחור עמודה לשדות שלא זוהו.
     """
+    overrides = overrides or {}
+    valid_cols = set(df.columns)
     lookup = {_norm_header(c): c for c in df.columns}
-    resolved = {}
-    missing_required = []
+    resolved, unmatched_required, unmatched_optional = {}, [], []
     for col in columns:
+        t = col["target"]
         aliases = _source_aliases(col.get("source"))
         if not aliases:
             continue  # עמודת ערך קבוע — אין מקור
+        required_missing = col.get("required") and col.get("default") in (None, "")
+        if t in overrides:  # בחירה ידנית מהממשק
+            val = overrides[t]
+            if val and val in valid_cols:
+                resolved[t] = val
+            elif required_missing:
+                unmatched_required.append(t)
+            else:
+                unmatched_optional.append(t)
+            continue
         actual = next((lookup[_norm_header(a)] for a in aliases if _norm_header(a) in lookup), None)
         if actual is not None:
-            resolved[col["target"]] = actual
-        elif col.get("required") and col.get("default") in (None, ""):
-            # שדה חובה ללא עמודה מתאימה ייחשב חסר — אלא אם יש לו ברירת מחדל שתמלא אותו
-            missing_required.append((col["target"], aliases))
-    if missing_required:
-        lines = "\n  - ".join(
-            f"{t} (חיפשנו: {', '.join(a)})" for t, a in missing_required
-        )
+            resolved[t] = actual
+        elif required_missing:
+            unmatched_required.append(t)
+        else:
+            unmatched_optional.append(t)
+    return resolved, unmatched_required, unmatched_optional
+
+
+def build_column_lookup(df, columns):
+    """
+    עטיפה ל-resolve_columns עבור ה-CLI (לא אינטראקטיבי): זורקת שגיאה ברורה
+    אם שדה חובה לא זוהה. בממשק הוובי משתמשים ב-resolve_columns ישירות.
+    """
+    resolved, req, _ = resolve_columns(df, columns)
+    if req:
+        amap = {c["target"]: _source_aliases(c.get("source")) for c in columns}
+        lines = "\n  - ".join(f"{t} (חיפשנו: {', '.join(amap.get(t, []))})" for t in req)
         raise UserError(
             "שדות חובה שלא נמצאה להם עמודה מתאימה בקובץ האקסל:\n  - " + lines
             + "\n\nעמודות שקיימות בקובץ: "

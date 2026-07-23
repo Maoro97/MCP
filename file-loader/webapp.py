@@ -40,16 +40,10 @@ RUNS = {}
 _RUNS_MAX = 40
 
 
-def _store_run(screen, valid_records, reserved, overflow):
-    run_id = uuid.uuid4().hex
-    RUNS[run_id] = {
-        "screen": screen, "valid": valid_records, "reserved": reserved,
-        "overflow": overflow, "created": time.time(),
-    }
+def _prune_runs():
     if len(RUNS) > _RUNS_MAX:  # ניקוי ריצות ישנות
         for old in sorted(RUNS, key=lambda k: RUNS[k]["created"])[:len(RUNS) - _RUNS_MAX]:
             RUNS.pop(old, None)
-    return run_id
 
 
 # ---------------------------------------------------------------------------
@@ -270,6 +264,18 @@ GRID = """
  .dl:hover{transform:translateY(-1px)}
  .dl.rej{background:linear-gradient(140deg,#f43f5e,#dc2626)}.dl.rep{background:linear-gradient(140deg,#64748b,#475569)}
  .hint{color:var(--muted);font-size:13px}
+ .mapcard{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);margin:8px 0 4px;padding:2px 16px}
+ .mapcard summary{cursor:pointer;font-weight:700;padding:12px 0;list-style:none;display:flex;align-items:center;gap:10px}
+ .mapcard summary::-webkit-details-marker{display:none}
+ .mapcard summary .chev{color:var(--muted);transition:.15s}.mapcard[open] summary .chev{transform:rotate(90deg)}
+ .maphint{color:var(--muted);font-weight:400;font-size:13px}
+ .mapbadge{background:var(--bad-bg);color:var(--bad-fg);border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700}
+ .mapgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;padding:6px 0 16px}
+ .mapitem{display:flex;flex-direction:column;gap:4px;font-size:13px}
+ .mapitem .mapt{font-weight:600;color:var(--muted)}.mapitem.mapreq .mapt{color:var(--bad-fg)}
+ .mapitem select{padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);font-family:inherit;font-size:13.5px}
+ .mapitem.mapreq select{border-color:var(--bad-fg)}
+ .mapitem select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(99,102,241,.15)}
 </style></head><body><div class="wrap">
  <h1>📋 טבלת טעינה — מסך {{ screen }}</h1>
  <p class="sub">תקן תאים מסומנים (רחף לראות סיבה), מחק או התעלם משורות, סדר עמודות בגרירה — ואז הפק את קובץ הטעינה.</p>
@@ -286,7 +292,7 @@ GRID = """
   <button class="b-gen" onclick="generate()">⬇ צור קובץ טעינה</button>
   <a class="back" href="/">＋ קובץ חדש</a>
  </div>
- <div id="banner"></div><div id="messages"></div>
+ <div id="banner"></div><div id="mapping"></div><div id="messages"></div>
  <div class="legend">
   <span><i class="sw-bad"></i>תא שגוי לתיקון</span>
   <span><i class="sw-warn"></i>אזהרה (לא פוסל — כלול בטעינה)</span>
@@ -421,6 +427,43 @@ function dropCol(e,toCi){ e.preventDefault();
   const [m]=colOrder.splice(from,1); colOrder.splice(to,0,m); render();
 }
 
+// --- פאנל מיפוי עמודות (Excel -> שדה פריוריטי) ---
+function renderMapping(){
+  const box=$('mapping'); if(!box||!GRID.excel_columns) return;
+  const req=new Set(GRID.unmatched_required||[]);
+  const cols=GRID.excel_columns, mapped=GRID.columns.filter(c=>!c.constant);
+  const auto=mapped.filter(c=>GRID.assignment[c.target]).length;
+  const open = req.size>0 ? ' open' : '';
+  let h='<details class="mapcard"'+open+'><summary><span class="chev">▸</span>'+
+        '🔗 מיפוי עמודות (Excel → שדה פריוריטי)'+
+        (req.size>0?' <span class="mapbadge">'+req.size+' שדות חובה לא מופו</span>':'')+
+        '<span class="maphint">'+auto+'/'+mapped.length+' שדות מופו · בחר עמודת מקור לכל שדה</span></summary><div class="mapgrid">';
+  for(const c of mapped){
+    const cur=GRID.assignment[c.target]||'', bad=req.has(c.target);
+    const hint=c.source?(Array.isArray(c.source)?c.source[0]:c.source):'';
+    h+='<label class="mapitem'+(bad?' mapreq':'')+'"><span class="mapt">'+esc(c.target)+
+       (bad?' • חובה':'')+'</span><select data-t="'+esc(c.target)+'" onchange="remap()">'+
+       '<option value="">— לא ממופה —</option>';
+    for(const ex of cols) h+='<option value="'+esc(ex)+'"'+(ex===cur?' selected':'')+'>'+esc(ex)+'</option>';
+    h+='</select></label>';
+  }
+  box.innerHTML=h+'</div></details>';
+}
+function collectAssignment(){
+  const a={};
+  document.querySelectorAll('#mapping select[data-t]').forEach(s=>a[s.getAttribute('data-t')]=s.value);
+  return a;
+}
+async function remap(){
+  const res=await post('/grid/remap',{run_id:GRID.run_id, assignment:collectAssignment()});
+  if(!res) return;
+  const openState=document.querySelector('.mapcard') && document.querySelector('.mapcard').open;
+  Object.assign(GRID,res); page=0;
+  renderBanner(); renderMapping(); render();
+  const d=document.querySelector('.mapcard'); if(d) d.open = openState!==false;
+  flash('ok','המיפוי עודכן — הטבלה חושבה מחדש.');
+}
+
 function renderBanner(){
   let b='';
   (GRID.map_warnings||[]).forEach(w=>{ b+='<div class="msg warnbox">🛈 '+esc(w)+'</div>'; });
@@ -477,7 +520,7 @@ function flash(kind,text){const box=document.createElement('div');box.className=
   $('messages').prepend(box);clearTimeout(ft);ft=setTimeout(()=>{if(box.parentNode)box.remove();},6000);}
 
 if(GRID.mode==='errors') $('onlyerr').checked=true;
-renderBanner(); render();
+renderBanner(); renderMapping(); render();
 </script></body></html>
 """
 
@@ -488,6 +531,65 @@ renderBanner(); render();
 @app.route("/")
 def index():
     return render_template_string(UPLOAD, screens=core.available_screens(), error=None)
+
+
+def _build_grid(screen, mapping, df, overrides, run_id=None):
+    """
+    ליבת בניית תגובת הטבלה — משותפת ל-/process ול-/grid/remap.
+    פותר את המיפוי (עם overrides ידניים), מריץ ולידציה, מפצל קטן/גדול, שומר את
+    הריצה (כולל ה-DataFrame הגולמי כדי לאפשר מיפוי מחדש), ומחזיר payload מלא.
+    """
+    resolved, req_missing, opt_missing = core.resolve_columns(df, mapping["columns"], overrides)
+    rows_out = core.evaluate_grid(mapping, core.rows_from_dataframe(df, mapping, resolved))
+    key_fields = mapping.get("key_fields") or []
+    total = len(rows_out)
+
+    def _has_warn(r):
+        return any(c.get("warning") for c in r["cells"])
+
+    invalid_rows = [r for r in rows_out if not r["valid"]]
+    valid_rows = [r for r in rows_out if r["valid"]]
+
+    if total <= FULL_GRID_LIMIT:
+        displayed, server_valid = rows_out, []
+        reserved, overflow_items = set(), []
+    else:
+        attention = invalid_rows + [r for r in valid_rows if _has_warn(r)]
+        displayed = attention[:DISPLAY_CAP]
+        shown = {id(r) for r in displayed}
+        hidden_valid = [r for r in valid_rows if id(r) not in shown]
+        server_valid = core.grid_valid_records(hidden_valid)
+        reserved = {core.row_key(r["cells"], key_fields) for r in hidden_valid} if key_fields else set()
+        overflow_items = [
+            (r["excel_row"], {c["target"]: c["value"] for c in r["cells"]}, _first_reason(r["cells"]))
+            for r in invalid_rows if id(r) not in shown
+        ]
+
+    run_id = run_id or uuid.uuid4().hex
+    RUNS[run_id] = {
+        "screen": screen, "df": df, "overrides": dict(overrides or {}),
+        "valid": server_valid, "reserved": reserved, "overflow": overflow_items,
+        "created": time.time(),
+    }
+    _prune_runs()
+
+    warnings, warn_count = _sample_warnings(mapping, core.grid_valid_records(valid_rows))
+    total_warn = sum(1 for r in rows_out if _has_warn(r))
+    assignment = {
+        c["target"]: resolved.get(c["target"], "")
+        for c in mapping["columns"] if c.get("source") is not None
+    }
+    return {
+        "screen": screen, "run_id": run_id, "interface": mapping.get("interface_name"),
+        "mode": "errors" if total > FULL_GRID_LIMIT else "all",
+        "columns": _columns_meta(mapping), "key_fields": key_fields,
+        "rows": displayed, "server_valid": len(server_valid),
+        "overflow": len(overflow_items), "total": total, "total_warn": total_warn,
+        "warnings": warnings, "warn_count": warn_count,
+        "map_warnings": core.mapping_field_warnings(mapping, screen),
+        "excel_columns": list(df.columns), "assignment": assignment,
+        "unmatched_required": req_missing, "unmatched_optional": opt_missing,
+    }
 
 
 @app.route("/process", methods=["POST"])
@@ -510,56 +612,31 @@ def process():
             header_row=header_row if header_row is not None else mapping.get("header_row"),
             expected_sources=core._expected_sources(mapping),
         )
-        resolved = core.build_column_lookup(df, mapping["columns"])
-        rows_out = core.evaluate_grid(mapping, core.rows_from_dataframe(df, mapping, resolved))
+        payload = _build_grid(screen, mapping, df, overrides=None)
     except core.UserError as e:
         return _upload_error(str(e))
     except Exception as e:  # noqa: BLE001
         return _upload_error(f"שגיאה בלתי צפויה בעיבוד הקובץ:\n{e}")
 
-    key_fields = mapping.get("key_fields") or []
-    total = len(rows_out)
-
-    def _has_warn(r):
-        return any(c.get("warning") for c in r["cells"])
-
-    invalid_rows = [r for r in rows_out if not r["valid"]]
-    valid_rows = [r for r in rows_out if r["valid"]]
-
-    if total <= FULL_GRID_LIMIT:
-        # קובץ קטן — כל השורות בטבלה
-        displayed, server_valid = rows_out, []
-        reserved, overflow_items = set(), []
-    else:
-        # קובץ גדול — מציגים לתיקון את השורות השגויות + שורות עם אזהרות;
-        # שאר השורות התקינות נשמרות בשרת ונכללות בקובץ הטעינה.
-        attention = invalid_rows + [r for r in valid_rows if _has_warn(r)]
-        displayed = attention[:DISPLAY_CAP]
-        shown = {id(r) for r in displayed}
-        hidden_valid = [r for r in valid_rows if id(r) not in shown]
-        server_valid = core.grid_valid_records(hidden_valid)
-        # reserved = מפתחות השורות התקינות ה*שמורות בלבד* (לא המוצגות) — כדי
-        # ששורה מוצגת שנשלחת חזרה לא תתנגש עם עצמה
-        reserved = {core.row_key(r["cells"], key_fields) for r in hidden_valid} if key_fields else set()
-        overflow_items = [
-            (r["excel_row"], {c["target"]: c["value"] for c in r["cells"]}, _first_reason(r["cells"]))
-            for r in invalid_rows if id(r) not in shown
-        ]
-
-    run_id = _store_run(screen, server_valid, reserved, overflow_items)
-    warnings, warn_count = _sample_warnings(mapping, core.grid_valid_records(valid_rows))
-    total_warn = sum(1 for r in rows_out if _has_warn(r))
-
-    payload = {
-        "screen": screen, "run_id": run_id, "interface": mapping.get("interface_name"),
-        "mode": "errors" if total > FULL_GRID_LIMIT else "all",
-        "columns": _columns_meta(mapping), "key_fields": key_fields,
-        "rows": displayed, "server_valid": len(server_valid),
-        "overflow": len(overflow_items), "total": total, "total_warn": total_warn,
-        "warnings": warnings, "warn_count": warn_count,
-        "map_warnings": core.mapping_field_warnings(mapping, screen),
-    }
     return render_template_string(GRID, screen=screen, grid=payload)
+
+
+@app.route("/grid/remap", methods=["POST"])
+def grid_remap():
+    """מיפוי מחדש: המשתמש בחר עמודת אקסל לשדה — מחשבים את הטבלה מחדש."""
+    data = request.get_json(silent=True) or {}
+    run = RUNS.get(data.get("run_id"))
+    if not run or run.get("df") is None:
+        return jsonify(error="הריצה פגה מהזיכרון — טען מחדש את הקובץ."), 400
+    try:
+        mapping = core.load_mapping(run["screen"])
+        overrides = data.get("assignment") or {}
+        payload = _build_grid(run["screen"], mapping, run["df"], overrides, run_id=data["run_id"])
+    except core.UserError as e:
+        return jsonify(error=str(e)), 400
+    except Exception as e:  # noqa: BLE001
+        return jsonify(error=f"שגיאה במיפוי מחדש: {e}"), 400
+    return jsonify(payload)
 
 
 @app.route("/grid/validate", methods=["POST"])

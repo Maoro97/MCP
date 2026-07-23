@@ -47,6 +47,20 @@ def validate_number(value: str, column: dict):
     return None
 
 
+def validate_boolean(value: str, column: dict):
+    """
+    בדיקת שדה בוליאני (דגל) לפי קטלוג פריוריטי — הערך חייב להיות Y או N
+    (או ריק). ערך אחר יגרום לכשל טעינה בפריוריטי, לכן נחשב שגיאה.
+    """
+    if not column.get("boolean") or value == "":
+        return None
+    if value not in ("Y", "N"):
+        return (
+            f"שדה דגל (בוליאני) '{column['target']}' חייב להיות Y או N (או ריק): '{value}'"
+        )
+    return None
+
+
 def validate_value_map(value: str, column: dict):
     """
     בדיקת ערך מול value_map.
@@ -75,6 +89,7 @@ _CELL_VALIDATORS = [
     validate_required,
     validate_max_length,
     validate_number,
+    validate_boolean,
     validate_value_map,
 ]
 

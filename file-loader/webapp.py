@@ -423,6 +423,7 @@ function dropCol(e,toCi){ e.preventDefault();
 
 function renderBanner(){
   let b='';
+  (GRID.map_warnings||[]).forEach(w=>{ b+='<div class="msg warnbox">🛈 '+esc(w)+'</div>'; });
   if(GRID.mode==='errors')
     b+='<div class="banner">📁 קובץ גדול: '+GRID.server_valid.toLocaleString()+
        ' שורות תקינות נשמרו בשרת ויכללו בקובץ הטעינה. כאן מוצגות רק '+GRID.rows.length+
@@ -556,6 +557,7 @@ def process():
         "rows": displayed, "server_valid": len(server_valid),
         "overflow": len(overflow_items), "total": total, "total_warn": total_warn,
         "warnings": warnings, "warn_count": warn_count,
+        "map_warnings": core.mapping_field_warnings(mapping, screen),
     }
     return render_template_string(GRID, screen=screen, grid=payload)
 

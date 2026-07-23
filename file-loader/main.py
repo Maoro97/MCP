@@ -36,6 +36,10 @@ class UserError(Exception):
 HERE = os.path.dirname(os.path.abspath(__file__))
 MAPPINGS_DIR = os.path.join(HERE, "mappings")
 OUTPUT_DIR = os.path.join(HERE, "output")
+SPECS_DIR = os.path.join(HERE, "specs")
+
+# מטמון למפרטי השדות (specs/<SCREEN>.yaml)
+_SPEC_CACHE = {}
 
 # פורמט התאריך בפלט — תמיד dd/mm/yy (למשל 23/07/26).
 # זהו מקור האמת היחיד: אם קובץ מיפוי לא מציין date_format, זה מה שיחול.
@@ -78,7 +82,80 @@ def load_mapping(screen: str) -> dict:
         raise UserError(f"שגיאת תחביר בקובץ המיפוי '{path}':\n{e}")
 
     _validate_mapping(mapping, path)
+    enrich_columns(mapping, screen)
     return mapping
+
+
+def load_field_spec(screen):
+    """
+    טוען מפרט שדות רשמי מ-specs/<SCREEN>.yaml (אם קיים).
+    מחזיר dict {field_name: {max_length, required, type, decimals, boolean, readonly, title}}.
+    """
+    if screen in _SPEC_CACHE:
+        return _SPEC_CACHE[screen]
+    spec = {}
+    path = os.path.join(SPECS_DIR, f"{screen}.yaml")
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+            spec = data.get("fields") or {}
+        except yaml.YAMLError:
+            spec = {}
+    _SPEC_CACHE[screen] = spec
+    return spec
+
+
+def enrich_columns(mapping, screen):
+    """
+    מעשיר את עמודות המיפוי לפי מפרט השדות הרשמי (specs/<SCREEN>.yaml):
+    ממלא אורך מקסימלי, חובה, טיפוס, דיוק עשרוני ובוליאני — לפי הגדרת השדה
+    בפריוריטי — אלא אם הערך צוין במפורש במיפוי (ערך מפורש תמיד גובר).
+    כך אין צורך לחזור על מגבלות השדה בכל מיפוי, והוולידציה תמיד תואמת לפריוריטי.
+    """
+    spec = load_field_spec(mapping.get("screen") or screen)
+    if not spec:
+        return
+    for col in mapping["columns"]:
+        fs = spec.get(col.get("target"))
+        if not fs:
+            continue
+        if "max_length" not in col and fs.get("max_length") is not None:
+            col["max_length"] = fs["max_length"]
+        if "required" not in col and fs.get("required"):
+            col["required"] = True
+        if "type" not in col and fs.get("type"):
+            col["type"] = fs["type"]
+        if "decimals" not in col and fs.get("decimals") is not None:
+            col["decimals"] = fs["decimals"]
+        if fs.get("boolean"):
+            col["boolean"] = True
+        if fs.get("readonly"):
+            col["_readonly"] = True
+
+
+def mapping_field_warnings(mapping, screen=None):
+    """
+    אזהרות ברמת המיפוי מול הקטלוג: שדה שאינו קיים בקטלוג, או שדה לקריאה בלבד.
+    מוחזרות פעם אחת (לא לכל שורה) כדי לתפוס טעויות הגדרה מוקדם.
+    """
+    spec = load_field_spec(mapping.get("screen") or screen or "")
+    if not spec:
+        return []
+    warns = []
+    for col in mapping["columns"]:
+        t = col.get("target")
+        if col.get("source") is None and "value" not in col and col.get("default") is None:
+            pass
+        if col.get("_readonly"):
+            warns.append(
+                f"השדה '{t}' מוגדר בפריוריטי כלקריאה בלבד — בדרך כלל אין לטעון אליו ישירות."
+            )
+        elif t not in spec and not str(t).startswith(("XXXX", "Y_", "ERPG_")):
+            warns.append(
+                f"השדה '{t}' אינו מופיע בקטלוג השדות של המסך — ודא ששם השדה מדויק."
+            )
+    return warns
 
 
 def available_screens() -> list:
@@ -405,7 +482,8 @@ def build_column_lookup(df, columns):
         actual = next((lookup[_norm_header(a)] for a in aliases if _norm_header(a) in lookup), None)
         if actual is not None:
             resolved[col["target"]] = actual
-        elif col.get("required"):
+        elif col.get("required") and col.get("default") in (None, ""):
+            # שדה חובה ללא עמודה מתאימה ייחשב חסר — אלא אם יש לו ברירת מחדל שתמלא אותו
             missing_required.append((col["target"], aliases))
     if missing_required:
         lines = "\n  - ".join(
@@ -761,7 +839,9 @@ def run(args):
     data_warnings = [
         f"שורה {r['excel_row']}: {w}" for r in records for w in r.get("warnings", [])
     ]
-    enc_warnings = enc_warnings + data_warnings
+    # אזהרות מיפוי מול קטלוג השדות (שדה לא מוכר / לקריאה בלבד)
+    map_warnings = mapping_field_warnings(mapping, args.screen)
+    enc_warnings = map_warnings + enc_warnings + data_warnings
 
     out_path = None
     rejected_path = None

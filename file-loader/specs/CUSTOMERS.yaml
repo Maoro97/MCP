@@ -1,0 +1,779 @@
+# מפרט שדות מסך הלקוחות בפריוריטי — נוצר מקטלוג השדות של הלקוח.
+# הכלי אוכף אוטומטית על עמודות שה-target שלהן מופיע כאן:
+# max_length (רוחב), required (חובה=M), type (DATE/REAL/INT), decimals, boolean.
+screen: CUSTOMERS
+source: Priority CUSTOMERS field catalog
+fields:
+  CUSTNAME:
+    title: מס. לקוח
+    max_length: 16
+  CUSTDES:
+    title: שם לקוח
+    max_length: 48
+    required: true
+  CUSTDESLONG:
+    title: שם לקוח מורחב
+    max_length: 80
+  ECUSTDES:
+    max_length: 48
+  STATDES:
+    title: סטטוס
+    max_length: 12
+    required: true
+  OWNERLOGIN:
+    title: שם משתמש
+    max_length: 20
+    required: true
+  INACTIVEFLAG:
+    title: לא פעיל
+    max_length: 1
+    readonly: true
+    boolean: true
+  CREATEDDATE:
+    title: תאריך פתיחה
+    type: date
+  STATUSDATE:
+    title: תאריך עדכון סטטוס
+    type: date
+    readonly: true
+  PHONE:
+    title: מספר טלפון
+    max_length: 20
+  FAX:
+    title: פקס
+    max_length: 20
+  EMAIL:
+    max_length: 68
+  BUSINESSTYPE:
+    max_length: 32
+  MCUSTNAME:
+    title: מס. לקוח
+    max_length: 16
+  MCUSTDES:
+    title: שם לקוח
+    max_length: 48
+    readonly: true
+  CTYPECODE:
+    title: קוד סוג לקוח
+    max_length: 2
+  CTYPENAME:
+    title: תאור סוג לקוח
+    max_length: 32
+    readonly: true
+  PCUSTNAME:
+    title: מס. לקוח
+    max_length: 16
+  CTYPE2CODE:
+    title: סווג נוסף ללקוח
+    max_length: 2
+  PCUSTDES:
+    title: שם לקוח
+    max_length: 48
+    readonly: true
+  CTYPE2NAME:
+    title: תאור סווג נוסף ללקוח
+    max_length: 32
+    readonly: true
+  CUSTPART:
+    title: מוצרים ללקוח בלבד?
+    max_length: 1
+    boolean: true
+  NSFLAG:
+    title: שינוי שם?
+    max_length: 1
+    boolean: true
+  STCODE:
+    title: קוד משלוח
+    max_length: 8
+  STDES:
+    title: תאור משלוח
+    max_length: 6
+    readonly: true
+  ZONECODE:
+    title: קוד איזור
+    max_length: 2
+  ZONEDES:
+    title: תאור איזור
+    max_length: 10
+    readonly: true
+  TRACK:
+    title: מסלול
+    max_length: 2
+    readonly: true
+  CUSTNAMEPATNAME:
+    title: תבנית
+    max_length: 12
+  ADDRESS:
+    title: כתובת
+    max_length: 80
+  ADDRESS2:
+    title: כתובת - שורה 2
+    max_length: 80
+  ADDRESS3:
+    title: כתובת - שורה 3
+    max_length: 80
+  STATE:
+    title: עיר ומדינה
+    max_length: 40
+  STATEA:
+    title: עיר
+    max_length: 40
+  STATECODE:
+    title: קוד מדינה
+    max_length: 24
+  STATENAME:
+    title: מדינה
+    max_length: 40
+  ZIP:
+    title: מיקוד
+    max_length: 10
+  COUNTRYNAME:
+    title: ארץ
+    max_length: 18
+  WTAXNUM:
+    title: מס' חברה
+    max_length: 16
+  WTAXNUMEXPL:
+    title: הסבר על מספר התיק
+    max_length: 1
+  VATNUM:
+    title: מספר תיק במע"מ
+    max_length: 16
+  AGENTCODE:
+    title: מס' סוכן
+    max_length: 16
+  AGENTNAME:
+    title: שם סוכן
+    max_length: 32
+    readonly: true
+  ERPG_AGENT_ZOHOID:
+    title: סוכן - מזהה ב-ZOHO
+    max_length: 60
+  AGENTCODE2:
+    title: מס' סוכן
+    max_length: 16
+  AGENTNAME2:
+    title: שם סוכן
+    max_length: 32
+    readonly: true
+  ERPG_AGENT2_ZOHOID:
+    title: סוכן - מזהה ב-ZOHO
+    max_length: 60
+  TERRITORYCODE:
+    title: קוד טריטוריה
+    max_length: 12
+  TERRITORYDES:
+    title: שם טריטוריה
+    max_length: 32
+    readonly: true
+  COMMISSION:
+    title: עמלת הסוכן(%)
+    type: number
+    max_length: 6
+    decimals: 2
+  ESTABLISHED:
+    max_length: 4
+  EMPNUM:
+    max_length: 7
+  BRANCHNAME:
+    title: סניף
+    max_length: 6
+  BRANCHDES:
+    title: תאור הסניף
+    max_length: 32
+    readonly: true
+  PAYCODE:
+    title: קוד תנאי תשלום
+    max_length: 4
+  PAYDES:
+    title: תנאי תשלום
+    max_length: 24
+    readonly: true
+  MAX_CREDIT:
+    max_length: 16
+  MAX_OBLIGO:
+    max_length: 16
+  OBCODE:
+    max_length: 3
+  DISTRLINECODE:
+    title: קוד קו חלוקה
+    max_length: 3
+  DISTRLINEDES:
+    title: תאור קו חלוקה
+    max_length: 12
+    readonly: true
+  UNLOADTIME:
+    title: זמן פריקה בהפצה
+    max_length: 6
+  DISTRORDER:
+    title: סדר הפצה
+    type: number
+    max_length: 3
+    decimals: 0
+  NOTALLOWFORECAST:
+    title: קזז תחזית לק' בלבד?
+    max_length: 1
+    boolean: true
+  RECYCLINGFLAG:
+    max_length: 1
+    boolean: true
+  BONUSFLAG:
+    title: מקבל בונוס כללי ?
+    max_length: 1
+    boolean: true
+  COMPETITORFLAG:
+    title: מתחרה ?
+    max_length: 1
+    boolean: true
+  FORECAST:
+    title: יעד מכירות/עסקאות
+    max_length: 1
+    boolean: true
+  CHANEL:
+    title: מלאי זמין
+    max_length: 1
+    boolean: true
+  DISTRTYPECODE:
+    title: קוד סוג חלוקה
+    max_length: 3
+  DISTRTYPEDES:
+    title: תאור סוג חלוקה
+    max_length: 32
+    readonly: true
+  SECONDLANGTEXT:
+    title: לקחת טקסט באנגלית?
+    max_length: 1
+    boolean: true
+  CONFIDENTIAL:
+    title: לקוח חסוי?
+    max_length: 1
+    boolean: true
+  HOSTNAME:
+    max_length: 48
+  SPEC1:
+    max_length: 32
+  SPEC2:
+    max_length: 32
+  SPEC3:
+    max_length: 32
+  SPEC4:
+    max_length: 32
+  SPEC5:
+    max_length: 32
+  SPEC6:
+    max_length: 32
+  SPEC7:
+    max_length: 32
+  SPEC8:
+    max_length: 32
+  SPEC9:
+    max_length: 32
+  SPEC10:
+    max_length: 32
+  SPEC11:
+    max_length: 32
+  Y_4107_0_ESH:
+    title: זמין למכירה
+    max_length: 1
+    readonly: true
+    boolean: true
+  SPEC12:
+    max_length: 32
+  SPEC13:
+    max_length: 32
+  SPEC14:
+    max_length: 32
+  SPEC15:
+    max_length: 32
+  SPEC16:
+    max_length: 32
+  SPEC17:
+    max_length: 32
+  SPEC18:
+    max_length: 32
+  SPEC19:
+    max_length: 32
+  SPEC20:
+    max_length: 32
+  EXTFILEFLAG:
+    title: נספחים?
+    max_length: 1
+    readonly: true
+    boolean: true
+  WAVESTRATEGYCODE:
+    title: קוד פיצול
+    max_length: 3
+  WAVESTRATEGYDES:
+    title: תאור פיצול
+    max_length: 32
+    readonly: true
+  PICKSTGCODE:
+    title: קוד אסטרטגיה
+    max_length: 3
+  PICKSTGDES:
+    title: תאור אסטרטגיה
+    max_length: 24
+    readonly: true
+  AUTOSHPFLAG:
+    title: משלוח אריזות אוטו. ?
+    max_length: 1
+    boolean: true
+  EDOCUMENTS:
+    title: מקבל מסמך ממוחשב?
+    max_length: 1
+    boolean: true
+  GPSX:
+    title: קו רוחב
+    max_length: 20
+  GPSY:
+    title: קו אורך
+    max_length: 20
+  QRANKCODE:
+    title: קוד דרגת איכות
+    max_length: 4
+  QRANKDES:
+    max_length: 32
+    readonly: true
+  DCMONTHS:
+    max_length: 3
+  CODE:
+    title: מטבע
+    max_length: 3
+    required: true
+  TAXCODE:
+    title: קוד מס
+    max_length: 8
+    required: true
+  TAXDES:
+    title: תאור מס
+    max_length: 56
+    readonly: true
+  VATCOUNTRYNAME:
+    title: ארץ
+    max_length: 18
+  CUSTREMARK:
+    max_length: 48
+  PIKORDER:
+    max_length: 6
+  MINEXPDAYS:
+    title: מינימום ימי תוקף
+    type: number
+    max_length: 3
+    decimals: 0
+  RESERVFLAG:
+    max_length: 1
+    boolean: true
+  LANG:
+    title: קוד שפה
+    type: number
+    max_length: 6
+    decimals: 0
+  LANGNAME:
+    title: שפה
+    max_length: 32
+    readonly: true
+  EORINUM:
+    max_length: 17
+  RETURNLABELS:
+    title: חיוב מדבקת החזרה
+    max_length: 24
+  ERPG_AGEREMARK:
+    title: הערה קבועה לגיול
+    max_length: 20
+  ERPG_MONTHLYFLAG:
+    title: בחיוב חודשי קבוע?
+    max_length: 1
+    boolean: true
+  ERPG_CHARGEDQUANT:
+    title: כמות כניסות בחיוב
+    type: number
+    max_length: 13
+    decimals: 0
+  ERPG_LOCKNAME:
+    title: שם
+    max_length: 37
+    readonly: true
+  ERPG_LOCKCELLPHONE:
+    title: טלפון נייד
+    max_length: 20
+    readonly: true
+  ERPG_LOCKEMAIL:
+    title: דואר אלקטרוני
+    max_length: 68
+    readonly: true
+  ERPG_WAF:
+    title: WAF
+    max_length: 1
+    boolean: true
+  ERPG_2FA:
+    title: 2FA
+    max_length: 1
+    boolean: true
+  Y_1529_5_ESHB:
+    title: שם לקוח
+    max_length: 48
+    readonly: true
+  ERPG_TOTINCOME:
+    title: סה"כ הכנסות
+    type: number
+    max_length: 16
+    readonly: true
+    decimals: 2
+  ERPG_ZOHOID:
+    title: לקוח - מזהה בזוהו
+    max_length: 60
+  ERPG_TOTCOST:
+    title: סה"כ עלויות
+    type: number
+    max_length: 16
+    readonly: true
+    decimals: 2
+  ERPG_PROFIT:
+    max_length: 16
+    readonly: true
+  ERPG_PROFITPERCENT:
+    max_length: 6
+    readonly: true
+  ERPG_ZOHO_CT_NAME:
+    title: שם בזוהו
+    max_length: 25
+  ERPG_LOCK:
+    title: איש קשר נוסף ליצוא
+    max_length: 1
+  STATUSFLAG:
+    title: סטטוס
+    max_length: 1
+  INACTIVE:
+    max_length: 1
+    boolean: true
+  ACCOUNT:
+    title: חשבון (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  ADDRESSMAP:
+    max_length: 100
+  AFAX:
+    max_length: 20
+  AGENT:
+    title: סוכן (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  AMAIL:
+    max_length: 68
+  BRANCH:
+    title: סניף (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  BRANCHCOMPANY:
+    title: תת חברה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  COUNTRY:
+    title: ארץ (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  CRMFLAG:
+    max_length: 1
+  CRMID:
+    max_length: 48
+  CTYPE:
+    title: סוג לקוח (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  CTYPE2:
+    title: סווג נוסף ללקוח (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  CTYPERESERVFLAG:
+    title: סוג לקוח לשריון מלאי
+    max_length: 1
+  CURRENCY:
+    title: מטבע (ID)
+    type: number
+    max_length: 13
+  CUST:
+    title: מס' לקוח (ID)
+    type: number
+    max_length: 13
+  CUST2:
+    title: מס' לקוח (ID)
+    type: number
+    max_length: 13
+  CUST3:
+    title: מס' לקוח (ID)
+    type: number
+    max_length: 13
+  DISTRLINE:
+    title: קו חלוקה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  DISTRTYPE:
+    title: סוג חלוקה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  EI_COND:
+    max_length: 1
+  EXTTYPE:
+    max_length: 1
+  FOLLOWUPIV:
+    title: מס' לקוח (ID)
+    type: number
+    max_length: 13
+  FOLLOWUPTYPE:
+    title: טיפוס תעודה
+    max_length: 20
+  FOLLOWUPUSER:
+    title: משתמש (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  IVTYPE:
+    title: טיפוס חשבונית
+    max_length: 1
+  LANGA:
+    title: שפה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  MAILINTERFACE:
+    max_length: 1
+  MCURRENCY:
+    title: מטבע (ID)
+    type: number
+    max_length: 13
+  MCUST:
+    title: מס' לקוח מרכז (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  MCUSTCUST:
+    title: מס' לקוח (ID)
+    type: number
+    max_length: 13
+  OBCURRENCY:
+    title: מטבע (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  OBLIGOCALC:
+    title: להמנע מחישוב אשראי
+    max_length: 1
+  OBLIGOCUST:
+    title: לקוח לאובליגו (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  PAY:
+    title: תשלום (ID)
+    type: number
+    max_length: 13
+  PAYCUST:
+    title: לקוח משלם (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  PICKSTG:
+    title: אסטרטגיית ליקוט (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  PURTAXDATE:
+    title: ת. פטור ממס קניה
+    type: date
+  QUALITYRANK:
+    title: דרגת איכות (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  SHIPTYPE:
+    title: סוג משלוח (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  TAX:
+    title: מס (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  TAXSTATEID:
+    title: מדינה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  TAXZIP:
+    title: Zip Code
+    max_length: 10
+  VATCOUNTRY:
+    title: ארץ רישום מע"מ (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  VATFLAG:
+    title: מס?
+    max_length: 1
+  VATPRICEFLAG:
+    title: מחיר ליח' כולל מע"מ?
+    max_length: 1
+  VATPRICEFLAGA:
+    title: מחיר ליח' כולל מע"מ?
+    max_length: 1
+  WAVESTRATEGY:
+    title: אסטרטגיה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  WTAXNUMEXPL1:
+    title: הסבר על מספר התיק
+    max_length: 1
+  ZONE:
+    title: אזור (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  SUP:
+    max_length: 13
+  SUPDES:
+    max_length: 48
+  SUPNAME:
+    max_length: 16
+  CUSTSTAT:
+    title: סטטוס לקוח (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  NSCUST:
+    title: מס' לקוח (ID)
+    type: number
+    max_length: 13
+  OPENIVFLAG:
+    title: לאפשר להפיק חשבונית
+    max_length: 1
+  OWNER:
+    title: לטיפול (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  RESTRICTDATE:
+    title: ת. הגבלה
+    type: date
+  RESTRICTED:
+    title: לקוח מוגבל?
+    max_length: 1
+  RESTRICTEDWRNFLAG:
+    title: אזהרה לפני חסימה
+    max_length: 1
+  STATUSTYPE:
+    max_length: 20
+  TMPFLAG:
+    title: זמני
+    max_length: 1
+  PROJ:
+    max_length: 13
+  STATEID:
+    title: מדינה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  STATECOUNTRY:
+    title: ארץ (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  USAPHONE:
+    title: טלפון בפורמט ארה"ב
+    max_length: 1
+  YEARINCOME:
+    title: הכנסה שנתית
+    type: number
+    max_length: 16
+    decimals: 2
+  LABFLAG:
+    title: לבדיקת מעבדה
+    max_length: 1
+  TERRITORY:
+    title: טריטוריה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  TIVCONTACT:
+    title: איש קשר לגיול(ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  AGENT2:
+    title: סוכן נוסף (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  MAX_CREDIT_ENV:
+    title: אשראי רב חברתי
+    type: number
+    max_length: 16
+    decimals: 2
+  MAX_OBLIGO_ENV:
+    title: אובליגו רב חברתי
+    type: number
+    max_length: 16
+    decimals: 2
+  MSGTYPE:
+    title: סוג הודעה על חריגה
+    max_length: 1
+  PAYDELAY:
+    title: ממוצע איחור בתשלומים
+    type: number
+    max_length: 6
+    decimals: 0
+  PCUST:
+    title: חברת אם(ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  CHANGES_EXEC:
+    max_length: 13
+  CHARKEY1:
+    max_length: 16
+  CHARKEY2:
+    max_length: 16
+  LOCKFLAG:
+    max_length: 1
+  CHANGEFLAG:
+    max_length: 1
+  COMPLETEFLAG:
+    max_length: 1
+  PHONEID:
+    max_length: 13
+  Y_19901_0_148_ESHB:
+    title: לקוח לדוגמא (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  FROMEDI:
+    title: עודכן מממשק אלקטרוני
+    max_length: 1
+  IVGUID:
+    title: מס' לקוח (ID)
+    type: number
+    max_length: 13
+  STATTYPE:
+    title: סוג תעודה
+    max_length: 20
+  GPSERRFLAG:
+    title: שגיאת גאוקוד
+    max_length: 1
+    readonly: true
+    boolean: true
+  RESERV:
+    max_length: 1
+  ERPG_LOCKCUST:
+    title: מס' לקוח (ID)
+    type: number
+    max_length: 13

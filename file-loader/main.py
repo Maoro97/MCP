@@ -546,6 +546,28 @@ def _encodable(ch, py_enc) -> bool:
 # ---------------------------------------------------------------------------
 # כתיבת קובץ הטעינה
 # ---------------------------------------------------------------------------
+def reorder_for_export(valid_records, mapping, order_targets):
+    """
+    מסדר מחדש את העמודות לפי סדר מבוקש (order_targets — רשימת שמות target).
+    מחזיר (רשומות_מסודרות, מיפוי_מסודר) כך שגם קובץ הטעינה וגם שורת הכותרת
+    (אם include_header) יֵצאו בסדר הזה. עמודות שלא צוינו נוספות בסוף.
+    """
+    columns = mapping["columns"]
+    tmap = {c["target"]: i for i, c in enumerate(columns)}
+    order = [t for t in (order_targets or []) if t in tmap]
+    order += [c["target"] for c in columns if c["target"] not in order]  # השלמת חוסרים
+    idx = [tmap[t] for t in order]
+
+    new_columns = [columns[i] for i in idx]
+    new_records = [
+        {"values": [r["values"][i] for i in idx], "excel_row": r.get("excel_row")}
+        for r in valid_records
+    ]
+    new_mapping = dict(mapping)
+    new_mapping["columns"] = new_columns
+    return new_records, new_mapping
+
+
 def build_load_content(valid_records, mapping) -> str:
     """בונה את תוכן קובץ הטעינה כמחרוזת (שורות מופרדות ב-CRLF)."""
     delimiter = _DELIMITERS[mapping.get("delimiter", "tab")]

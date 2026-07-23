@@ -170,6 +170,10 @@ GRID = """
  th,td{border-bottom:1px solid var(--line);border-left:1px solid var(--line);padding:0;text-align:right;white-space:nowrap}
  th{background:#f7f9fc;padding:8px 10px;position:sticky;top:0;z-index:2}
  th .tgt{font-weight:700}th .src{display:block;font-weight:400;color:var(--muted);font-size:12px}
+ th.col{cursor:grab;user-select:none}th.col:active{cursor:grabbing}
+ th.col .grip{color:#94a3b8;font-size:12px;margin-left:5px}
+ th.col.dragover{background:#dbeafe;box-shadow:inset 0 0 0 2px var(--blue)}
+ th.col.dragging{opacity:.45}
  th.rownum,td.rownum{background:#f1f5f9;color:#64748b;text-align:center;font-size:12px;min-width:42px;padding:6px}
  th.act,td.act{text-align:center;min-width:38px;padding:2px}
  td input{border:0;background:transparent;width:100%;min-width:105px;padding:8px 10px;font:inherit;color:inherit;outline:none}
@@ -205,7 +209,7 @@ GRID = """
  <div class="legend">
   <span><i style="background:#fef2f2;border:1px solid #fecaca"></i>תא שגוי לתיקון</span>
   <span><i style="background:#f8fafc;border:1px solid #e3e8f0"></i>ערך קבוע (לא לעריכה)</span>
-  <span class="hint">🗑 מוחק שורה מהטעינה · התאריך תמיד dd/mm/yy</span>
+  <span class="hint">🗑 מוחק שורה · ⋮⋮ גרור כותרת עמודה כדי לשנות את סדר הייצוא · התאריך תמיד dd/mm/yy</span>
  </div>
  <div class="tablewrap"><table id="grid"></table></div>
  <div class="pager" id="pager"></div>
@@ -214,6 +218,7 @@ GRID = """
 const GRID = {{ grid|tojson }};
 const PAGE_SIZE = 100;
 let page = 0;
+let colOrder = GRID.columns.map((_, i) => i);   // סדר תצוגה/ייצוא של העמודות
 const $ = id => document.getElementById(id);
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
@@ -235,21 +240,25 @@ function render(){
   if(page>=pages) page=pages-1; if(page<0) page=0;
   const slice=disp.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE);
   let h='<thead><tr><th class="act"></th><th class="rownum">#</th>';
-  for(const c of cols) h+='<th><span class="tgt">'+esc(c.target)+'</span><span class="src">'+
-     (c.constant?'ערך קבוע':esc(c.source||''))+'</span></th>';
+  for(const ci of colOrder){ const c=cols[ci];
+    h+='<th class="col" draggable="true" data-ci="'+ci+'" ondragstart="dragStart(event,'+ci+
+       ')" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropCol(event,'+ci+
+       ')" ondragend="dragEnd(event)"><span class="grip">⋮⋮</span><span class="tgt">'+esc(c.target)+
+       '</span><span class="src">'+(c.constant?'ערך קבוע':esc(c.source||''))+'</span></th>';
+  }
   h+='</tr></thead><tbody>';
   for(const [gi,r] of slice){
     h+='<tr class="'+(r.valid?'':'rowbad')+'">'+
        '<td class="act"><span class="del" title="מחק שורה" onclick="delRow('+gi+')">🗑</span></td>'+
        '<td class="rownum">'+r.excel_row+'</td>';
-    r.cells.forEach((cell,ci)=>{
-      const c=cols[ci];
+    for(const ci of colOrder){
+      const cell=r.cells[ci], c=cols[ci];
       const cls=(cell.error?'bad ':'')+(c.constant?'const':'');
       const title=cell.error?' title="'+esc(cell.error)+'"':'';
       const ro=c.constant?' readonly':'';
       h+='<td class="'+cls+'"'+title+'><input value="'+esc(cell.value)+'"'+ro+
          ' oninput="upd('+gi+','+ci+',this.value)"></td>';
-    });
+    }
     h+='</tr>';
   }
   if(!slice.length) h+='<tr><td class="act"></td><td class="rownum">–</td><td colspan="'+cols.length+
@@ -271,6 +280,20 @@ function updateCounts(){
 function upd(gi,ci,val){ GRID.rows[gi].cells[ci].value=val; }
 function delRow(gi){ GRID.rows.splice(gi,1); render(); }
 
+// --- גרירת עמודות לשינוי סדר הייצוא ---
+let dragFromCi=null;
+function dragStart(e,ci){ dragFromCi=ci; e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed='move'; }
+function dragOver(e){ e.preventDefault(); e.currentTarget.classList.add('dragover'); }
+function dragLeave(e){ e.currentTarget.classList.remove('dragover'); }
+function dragEnd(e){ document.querySelectorAll('th.col').forEach(t=>t.classList.remove('dragover','dragging')); }
+function dropCol(e,toCi){ e.preventDefault();
+  document.querySelectorAll('th.col').forEach(t=>t.classList.remove('dragover'));
+  const from=colOrder.indexOf(dragFromCi), to=colOrder.indexOf(toCi);
+  if(from<0||to<0||from===to) return;
+  const [m]=colOrder.splice(from,1); colOrder.splice(to,0,m); render();
+}
+
 function renderBanner(){
   let b='';
   if(GRID.mode==='errors')
@@ -285,7 +308,8 @@ function renderBanner(){
 function collect(){
   return {screen:GRID.screen, run_id:GRID.run_id,
     rows:GRID.rows.map(r=>{const o={};r.cells.forEach(c=>o[c.target]=c.value);return o;}),
-    excel_rows:GRID.rows.map(r=>r.excel_row)};
+    excel_rows:GRID.rows.map(r=>r.excel_row),
+    order:colOrder.map(ci=>GRID.columns[ci].target)};   // סדר עמודות לייצוא
 }
 async function revalidate(){
   const res=await post('/grid/validate',collect()); if(!res)return;
@@ -427,22 +451,28 @@ def grid_generate():
     still_invalid = [r for r in rows_out if not r["valid"]]
     valid_records = run["valid"] + core.grid_valid_records(now_valid)
 
+    # סדר עמודות מבוקש (אם המשתמש סידר מחדש בטבלה) — חל על קובץ הטעינה ועל rejected
+    order = data.get("order")
+    export_mapping = mapping
+    if order:
+        valid_records, export_mapping = core.reorder_for_export(valid_records, mapping, order)
+
     run_id = uuid.uuid4().hex
     run_dir = os.path.join(WEB_OUTPUT, run_id)
     os.makedirs(run_dir, exist_ok=True)
 
-    load_name = f"{screen}_load.{core.load_file_extension(mapping)}"
+    load_name = f"{screen}_load.{core.load_file_extension(export_mapping)}"
     if valid_records:
-        content = core.build_load_content(valid_records, mapping)
+        content = core.build_load_content(valid_records, export_mapping)
         with open(os.path.join(run_dir, load_name), "wb") as f:
-            f.write(core.load_content_bytes(content, mapping))
+            f.write(core.load_content_bytes(content, export_mapping))
 
     rejected_items = [
         (r["excel_row"], {c["target"]: c["value"] for c in r["cells"]}, _first_reason(r["cells"]))
         for r in still_invalid
     ] + run["overflow"]
     if rejected_items:
-        _rejected_df(mapping, rejected_items).to_excel(
+        _rejected_df(export_mapping, rejected_items).to_excel(
             os.path.join(run_dir, f"{screen}_rejected.xlsx"), index=False, engine="openpyxl")
 
     warnings, warn_count = _sample_warnings(mapping, valid_records)

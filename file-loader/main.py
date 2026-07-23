@@ -97,6 +97,69 @@ def _list_available_screens() -> str:
     return ", ".join(available_screens())
 
 
+def rows_from_dataframe(df, mapping, resolved):
+    """הופך DataFrame לרשימת שורות {target: ערך_גולמי} לפי מיפוי העמודות."""
+    columns = mapping["columns"]
+    rows = []
+    for _, r in df.iterrows():
+        row = {}
+        for col in columns:
+            actual = resolved.get(col["target"])
+            row[col["target"]] = r[actual] if actual is not None else None
+        rows.append(row)
+    return rows
+
+
+def evaluate_grid(mapping, input_rows):
+    """
+    ליבת "טבלת הטעינה" — מקבלת שורות של {target: ערך} (גולמי מהאקסל או
+    ערוך מהמשתמש), מריצה עיבוד + ולידציה על *כל תא בנפרד*, ומחזירה רשימת
+    שורות עם הערך המעובד וסיבת השגיאה לכל תא. כפילויות מסמנות את תאי המפתח.
+
+    כל שורה: {excel_row, valid, cells:[{target, value, error}]}
+    הפונקציה משמשת גם לטעינה הראשונית וגם לכל "בדיקה מחדש" אחרי עריכה —
+    אותה לוגיקה בדיוק כמו ה-CLI, כך שהתוצאה עקבית.
+    """
+    columns = mapping["columns"]
+    date_format = mapping.get("date_format", DEFAULT_DATE_FORMAT)
+    key_fields = mapping.get("key_fields") or []
+
+    rows_out = []
+    for i, row in enumerate(input_rows):
+        cells = []
+        row_valid = True
+        for col in columns:
+            value, err = process_value(row.get(col["target"]), col, date_format)
+            if not err:
+                err = validators.validate_cell(value, col)
+            if err:
+                row_valid = False
+            cells.append({"target": col["target"], "value": value, "error": err})
+        rows_out.append({"excel_row": i + 2, "cells": cells, "valid": row_valid})
+
+    # בדיקת כפילויות בין השורות שתקינות עד כה — סימון תאי המפתח
+    if key_fields:
+        valid_pairs = [
+            (idx, {c["target"]: c["value"] for c in r["cells"]})
+            for idx, r in enumerate(rows_out) if r["valid"]
+        ]
+        dups = validators.check_duplicates(valid_pairs, key_fields, columns)
+        for idx, reason in dups.items():
+            rows_out[idx]["valid"] = False
+            for c in rows_out[idx]["cells"]:
+                if c["target"] in key_fields:
+                    c["error"] = reason
+    return rows_out
+
+
+def grid_valid_records(rows_out):
+    """מחזיר רשומות תקינות (עם values מסודרים) לבניית קובץ הטעינה מטבלת הטעינה."""
+    return [
+        {"values": [c["value"] for c in r["cells"]], "excel_row": r["excel_row"]}
+        for r in rows_out if r["valid"]
+    ]
+
+
 def prepare(screen, source, sheet=None):
     """
     ליבת העיבוד המשותפת ל-CLI ולממשק הוובי.

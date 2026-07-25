@@ -1,0 +1,487 @@
+# מפרט שדות מסך הספקים בפריוריטי — נוצר מקטלוג השדות של הלקוח.
+# הכלי אוכף אוטומטית: max_length, required (M), type (DATE/REAL/INT), decimals, boolean.
+screen: SUPPLIERS
+source: Priority SUPPLIERS field catalog
+fields:
+  SUPNAME:
+    title: מס' ספק
+    max_length: 16
+  SUPDES:
+    title: שם ספק
+    max_length: 48
+    required: true
+  ESUPDES:
+    title: שם ספק (אנגלית)
+    max_length: 48
+  PRIVTYPE:
+    title: ד. הרשאה לספק - כללי
+    max_length: 1
+  OWNERLOGIN:
+    title: שם משתמש
+    max_length: 20
+    required: true
+  STATDES:
+    title: סטטוס
+    max_length: 12
+    required: true
+  CREATEDDATE:
+    title: תאריך פתיחה
+    type: date
+  SUPNAMEPATNAME:
+    title: תבנית
+    max_length: 12
+  PHONE:
+    title: מספר טלפון
+    max_length: 20
+  FAX:
+    title: פקס
+    max_length: 20
+  EMAIL:
+    title: דואר אלקטרוני
+    max_length: 68
+  ADDRESS:
+    title: כתובת
+    max_length: 80
+  ADDRESS2:
+    title: כתובת - שורה 2
+    max_length: 80
+  ADDRESS3:
+    title: כתובת - שורה 3
+    max_length: 80
+  STATE:
+    title: עיר ומדינה
+    max_length: 40
+  STATEA:
+    title: עיר
+    max_length: 40
+  STATECODE:
+    title: קוד מדינה
+    max_length: 24
+  STATENAME:
+    title: מדינה
+    max_length: 40
+  ZIP:
+    title: מיקוד
+    max_length: 10
+  COUNTRYNAME:
+    title: ארץ
+    max_length: 18
+  SHOWINWEB:
+    title: הצגה באינטרנט
+    max_length: 1
+    boolean: true
+  BRANCHNAME:
+    title: סניף
+    max_length: 6
+  BRANCHDES:
+    title: תאור הסניף
+    max_length: 32
+    readonly: true
+  BUSINESSTYPE:
+    title: תחום עיסוק
+    max_length: 32
+  CONSIGWARHSNAME:
+    title: מחסן
+    max_length: 4
+  CONSIGLOCNAME:
+    title: איתור
+    max_length: 14
+  WARHSNAME:
+    title: מחסן
+    max_length: 4
+  NSFLAG:
+    title: שינוי שם?
+    max_length: 1
+    boolean: true
+  STCODE:
+    title: קוד משלוח
+    max_length: 8
+  STDES:
+    title: תאור משלוח
+    max_length: 6
+    readonly: true
+  IMPTERMNAME:
+    title: תנאי יבוא
+    max_length: 4
+  HOSTNAME:
+    title: Web Site
+    max_length: 48
+  SECONDLANGTEXT:
+    title: לקחת טקסט באנגלית?
+    max_length: 1
+    boolean: true
+  COMPNUM:
+    title: מס. עוסק מורשה
+    max_length: 16
+  VATNUM:
+    title: מספר תיק במע"מ
+    max_length: 16
+  CONFIDENTIAL:
+    title: ספק חסוי?
+    max_length: 1
+    boolean: true
+  SUPTYPECODE:
+    title: קוד סוג ספק
+    max_length: 3
+  SUPTYPEDES:
+    title: תאור סוג ספק
+    max_length: 32
+    readonly: true
+  RANKFLAG:
+    title: ספק לדירוג
+    max_length: 1
+    boolean: true
+  SUPRANK:
+    title: ציון ספק
+    type: number
+    max_length: 3
+    readonly: true
+    decimals: 0
+  SHIPPERNAME:
+    title: חברת הובלה/תע/ספ
+    max_length: 8
+  SHIPPERDES:
+    title: שם ח. הובלה/תע/ספ
+    max_length: 32
+  PAYCODE:
+    title: קוד תנאי תשלום
+    max_length: 4
+  PAYDES:
+    title: תנאי תשלום
+    max_length: 24
+    readonly: true
+  PROFORMA:
+    title: חשבוניות עסקה?
+    max_length: 1
+    boolean: true
+  ESTABLISHED:
+    title: שנת הקמה
+    max_length: 4
+  EMPNUM:
+    title: מספר עובדים
+    max_length: 7
+  EXTFILEFLAG:
+    title: נספחים?
+    max_length: 1
+    readonly: true
+    boolean: true
+  REQDATEDAYS:
+    title: ימים ל-"עד ת. אספקה"
+    type: number
+    max_length: 3
+    decimals: 0
+  DCMONTHS:
+    title: חודשי DC מותרים
+    type: number
+    max_length: 5
+    decimals: 0
+  DCMONTHSNEW:
+    title: חודשי DC חדש
+    type: number
+    max_length: 5
+    decimals: 0
+  CODE:
+    title: מטבע
+    max_length: 3
+    required: true
+  TYPECODE:
+    title: סוג הזמנת רכש
+    max_length: 3
+  TYPEDES:
+    title: תאור סוג הזמנת רכש
+    max_length: 12
+    readonly: true
+  LANG:
+    title: קוד שפה
+    type: number
+    max_length: 6
+    decimals: 0
+  LANGNAME:
+    title: שפה
+    max_length: 32
+    readonly: true
+  GPSX:
+    title: קו רוחב
+    max_length: 20
+  GPSY:
+    title: קו אורך
+    max_length: 20
+  SHIPMDAYS:
+    title: זמן הובלה ספק
+    type: number
+    max_length: 6
+    decimals: 0
+  MINPURQUANT:
+    title: מינימום להזמנה/פק"ע
+    max_length: 17
+  INCREMENT:
+    title: מדרגת הזמנה/פק"ע
+    max_length: 17
+  INVDAYS:
+    title: טווח קיבוץ
+    max_length: 3
+  PLEADTIME:
+    title: זמן אספקה רכש
+    max_length: 8
+  LABDAYS:
+    title: זמן בדיקות
+    max_length: 6
+  ERPG_ADVPAYMFLAG:
+    title: מקדמות לספק?
+    max_length: 1
+    boolean: true
+  ERPG_FROMSPART:
+    title: מתו מק"ט
+    type: number
+    max_length: 2
+    decimals: 0
+  ERPG_TOSPART:
+    title: עד תו מק"ט
+    type: number
+    max_length: 2
+    decimals: 0
+  ERPG_SPARTFLAG:
+    title: מק"ט ספק?
+    max_length: 1
+    boolean: true
+  ERPG_FROMSUPNO:
+    title: מתו אצווה?
+    type: number
+    max_length: 2
+    decimals: 0
+  ERPG_TOSUPNO:
+    title: עד תו אצווה
+    type: number
+    max_length: 2
+    decimals: 0
+  ERPG_FROMEXPDATE:
+    title: מתו תוקף
+    type: number
+    max_length: 2
+    decimals: 0
+  ERPG_TOEXPDATE:
+    title: עד תו תוקף
+    type: number
+    max_length: 2
+    decimals: 0
+  ERPG_EXPFORMAT:
+    title: פורמט תוקף
+    max_length: 20
+  ERPG_TYPECODE:
+    title: סוג מכירה
+    max_length: 3
+  ERPG_TYPEDES:
+    title: תאור סוג מכירה
+    max_length: 12
+    readonly: true
+  ERPG_QAACCEPT:
+    title: אישור QA לספק?
+    max_length: 1
+    readonly: true
+    boolean: true
+  ERPG_REMARK1:
+    title: הערות 1
+    max_length: 40
+  ERPG_REMARK2:
+    title: הערות 2
+    max_length: 40
+  SUP:
+    title: ספק (ID)
+    type: number
+    max_length: 13
+  SUPSUP:
+    title: ספק (ID)
+    type: number
+    max_length: 13
+  LOCNAME:
+    title: איתור
+    max_length: 14
+  INACTIVE:
+    title: לא פעיל
+    max_length: 1
+    boolean: true
+  FOREIGN:
+    title: ספק זר
+    max_length: 1
+  ACCOUNT:
+    title: חשבון (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  ADDRESSMAP:
+    max_length: 100
+  AFAX:
+    title: פקס אוטומטי
+    max_length: 20
+  AMAIL:
+    title: דואר אוטומטי
+    max_length: 68
+  BRANCH:
+    title: סניף (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  BRANCHCOMPANY:
+    title: תת חברה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  CONSIGWARHS:
+    title: מחסן קונסיגנציה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  CONSIGWARHSTYPE:
+    title: טיפוס D/F/W
+    max_length: 1
+  COUNTRY:
+    title: ארץ (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  EXTTYPE:
+    max_length: 1
+  FOLLOWUPIV:
+    title: ספק (ID)
+    type: number
+    max_length: 13
+  FOLLOWUPTYPE:
+    title: טיפוס תעודה
+    max_length: 20
+  FOLLOWUPUSER:
+    title: משתמש (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  LANGA:
+    title: שפה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  MAILINTERFACE:
+    max_length: 1
+  PAY:
+    title: תשלום (ID)
+    type: number
+    max_length: 13
+  SHIPPER:
+    title: ח.הובלה/תע/ספ (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  SHIPTYPE:
+    title: סוג משלוח (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  WARHS:
+    title: מחסן (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  AGENT:
+    max_length: 13
+  CURRENCY:
+    title: מטבע (ID)
+    type: number
+    max_length: 13
+  CUST:
+    max_length: 13
+  CUSTDES:
+    max_length: 48
+  CUSTNAME:
+    max_length: 16
+  MCUST:
+    max_length: 13
+  INACTIVEFLAG:
+    title: לא פעיל
+    max_length: 1
+  NSCUST:
+    title: ספק (ID)
+    type: number
+    max_length: 13
+  OPENPAYMENTFLAG:
+    title: מותר לפתוח תשלום
+    max_length: 1
+  OWNER:
+    title: לטיפול (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  RESTRICTED:
+    title: חסום לתשלום
+    max_length: 1
+  RESTRICTEDBY:
+    title: נחסם/שוחרר ע"י
+    type: number
+    max_length: 13
+    decimals: 0
+  RESTRICTEDDATE:
+    title: ת. חסימה/שיחרור
+    type: date
+  STATUSTYPE:
+    max_length: 20
+  SUPSTAT:
+    title: סטטוס ספק (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  PROJ:
+    max_length: 13
+  SUPTYPE:
+    title: סוג ספק (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  STATEID:
+    title: מדינה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  STATECOUNTRY:
+    title: ארץ (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  IMPTERM:
+    title: תנאי יבוא (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  USAPHONE:
+    title: טלפון בפורמט ארה"ב
+    max_length: 1
+  CHANGES_EXEC:
+    max_length: 13
+  CHARKEY1:
+    max_length: 16
+  CHARKEY2:
+    max_length: 16
+  INTERNAL:
+    title: ספק פנימי?
+    max_length: 1
+  GPSERRFLAG:
+    title: שגיאת גאוקוד
+    max_length: 1
+    readonly: true
+    boolean: true
+  FROMEDI:
+    title: עודכן מממשק אלקטרוני
+    max_length: 1
+  IVGUID:
+    title: ספק (ID)
+    type: number
+    max_length: 13
+  STATTYPE:
+    title: סוג תעודה
+    max_length: 20
+  PORDTYPE:
+    title: סוג הזמנת רכש (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  ERPG_CPROFTYPE:
+    title: סוג מכירה (ID)
+    type: number
+    max_length: 13
+    decimals: 0

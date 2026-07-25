@@ -10,6 +10,7 @@ webapp.py — ממשק וובי מקומי להכנת קבצי טעינה לפר
 הפעלה:  python webapp.py   ואז בדפדפן:  http://127.0.0.1:5000
 """
 
+import base64
 import io
 import os
 import re
@@ -38,6 +39,55 @@ DISPLAY_CAP = 8000
 # מאגר ריצות בזיכרון (כלי מקומי, משתמש יחיד): run_id -> נתוני הריצה
 RUNS = {}
 _RUNS_MAX = 40
+
+ASSETS_DIR = os.path.join(core.HERE, "assets")
+
+# לוגו ברירת-מחדל (ינשוף מעוגלים בכחול המותג). כדי להשתמש בלוגו האמיתי — פשוט
+# שמור קובץ בשם assets/logo.png (או .svg/.jpg) והוא יוצג במקום ברירת המחדל.
+_OWL_SVG = (
+    '<svg viewBox="0 0 120 120" width="42" height="42" aria-hidden="true" style="flex:none">'
+    '<g fill="#1e50c8">'
+    '<circle cx="33" cy="16" r="7"/><circle cx="87" cy="16" r="7"/><circle cx="60" cy="30" r="6"/>'
+    '<circle cx="41" cy="52" r="7"/><circle cx="79" cy="52" r="7"/>'
+    '<circle cx="42" cy="86" r="7"/><circle cx="60" cy="86" r="7"/><circle cx="78" cy="86" r="7"/>'
+    '<circle cx="51" cy="102" r="7"/><circle cx="69" cy="102" r="7"/><circle cx="60" cy="115" r="6"/>'
+    "</g>"
+    '<g fill="none" stroke="#1e50c8" stroke-width="8">'
+    '<circle cx="41" cy="52" r="19"/><circle cx="79" cy="52" r="19"/>'
+    "</g></svg>"
+)
+
+
+def _logo_file_markup():
+    """אם קיים קובץ לוגו ב-assets/ — מחזיר <img> מוטמע (data URI). אחרת None."""
+    mimes = {"svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg",
+             "jpeg": "image/jpeg", "webp": "image/webp"}
+    for ext, mime in mimes.items():
+        p = os.path.join(ASSETS_DIR, f"logo.{ext}")
+        if os.path.exists(p):
+            with open(p, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode()
+            return f'<img src="data:{mime};base64,{b64}" alt="לוגו" class="logo-img">'
+    return None
+
+
+def brand_html():
+    """רצועת המיתוג: הלוגו (קובץ אם קיים, אחרת ינשוף ברירת מחדל) + שם החברה."""
+    logo = _logo_file_markup()
+    if logo:
+        return f'<div class="brand">{logo}</div>'
+    return (
+        '<div class="brand">' + _OWL_SVG +
+        '<div class="brand-tx"><span class="brand-name">יזמקו גורו</span>'
+        '<span class="brand-sub">מערכות מידע</span></div></div>'
+    )
+
+
+# סקריפט קצר ל-<head> שמחיל נושא שמור (בהיר/כהה) לפני הרינדור — מונע הבהוב
+THEME_HEAD = (
+    "<script>(function(){try{var t=localStorage.getItem('fl-theme');"
+    "if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>"
+)
 
 
 def _prune_runs():
@@ -85,6 +135,7 @@ UPLOAD = """
 <!doctype html><html lang="he" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>הכנת קובץ טעינה — Priority ERP</title>
+<script>(function(){try{var t=localStorage.getItem('fl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -96,11 +147,25 @@ UPLOAD = """
   --shadow:0 1px 2px rgba(16,24,40,.05),0 8px 24px rgba(16,24,40,.07);
   --shadow-lg:0 20px 50px rgba(37,40,90,.16);
  }
- @media (prefers-color-scheme:dark){:root{
+ @media (prefers-color-scheme:dark){:root:not([data-theme]){
   --bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;
   --text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--brand-2:#a5b4fc;--brand-700:#6366f1;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.4);--shadow-lg:0 24px 60px rgba(0,0,0,.55);
  }}
+ :root[data-theme="dark"]{
+  --bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;
+  --text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--brand-2:#a5b4fc;--brand-700:#6366f1;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.4);--shadow-lg:0 24px 60px rgba(0,0,0,.55);
+ }
+ .brand{display:flex;align-items:center;gap:11px}
+ .brand .logo-img{height:46px;width:auto}
+ .brand-tx{display:flex;flex-direction:column;line-height:1.05}
+ .brand-name{font-weight:800;font-size:21px;color:var(--text);letter-spacing:-.01em}
+ .brand-sub{font-weight:600;font-size:12.5px;color:#1e50c8}
+ .topbar{display:flex;align-items:center;justify-content:space-between;max-width:720px;margin:0 auto 4px;padding:0 2px}
+ .themebtn{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;
+  padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;width:auto;margin:0;box-shadow:none}
+ .themebtn:hover{transform:none;background:var(--surface-2);box-shadow:none}
  *{box-sizing:border-box}
  body{margin:0;min-height:100vh;color:var(--text);line-height:1.6;
   font-family:"Assistant",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Arial,sans-serif;
@@ -139,6 +204,8 @@ UPLOAD = """
  code{background:var(--surface-2);border:1px solid var(--border);padding:2px 7px;border-radius:6px;font-size:13px}
  a.back{color:var(--brand);text-decoration:none;font-weight:700}
 </style></head><body><div class="wrap">
+ <div class="topbar">{{ brand|safe }}
+  <button id="themebtn" class="themebtn" onclick="toggleTheme()">🌙 מצב כהה</button></div>
  <div class="hero">
   <div class="logo">📥</div>
   <h1>הכנת קובץ טעינה ל-Priority ERP</h1>
@@ -175,6 +242,12 @@ UPLOAD = """
   ['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over');}));
   ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over');}));
   drop.addEventListener('drop',ev=>{file.files=ev.dataTransfer.files;if(file.files[0])fname.textContent='📄 '+file.files[0].name;});}
+ function toggleTheme(){var r=document.documentElement,cur=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+  var nx=cur==='dark'?'light':'dark';r.setAttribute('data-theme',nx);try{localStorage.setItem('fl-theme',nx);}catch(e){}updateThemeBtn();}
+ function updateThemeBtn(){var b=document.getElementById('themebtn');if(!b)return;
+  var cur=document.documentElement.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+  b.textContent=cur==='dark'?'☀️ מצב בהיר':'🌙 מצב כהה';}
+ updateThemeBtn();
 </script></body></html>
 """
 
@@ -186,6 +259,7 @@ GRID = """
 <!doctype html><html lang="he" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>טבלת טעינה — {{ screen }}</title>
+<script>(function(){try{var t=localStorage.getItem('fl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -196,7 +270,7 @@ GRID = """
   --ok-bg:#dcfce7;--ok-fg:#166534;--ign-bg:#e0e7ff;--ign-fg:#4338ca;--tot-bg:#eef2f7;--tot-fg:#334155;
   --shadow:0 1px 2px rgba(16,24,40,.05),0 10px 30px rgba(16,24,40,.07);
  }
- @media (prefers-color-scheme:dark){:root{
+ @media (prefers-color-scheme:dark){:root:not([data-theme]){
   --bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;--text:#e8edf6;--muted:#93a1b8;
   --brand:#818cf8;--brand-2:#a5b4fc;
   --bad-bg:rgba(220,38,38,.15);--bad-fg:#f87171;--warn-bg:rgba(217,119,6,.16);--warn-fg:#fbbf24;
@@ -204,6 +278,23 @@ GRID = """
   --tot-bg:rgba(148,163,184,.16);--tot-fg:#cbd5e1;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 34px rgba(0,0,0,.45);
  }}
+ :root[data-theme="dark"]{
+  --bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;--text:#e8edf6;--muted:#93a1b8;
+  --brand:#818cf8;--brand-2:#a5b4fc;
+  --bad-bg:rgba(220,38,38,.15);--bad-fg:#f87171;--warn-bg:rgba(217,119,6,.16);--warn-fg:#fbbf24;
+  --ok-bg:rgba(5,150,105,.18);--ok-fg:#34d399;--ign-bg:rgba(99,102,241,.22);--ign-fg:#a5b4fc;
+  --tot-bg:rgba(148,163,184,.16);--tot-fg:#cbd5e1;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 34px rgba(0,0,0,.45);
+ }
+ .brand{display:flex;align-items:center;gap:10px}
+ .brand .logo-img{height:40px;width:auto}
+ .brand-tx{display:flex;flex-direction:column;line-height:1.03}
+ .brand-name{font-weight:800;font-size:18px;color:var(--text);letter-spacing:-.01em}
+ .brand-sub{font-weight:600;font-size:11.5px;color:#1e50c8}
+ .apphead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+ .apphead .ttl h1{margin:0}.apphead .ttl .sub{margin:0}
+ .themebtn{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;
+  padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
  *{box-sizing:border-box}
  body{margin:0;color:var(--text);font-family:"Assistant",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Arial,sans-serif;
   background:radial-gradient(1000px 420px at 100% -8%,rgba(99,102,241,.14),transparent 60%),var(--bg)}
@@ -277,8 +368,12 @@ GRID = """
  .mapitem.mapreq select{border-color:var(--bad-fg)}
  .mapitem select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(99,102,241,.15)}
 </style></head><body><div class="wrap">
- <h1>📋 טבלת טעינה — מסך {{ screen }}</h1>
- <p class="sub">תקן תאים מסומנים (רחף לראות סיבה), מחק או התעלם משורות, סדר עמודות בגרירה — ואז הפק את קובץ הטעינה.</p>
+ <div class="apphead">
+  <div class="ttl"><h1>📋 טבלת טעינה — מסך {{ screen }}</h1>
+   <p class="sub">תקן תאים מסומנים (רחף לראות סיבה), מחק או התעלם משורות, סדר עמודות בגרירה — ואז הפק את קובץ הטעינה.</p></div>
+  <div style="display:flex;align-items:center;gap:14px">{{ brand|safe }}
+   <button id="themebtn" class="themebtn" onclick="toggleTheme()">🌙 מצב כהה</button></div>
+ </div>
  <div class="bar">
   <span class="pill tot" id="p-tot">סה״כ 0</span>
   <span class="pill ok" id="p-ok">תקינות 0</span>
@@ -519,8 +614,14 @@ let ft=null;
 function flash(kind,text){const box=document.createElement('div');box.className='msg '+(kind==='ok'?'ok':'err');box.textContent=text;
   $('messages').prepend(box);clearTimeout(ft);ft=setTimeout(()=>{if(box.parentNode)box.remove();},6000);}
 
+function toggleTheme(){var r=document.documentElement,cur=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+  var nx=cur==='dark'?'light':'dark';r.setAttribute('data-theme',nx);try{localStorage.setItem('fl-theme',nx);}catch(e){}updateThemeBtn();}
+function updateThemeBtn(){var b=$('themebtn');if(!b)return;
+  var cur=document.documentElement.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+  b.textContent=cur==='dark'?'☀️ מצב בהיר':'🌙 מצב כהה';}
+
 if(GRID.mode==='errors') $('onlyerr').checked=true;
-renderBanner(); renderMapping(); render();
+updateThemeBtn(); renderBanner(); renderMapping(); render();
 </script></body></html>
 """
 
@@ -530,7 +631,7 @@ renderBanner(); renderMapping(); render();
 # ---------------------------------------------------------------------------
 @app.route("/")
 def index():
-    return render_template_string(UPLOAD, screens=core.available_screens(), error=None)
+    return render_template_string(UPLOAD, screens=core.available_screens(), error=None, brand=brand_html())
 
 
 def _build_grid(screen, mapping, df, overrides, run_id=None):
@@ -618,7 +719,7 @@ def process():
     except Exception as e:  # noqa: BLE001
         return _upload_error(f"שגיאה בלתי צפויה בעיבוד הקובץ:\n{e}")
 
-    return render_template_string(GRID, screen=screen, grid=payload)
+    return render_template_string(GRID, screen=screen, grid=payload, brand=brand_html())
 
 
 @app.route("/grid/remap", methods=["POST"])
@@ -741,7 +842,7 @@ def download(run_id, kind):
 
 
 def _upload_error(msg):
-    return render_template_string(UPLOAD, screens=core.available_screens(), error=msg)
+    return render_template_string(UPLOAD, screens=core.available_screens(), error=msg, brand=brand_html())
 
 
 if __name__ == "__main__":

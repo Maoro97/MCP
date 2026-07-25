@@ -1,56 +1,91 @@
 # ============================================================================
-# קובץ מיפוי לדוגמה — מסך ספקים (SUPPLIERS)
-# הסדר של columns כאן = סדר העמודות בקובץ הפלט (חייב להתאים ל-Interface).
+# מיפוי — טעינת ספקים אל ממשק הספקים של פריוריטי (SUPPLIERS)
+# ולידציית השדות (אורך, חובה, טיפוס, בוליאני) נטענת אוטומטית מ-specs/SUPPLIERS.yaml
+# (קטלוג השדות הרשמי). ערך מפורש כאן גובר על הקטלוג.
+# לכל שדה אפשר להגדיר כמה כינויים (source כרשימה) להתאמה אוטומטית מקבצים שונים.
 # ============================================================================
 
 screen: SUPPLIERS
-interface_name: XXXX_LOADSUP       # שם ה-Interface בפריוריטי (תיעוד בלבד)
-
+interface_name: XXXX_LOADSUP
 delimiter: tab
 encoding: windows-1255
 date_format: "%d/%m/%y"
 include_header: false
-key_fields: [SUPNAME]              # מספר ספק = מזהה ייחודי
+key_fields: [SUPNAME]
 
 columns:
-  # מספר ספק — מפתח, חובה, עד 15 תווים
-  - source: "מספר ספק"
+  # מס' ספק — מזהה (רוחב 16 מהקטלוג)
+  - source: ["מספר ספק", "קוד ספק", "מפתח ספק", "מס ספק"]
     target: SUPNAME
     required: true
-    max_length: 15
-    transform: [strip]
-
-  # שם ספק — חובה, עד 48 תווים
-  - source: "שם ספק"
-    target: SUPDES
-    required: true
-    max_length: 48
-    transform: [strip]
-
-  # מספר עוסק מורשה / ח.פ. — מספר, עד 9 ספרות
-  - source: "עוסק מורשה"
-    target: VATNUM
-    type: number
-    max_length: 9
-
-  # טלפון — ניקוי רווחים, עד 20 תווים
-  - source: "טלפון"
-    target: PHONE
-    max_length: 20
     transform: [strip, remove_spaces]
 
-  # דוא"ל — עד 50 תווים
-  - source: "אימייל"
-    target: EMAIL
-    max_length: 50
-    transform: [strip, lower]
+  # שם ספק — חובה, רוחב 48 מהקטלוג
+  - source: ["שם ספק", "שם"]
+    target: SUPDES
+    transform: [strip]
 
-  # מטבע — מיפוי לקוד מטבע, ברירת מחדל שקל
-  - source: "מטבע"
-    target: CURRENCY
-    value_map: {"שקל": "ILS", 'ש"ח': "ILS", "דולר": "USD", "אירו": "EUR", "יורו": "EUR"}
+  # סטטוס — חובה (רוחב 12), ברירת מחדל "פעיל"
+  - source: ["סטטוס", "סטטוס ספק", "פעיל"]
+    target: STATDES
+    default: "פעיל"
+    transform: [strip]
+
+  # תאריך פתיחה — טיפוס date מהקטלוג
+  - source: ["תאריך פתיחה", "תאריך הקמה"]
+    target: CREATEDDATE
+
+  # טלפון — רק ספרות, אזהרה אם לא תקין (רוחב 20)
+  - source: ["טלפון", "מספר טלפון", "טלפון קווי"]
+    target: PHONE
+    transform: [strip]
+    format: phone
+
+  # פקס — רוחב 20
+  - source: ["פקס"]
+    target: FAX
+    transform: [strip]
+    format: phone
+
+  # דואר אלקטרוני — רוחב 68, אזהרה אם לא תקין
+  - source: ["דואר אלקטרוני", "אימייל", "מייל", 'דוא"ל', "email"]
+    target: EMAIL
+    transform: [strip, lower]
+    format: email
+
+  # כתובת — רוחב 80
+  - source: ["כתובת", "רחוב"]
+    target: ADDRESS
+    transform: [strip]
+
+  # עיר — רוחב 40
+  - source: ["עיר", "יישוב", "ישוב"]
+    target: STATEA
+    transform: [strip]
+
+  # מיקוד — רוחב 10
+  - source: ["מיקוד"]
+    target: ZIP
+    transform: [strip, digits_only]
+
+  # מס' עוסק מורשה — CHAR 16 (נשמר כטקסט)
+  - source: ["עוסק מורשה", "מס עוסק מורשה", "מספר עוסק", "ח.פ.", "עוסק"]
+    target: COMPNUM
+    transform: [strip]
+
+  # מספר תיק במע"מ — CHAR 16
+  - source: ['מספר תיק במע"מ', "מספר תיק במעמ", "תיק מעמ", "תיק מע\"מ"]
+    target: VATNUM
+    transform: [strip]
+
+  # מטבע — קוד מטבע (CHAR 3, חובה). ברירת מחדל ILS.
+  # התאם את הקודים (ILS/USD/EUR) לקודי המטבע שמוגדרים אצלך בפריוריטי.
+  - source: ["מטבע", "קוד מטבע"]
+    target: CODE
+    value_map: {"שקל": "ILS", 'ש"ח': "ILS", "שח": "ILS", "דולר": "USD", "אירו": "EUR", "יורו": "EUR"}
     default: "ILS"
 
-  # תנאי תשלום — ערך קבוע לכל השורות
-  - target: PAYCODE
-    default: "שוטף+30"
+  # קוד תנאי תשלום — CHAR 4
+  - source: ["קוד תנאי תשלום", "תנאי תשלום", "קוד תשלום"]
+    target: PAYCODE
+    transform: [strip]

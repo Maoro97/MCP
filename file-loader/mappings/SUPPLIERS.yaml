@@ -63,20 +63,23 @@ columns:
     target: STATEA
     transform: [strip]
 
-  # מיקוד — רוחב 10
+  # מיקוד — רוחב 10; אזהרה אם אינו 5/7 ספרות
   - source: ["מיקוד"]
     target: ZIP
     transform: [strip, digits_only]
+    format: zip
 
-  # מס' עוסק מורשה — CHAR 16 (נשמר כטקסט)
+  # מס' עוסק מורשה — CHAR 16; אזהרה אם ספרת הביקורת שגויה
   - source: ["עוסק מורשה", "מס עוסק מורשה", "מספר עוסק", "ח.פ.", "עוסק"]
     target: COMPNUM
     transform: [strip]
+    format: idnum
 
-  # מספר תיק במע"מ — CHAR 16
+  # מספר תיק במע"מ — CHAR 16; אזהרה אם ספרת הביקורת שגויה
   - source: ['מספר תיק במע"מ', "מספר תיק במעמ", "תיק מעמ", "תיק מע\"מ"]
     target: VATNUM
     transform: [strip]
+    format: idnum
 
   # מטבע — קוד מטבע (CHAR 3, חובה). ברירת מחדל ILS.
   # התאם את הקודים (ILS/USD/EUR) לקודי המטבע שמוגדרים אצלך בפריוריטי.

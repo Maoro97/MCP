@@ -140,10 +140,34 @@ def is_valid_email(value: str) -> bool:
     return bool(_EMAIL_RE.match(value))
 
 
+def is_valid_il_id(value: str) -> bool:
+    """
+    בדיקת ספרת ביקורת של מספר ישראלי (ת"ז / ח.פ. / עוסק מורשה) —
+    אלגוריתם ה-checksum הרשמי (וריאנט Luhn). מקבל עד 9 ספרות.
+    """
+    d = "".join(ch for ch in value if ch.isdigit())
+    if not d or len(d) > 9:
+        return False
+    d = d.zfill(9)
+    total = 0
+    for i, ch in enumerate(d):
+        n = int(ch) * (1 if i % 2 == 0 else 2)
+        total += n if n < 10 else n - 9
+    return total % 10 == 0
+
+
+def is_valid_il_zip(value: str) -> bool:
+    """מיקוד ישראלי תקין — 7 ספרות (מיקוד חדש) או 5 ספרות (ישן)."""
+    d = "".join(ch for ch in value if ch.isdigit())
+    return len(d) in (5, 7)
+
+
 # כל בדיקה: (פונקציה, טקסט האזהרה)
 FORMAT_CHECKS = {
     "phone": (is_valid_il_phone, "מספר טלפון לא תקין"),
     "email": (is_valid_email, "כתובת דוא\"ל לא תקינה"),
+    "idnum": (is_valid_il_id, "מספר ח.פ./עוסק לא תקין (ספרת ביקורת)"),
+    "zip": (is_valid_il_zip, "מיקוד לא תקין"),
 }
 
 

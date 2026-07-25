@@ -205,7 +205,9 @@ UPLOAD = """
  a.back{color:var(--brand);text-decoration:none;font-weight:700}
 </style></head><body><div class="wrap">
  <div class="topbar">{{ brand|safe }}
-  <button id="themebtn" class="themebtn" onclick="toggleTheme()">🌙 מצב כהה</button></div>
+  <div style="display:flex;gap:8px;align-items:center">
+   <a class="themebtn" style="text-decoration:none" href="/history">📜 היסטוריה</a>
+   <button id="themebtn" class="themebtn" onclick="toggleTheme()">🌙 מצב כהה</button></div></div>
  <div class="hero">
   <div class="logo">📥</div>
   <h1>הכנת קובץ טעינה ל-Priority ERP</h1>
@@ -385,6 +387,7 @@ GRID = """
   <button class="b-check" onclick="ignoreAllWarnings()" title="סמן את כל שורות האזהרה כמיוצאות">🚫 התעלם מאזהרות</button>
   <button class="b-check" onclick="revalidate()">🔄 בדוק מחדש</button>
   <button class="b-gen" onclick="generate()">⬇ צור קובץ טעינה</button>
+  <a class="back" href="/history">📜 היסטוריה</a>
   <a class="back" href="/">＋ קובץ חדש</a>
  </div>
  <div id="banner"></div><div id="mapping"></div><div id="messages"></div>
@@ -634,7 +637,7 @@ def index():
     return render_template_string(UPLOAD, screens=core.available_screens(), error=None, brand=brand_html())
 
 
-def _build_grid(screen, mapping, df, overrides, run_id=None):
+def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None):
     """
     ליבת בניית תגובת הטבלה — משותפת ל-/process ול-/grid/remap.
     פותר את המיפוי (עם overrides ידניים), מריץ ולידציה, מפצל קטן/גדול, שומר את
@@ -666,10 +669,12 @@ def _build_grid(screen, mapping, df, overrides, run_id=None):
             for r in invalid_rows if id(r) not in shown
         ]
 
+    prev = RUNS.get(run_id) or {}
     run_id = run_id or uuid.uuid4().hex
     RUNS[run_id] = {
         "screen": screen, "df": df, "overrides": dict(overrides or {}),
         "valid": server_valid, "reserved": reserved, "overflow": overflow_items,
+        "source_name": source_name or prev.get("source_name", ""),
         "created": time.time(),
     }
     _prune_runs()
@@ -713,7 +718,8 @@ def process():
             header_row=header_row if header_row is not None else mapping.get("header_row"),
             expected_sources=core._expected_sources(mapping),
         )
-        payload = _build_grid(screen, mapping, df, overrides=None)
+        payload = _build_grid(screen, mapping, df, overrides=None,
+                              source_name=upload.filename)
     except core.UserError as e:
         return _upload_error(str(e))
     except Exception as e:  # noqa: BLE001
@@ -818,6 +824,14 @@ def grid_generate():
     with open(os.path.join(run_dir, f"{screen}_report.txt"), "w", encoding="utf-8") as f:
         f.write(report)
 
+    core.append_history({
+        "screen": screen, "source": run.get("source_name", ""),
+        "total": len(valid_records) + len(rejected_items),
+        "valid": len(valid_records), "invalid": len(rejected_items),
+        "warnings": warn_count, "via": "web", "run_id": run_id,
+        "has_rejected": bool(rejected_items),
+    })
+
     return jsonify(
         run_id=run_id, load_name=load_name,
         valid=len(valid_records), invalid=len(rejected_items),
@@ -839,6 +853,59 @@ def download(run_id, kind):
         if suffix in fname or fname.endswith(suffix):
             return send_from_directory(run_dir, fname, as_attachment=True)
     abort(404)
+
+
+HISTORY = """
+<!doctype html><html lang="he" dir="rtl"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>היסטוריית טעינות</title>
+<script>(function(){try{var t=localStorage.getItem('fl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+ :root{--bg:#eef2f9;--surface:#fff;--surface-2:#f7f9fc;--border:#e5eaf2;--text:#0f172a;--muted:#64748b;--brand:#4f46e5;
+  --ok-fg:#166534;--bad-fg:#dc2626;--shadow:0 1px 2px rgba(16,24,40,.05),0 10px 30px rgba(16,24,40,.07);}
+ @media (prefers-color-scheme:dark){:root:not([data-theme]){--bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;--text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--ok-fg:#34d399;--bad-fg:#f87171;}}
+ :root[data-theme="dark"]{--bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;--text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--ok-fg:#34d399;--bad-fg:#f87171;}
+ *{box-sizing:border-box}body{margin:0;font-family:"Assistant",-apple-system,"Segoe UI",system-ui,Arial,sans-serif;background:var(--bg);color:var(--text)}
+ .wrap{max-width:1100px;margin:0 auto;padding:26px 18px 70px}
+ .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+ h1{font-size:22px;font-weight:800;margin:0}
+ a.back{color:var(--brand);text-decoration:none;font-weight:700}
+ .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+ table{border-collapse:collapse;width:100%;font-size:14px}
+ th,td{text-align:right;padding:11px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+ th{background:var(--surface-2);font-weight:700}
+ .ok{color:var(--ok-fg);font-weight:700}.bad{color:var(--bad-fg);font-weight:700}
+ .dl{color:var(--brand);text-decoration:none;font-weight:600;margin-left:10px}
+ .empty{padding:40px;text-align:center;color:var(--muted)}
+ .tag{font-size:12px;color:var(--muted)}
+</style></head><body><div class="wrap">
+ <div class="head"><h1>📜 היסטוריית טעינות</h1><a class="back" href="/">→ חזרה</a></div>
+ <div class="card">
+ {% if not rows %}<div class="empty">עדיין לא בוצעו טעינות.</div>
+ {% else %}
+ <table><thead><tr><th>זמן</th><th>מסך</th><th>קובץ מקור</th><th>נקראו</th><th>תקינות</th><th>נפסלו</th><th>אזהרות</th><th>משתמש</th><th>קבצים</th></tr></thead><tbody>
+ {% for r in rows %}
+ <tr>
+  <td class="tag">{{ r.ts }}</td><td>{{ r.screen }}</td><td>{{ r.source or '—' }}</td>
+  <td>{{ r.total }}</td><td class="ok">{{ r.valid }}</td>
+  <td class="{{ 'bad' if r.invalid else '' }}">{{ r.invalid }}</td><td>{{ r.warnings }}</td>
+  <td class="tag">{{ r.user or '' }}{% if r.via=='cli' %} · CLI{% endif %}</td>
+  <td>{% if r.run_id %}<a class="dl" href="/download/{{ r.run_id }}/load">קובץ</a>
+      {% if r.has_rejected %}<a class="dl" href="/download/{{ r.run_id }}/rejected">פסולות</a>{% endif %}
+      <a class="dl" href="/download/{{ r.run_id }}/report">דוח</a>{% else %}<span class="tag">output/</span>{% endif %}</td>
+ </tr>
+ {% endfor %}
+ </tbody></table>
+ {% endif %}
+ </div>
+</div></body></html>
+"""
+
+
+@app.route("/history")
+def history():
+    return render_template_string(HISTORY, rows=core.read_history(200))
 
 
 def _upload_error(msg):

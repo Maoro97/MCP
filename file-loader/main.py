@@ -37,9 +37,49 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MAPPINGS_DIR = os.path.join(HERE, "mappings")
 OUTPUT_DIR = os.path.join(HERE, "output")
 SPECS_DIR = os.path.join(HERE, "specs")
+HISTORY_FILE = os.path.join(OUTPUT_DIR, "history.jsonl")
 
 # מטמון למפרטי השדות (specs/<SCREEN>.yaml)
 _SPEC_CACHE = {}
+
+
+def append_history(entry):
+    """מוסיף רשומת היסטוריה (שורת JSON) על ריצת טעינה. שקט בכל שגיאה."""
+    import json
+    import datetime as _dt
+    import getpass
+    entry = dict(entry)
+    entry.setdefault("ts", _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    try:
+        entry.setdefault("user", getpass.getuser())
+    except Exception:  # noqa: BLE001
+        entry.setdefault("user", "")
+    try:
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        with open(HISTORY_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
+def read_history(limit=200):
+    """קורא את רשומות ההיסטוריה (החדשות ראשונות)."""
+    import json
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    rows = []
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        rows.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+    except OSError:
+        return []
+    return rows[::-1][:limit]
 
 # פורמט התאריך בפלט — תמיד dd/mm/yy (למשל 23/07/26).
 # זהו מקור האמת היחיד: אם קובץ מיפוי לא מציין date_format, זה מה שיחול.
@@ -884,6 +924,13 @@ def run(args):
 
     print(report)
     print(f"\nהדוח נשמר: {report_path}")
+
+    append_history({
+        "screen": args.screen, "source": os.path.basename(str(args.input)),
+        "total": len(records), "valid": len(valid_records),
+        "invalid": len(rejected_records), "warnings": len(enc_warnings),
+        "via": "cli", "dry_run": bool(args.dry_run),
+    })
 
     # קוד יציאה: 0 אם הכל תקין, 1 אם היו שורות פסולות (נוח לאוטומציה)
     return 1 if rejected_records else 0

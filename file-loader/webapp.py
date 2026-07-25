@@ -103,7 +103,7 @@ def _columns_meta(mapping):
     return [{
         "target": c["target"], "source": c.get("source"),
         "constant": c.get("source") is None, "type": c.get("type", "text"),
-    } for c in mapping["columns"]]
+    } for c in core.all_columns(mapping)]
 
 
 def _first_reason(cells):
@@ -111,14 +111,21 @@ def _first_reason(cells):
 
 
 def _sample_warnings(mapping, valid_records, limit=40):
-    w = core.check_encoding(valid_records, mapping["columns"],
+    w = core.check_encoding(valid_records, core.all_columns(mapping),
                             mapping.get("encoding", "windows-1255"))
     return w[:limit], len(w)
 
 
+def _write_records(run_dir, fname, records, mp):
+    """כותב קובץ טעינה מרשומות לפי מיפוי נתון."""
+    content = core.build_load_content(records, mp)
+    with open(os.path.join(run_dir, fname), "wb") as f:
+        f.write(core.load_content_bytes(content, mp))
+
+
 def _rejected_df(mapping, items):
     """items: רשימת (excel_row, {target:value}, reason)."""
-    targets = [c["target"] for c in mapping["columns"]]
+    targets = [c["target"] for c in core.all_columns(mapping)]
     data = []
     for excel_row, values, reason in items:
         row = dict(values)
@@ -600,7 +607,11 @@ async function generate(){
   const res=await post('/grid/generate',collect()); if(!res)return;
   if(res.rows){ GRID.rows=keepIgnore(res.rows); GRID.server_valid=res.server_valid; GRID.overflow=res.overflow; render(); }
   let html='';
-  if(res.valid>0){ html+='<a class="dl" href="/download/'+res.run_id+'/load">⬇ הורדת קובץ הטעינה ('+esc(res.load_name)+')</a>';
+  if(res.files && res.files.length){   // מסמך: קובץ אב + מסכי-משנה
+    res.files.forEach(f=>{ html+='<a class="dl" href="/download/'+res.run_id+'/f/'+encodeURIComponent(f.name)+'">⬇ '+esc(f.label)+'</a>'; });
+    html+='<a class="dl rep" href="/download/'+res.run_id+'/report">⬇ דוח</a>';
+  } else if(res.valid>0){
+    html+='<a class="dl" href="/download/'+res.run_id+'/load">⬇ הורדת קובץ הטעינה ('+esc(res.load_name)+')</a>';
     html+='<a class="dl rep" href="/download/'+res.run_id+'/report">⬇ דוח</a>'; }
   if(res.invalid>0) html+='<a class="dl rej" href="/download/'+res.run_id+'/rejected">⬇ שורות פסולות ('+res.invalid+')</a>';
   $('dlarea').innerHTML=html;
@@ -643,7 +654,7 @@ def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None):
     פותר את המיפוי (עם overrides ידניים), מריץ ולידציה, מפצל קטן/גדול, שומר את
     הריצה (כולל ה-DataFrame הגולמי כדי לאפשר מיפוי מחדש), ומחזיר payload מלא.
     """
-    resolved, req_missing, opt_missing = core.resolve_columns(df, mapping["columns"], overrides)
+    resolved, req_missing, opt_missing = core.resolve_columns(df, core.all_columns(mapping), overrides)
     rows_out = core.evaluate_grid(mapping, core.rows_from_dataframe(df, mapping, resolved))
     key_fields = mapping.get("key_fields") or []
     total = len(rows_out)
@@ -654,7 +665,8 @@ def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None):
     invalid_rows = [r for r in rows_out if not r["valid"]]
     valid_rows = [r for r in rows_out if r["valid"]]
 
-    if total <= FULL_GRID_LIMIT:
+    # במסמכים (מסכי-משנה) כל השורות מוצגות — הבנייה של האב/הבן דורשת אותן
+    if total <= FULL_GRID_LIMIT or core.subform_defs(mapping):
         displayed, server_valid = rows_out, []
         reserved, overflow_items = set(), []
     else:
@@ -683,7 +695,7 @@ def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None):
     total_warn = sum(1 for r in rows_out if _has_warn(r))
     assignment = {
         c["target"]: resolved.get(c["target"], "")
-        for c in mapping["columns"] if c.get("source") is not None
+        for c in core.all_columns(mapping) if c.get("source") is not None
     }
     return {
         "screen": screen, "run_id": run_id, "interface": mapping.get("interface_name"),
@@ -801,11 +813,23 @@ def grid_generate():
     run_dir = os.path.join(WEB_OUTPUT, run_id)
     os.makedirs(run_dir, exist_ok=True)
 
-    load_name = f"{screen}_load.{core.load_file_extension(export_mapping)}"
-    if valid_records:
-        content = core.build_load_content(valid_records, export_mapping)
-        with open(os.path.join(run_dir, load_name), "wb") as f:
-            f.write(core.load_content_bytes(content, export_mapping))
+    files = []  # קבצי טעינה שנוצרו: [{name, label}]
+    load_name = f"{screen}_load.{core.load_file_extension(mapping)}"
+    if core.subform_defs(mapping):
+        # מסמך: קובץ אב (ייחודי לפי מפתח) + קובץ לכל מסך-משנה (מקושר במפתח)
+        parent_records = core.build_parent_records(now_valid, mapping)
+        if parent_records:
+            _write_records(run_dir, load_name, parent_records, mapping)
+            files.append({"name": load_name, "label": f"קובץ אב · {screen}"})
+        for sf in core.subform_defs(mapping):
+            vm = core.subform_mapping(mapping, sf)
+            fn = f"{screen}_{sf['name']}_load.{core.load_file_extension(vm)}"
+            if now_valid:
+                _write_records(run_dir, fn, core.build_subform_records(now_valid, mapping, sf), vm)
+                files.append({"name": fn, "label": f"מסך-משנה · {sf['name']}"})
+    elif valid_records:
+        _write_records(run_dir, load_name, valid_records, export_mapping)
+        files.append({"name": load_name, "label": "קובץ טעינה"})
 
     rejected_items = [
         (r["excel_row"], {c["target"]: c["value"] for c in r["cells"]}, _first_reason(r["cells"]))
@@ -833,10 +857,21 @@ def grid_generate():
     })
 
     return jsonify(
-        run_id=run_id, load_name=load_name,
+        run_id=run_id, load_name=load_name, files=files,
         valid=len(valid_records), invalid=len(rejected_items),
         rows=rows_out, server_valid=len(run["valid"]), overflow=len(run["overflow"]),
     )
+
+
+@app.route("/download/<run_id>/f/<path:name>")
+def download_named(run_id, name):
+    """הורדת קובץ ספציפי לפי שם (לקבצי אב/מסכי-משנה)."""
+    if not _RUN_ID_RE.match(run_id) or "/" in name or "\\" in name or name.startswith("."):
+        abort(404)
+    run_dir = os.path.join(WEB_OUTPUT, run_id)
+    if not os.path.isfile(os.path.join(run_dir, name)):
+        abort(404)
+    return send_from_directory(run_dir, name, as_attachment=True)
 
 
 @app.route("/download/<run_id>/<kind>")

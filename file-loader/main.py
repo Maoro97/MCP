@@ -156,7 +156,7 @@ def enrich_columns(mapping, screen):
     spec = load_field_spec(mapping.get("screen") or screen)
     if not spec:
         return
-    for col in mapping["columns"]:
+    for col in all_columns(mapping):
         fs = spec.get(col.get("target"))
         if not fs:
             continue
@@ -214,9 +214,68 @@ def _list_available_screens() -> str:
     return ", ".join(available_screens())
 
 
+def subform_defs(mapping):
+    """מחזיר את רשימת מסכי-המשנה (subforms) המוגדרים במיפוי (או ריק)."""
+    return mapping.get("subforms") or []
+
+
+def all_columns(mapping):
+    """כל עמודות המיפוי — עמודות המסך הראשי + עמודות כל מסכי-המשנה."""
+    cols = list(mapping["columns"])
+    for sf in subform_defs(mapping):
+        cols += sf.get("columns", [])
+    return cols
+
+
+def _key_columns(mapping):
+    """אובייקטי העמודות של שדות המפתח, בסדר key_fields."""
+    key_fields = mapping.get("key_fields") or []
+    by_target = {c["target"]: c for c in mapping["columns"]}
+    return [by_target[k] for k in key_fields if k in by_target]
+
+
+def subform_mapping(mapping, subform):
+    """
+    בונה 'מיפוי' לקובץ מסך-משנה: שדות המפתח של האב + עמודות מסך-המשנה,
+    כך שאפשר לייצר לו קובץ טעינה נפרד (מקושר לאב דרך המפתח).
+    """
+    vm = dict(mapping)
+    vm["columns"] = _key_columns(mapping) + list(subform.get("columns", []))
+    if subform.get("interface_name"):
+        vm["interface_name"] = subform["interface_name"]
+    return vm
+
+
+def build_parent_records(valid_rows_out, mapping):
+    """רשומות האב לקובץ הראשי — ייחודיות לפי key_fields (השורה הראשונה לכל מפתח)."""
+    key_fields = mapping.get("key_fields") or []
+    targets = [c["target"] for c in mapping["columns"]]
+    seen, recs = set(), []
+    for r in valid_rows_out:
+        cm = {c["target"]: c["value"] for c in r["cells"]}
+        if key_fields:
+            key = tuple(cm.get(k, "") for k in key_fields)
+            if key in seen:
+                continue
+            seen.add(key)
+        recs.append({"values": [cm.get(t, "") for t in targets], "excel_row": r["excel_row"]})
+    return recs
+
+
+def build_subform_records(valid_rows_out, mapping, subform):
+    """רשומות מסך-משנה — שורה לכל שורת קלט (שדות המפתח + עמודות מסך-המשנה)."""
+    key_fields = mapping.get("key_fields") or []
+    out_targets = key_fields + [c["target"] for c in subform.get("columns", [])]
+    recs = []
+    for r in valid_rows_out:
+        cm = {c["target"]: c["value"] for c in r["cells"]}
+        recs.append({"values": [cm.get(t, "") for t in out_targets], "excel_row": r["excel_row"]})
+    return recs
+
+
 def rows_from_dataframe(df, mapping, resolved):
     """הופך DataFrame לרשימת שורות {target: ערך_גולמי} לפי מיפוי העמודות."""
-    columns = mapping["columns"]
+    columns = all_columns(mapping)
     rows = []
     for _, r in df.iterrows():
         row = {}
@@ -240,10 +299,11 @@ def evaluate_grid(mapping, input_rows, reserved_keys=None, excel_rows=None):
 
     כל שורה: {excel_row, valid, cells:[{target, value, error}]}
     """
-    columns = mapping["columns"]
+    columns = all_columns(mapping)
     date_format = mapping.get("date_format", DEFAULT_DATE_FORMAT)
     key_fields = mapping.get("key_fields") or []
     reserved_keys = reserved_keys or set()
+    is_document = bool(subform_defs(mapping)) or bool(mapping.get("document"))
 
     rows_out = []
     for i, row in enumerate(input_rows):
@@ -269,8 +329,8 @@ def evaluate_grid(mapping, input_rows, reserved_keys=None, excel_rows=None):
         excel_row = excel_rows[i] if excel_rows else i + 2
         rows_out.append({"excel_row": excel_row, "cells": cells, "valid": row_valid})
 
-    # בדיקת כפילויות בין השורות שתקינות עד כה — סימון תאי המפתח
-    if key_fields:
+    # בדיקת כפילויות — במסמך (עם מסכי-משנה) המפתח חוזר בכל שורת בת, לכן לא נפסל
+    if key_fields and not is_document:
         valid_pairs = [
             (idx, {c["target"]: c["value"] for c in r["cells"]})
             for idx, r in enumerate(rows_out) if r["valid"]
@@ -319,7 +379,7 @@ def grid_valid_records(rows_out):
 def _expected_sources(mapping):
     """כל שמות עמודות המקור (כולל כינויים) — לצורך זיהוי אוטומטי של שורת הכותרת."""
     names = []
-    for c in mapping["columns"]:
+    for c in all_columns(mapping):
         names.extend(_source_aliases(c.get("source")))
     return names
 
@@ -336,7 +396,7 @@ def prepare(screen, source, sheet=None, header_row=None):
         header_row=header_row if header_row is not None else mapping.get("header_row"),
         expected_sources=_expected_sources(mapping),
     )
-    resolved = build_column_lookup(df, mapping["columns"])
+    resolved = build_column_lookup(df, all_columns(mapping))
 
     records = process_rows(df, mapping, resolved)
     valid_records = [r for r in records if r["reason"] is None]
@@ -379,7 +439,7 @@ def _validate_mapping(mapping, path):
             f"אפשרויות: {', '.join(_ENCODINGS)}"
         )
 
-    for i, col in enumerate(columns, start=1):
+    for i, col in enumerate(all_columns(mapping), start=1):
         if not isinstance(col, dict) or not col.get("target"):
             raise UserError(
                 f"עמודה מס' {i} בקובץ המיפוי חסרה שדה 'target' (שם השדה בפריוריטי)."
@@ -631,7 +691,8 @@ def process_rows(df, mapping, resolved):
     מעבד את כל השורות ומחזיר רשומות עם הערכים המעובדים וסיבת פסילה (אם יש).
     כל רשומה: dict עם excel_row, values (רשימה מסודרת), row_dict, reason, original.
     """
-    columns = mapping["columns"]
+    main_targets = {c["target"] for c in mapping["columns"]}
+    columns = all_columns(mapping)  # כולל עמודות מסכי-משנה (לוולידציה + row_dict)
     date_format = mapping.get("date_format", DEFAULT_DATE_FORMAT)
 
     records = []
@@ -661,7 +722,9 @@ def process_rows(df, mapping, resolved):
                 elif severity != "error":
                     warnings.append(msg)
 
-            values.append(value)
+            # 'values' = עמודות המסך הראשי בלבד (סדר הפלט); row_dict = כל השדות
+            if col["target"] in main_targets:
+                values.append(value)
             row_dict[col["target"]] = value
 
         records.append(
@@ -676,12 +739,14 @@ def process_rows(df, mapping, resolved):
         )
 
     # בדיקת כפילויות על השורות שעברו ולידציית תא (reason ריק)
-    valid_pairs = [(i, r["row_dict"]) for i, r in enumerate(records) if r["reason"] is None]
-    dup_map = validators.check_duplicates(
-        valid_pairs, mapping.get("key_fields"), columns
-    )
-    for idx, dup_reason in dup_map.items():
-        records[idx]["reason"] = dup_reason
+    # במסמך (מסכי-משנה) המפתח חוזר בכל שורת בת — לכן לא בודקים כפילות
+    if not (subform_defs(mapping) or mapping.get("document")):
+        valid_pairs = [(i, r["row_dict"]) for i, r in enumerate(records) if r["reason"] is None]
+        dup_map = validators.check_duplicates(
+            valid_pairs, mapping.get("key_fields"), columns
+        )
+        for idx, dup_reason in dup_map.items():
+            records[idx]["reason"] = dup_reason
 
     return records
 
@@ -789,6 +854,48 @@ def write_load_file(valid_records, mapping, screen):
     return out_path
 
 
+def _write_records_file(records, mp, path):
+    with open(path, "wb") as f:
+        f.write(load_content_bytes(build_load_content(records, mp), mp))
+
+
+def _write_document_files(valid_records, mapping, screen):
+    """
+    כותב קבצי מסמך: קובץ אב (ייחודי לפי מפתח) + קובץ לכל מסך-משנה.
+    valid_records — רשומות ה-CLI (עם row_dict של כל השדות).
+    מחזיר (parent_path, [sub_paths]).
+    """
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    ext = load_file_extension(mapping)
+    key_fields = mapping.get("key_fields") or []
+    main_targets = [c["target"] for c in mapping["columns"]]
+
+    # אב — ייחודי לפי מפתח
+    seen, parent = set(), []
+    for r in valid_records:
+        rd = r["row_dict"]
+        key = tuple(rd.get(k, "") for k in key_fields)
+        if key_fields:
+            if key in seen:
+                continue
+            seen.add(key)
+        parent.append({"values": [rd.get(t, "") for t in main_targets]})
+    parent_path = os.path.join(OUTPUT_DIR, f"{screen}_load.{ext}")
+    _write_records_file(parent, mapping, parent_path)
+
+    # מסכי-משנה — שורה לכל שורת קלט
+    sub_paths = []
+    for sf in subform_defs(mapping):
+        vm = subform_mapping(mapping, sf)
+        out_targets = key_fields + [c["target"] for c in sf.get("columns", [])]
+        subrecs = [{"values": [r["row_dict"].get(t, "") for t in out_targets]} for r in valid_records]
+        sub_path = os.path.join(OUTPUT_DIR, f"{screen}_{sf['name']}_load.{load_file_extension(vm)}")
+        _write_records_file(subrecs, vm, sub_path)
+        sub_paths.append(sub_path)
+
+    return parent_path, sub_paths
+
+
 # ---------------------------------------------------------------------------
 # כתיבת קובץ השורות הפסולות (rejected.xlsx)
 # ---------------------------------------------------------------------------
@@ -890,7 +997,7 @@ def run(args):
         header_row=args.header_row if args.header_row is not None else mapping.get("header_row"),
         expected_sources=_expected_sources(mapping),
     )
-    resolved = build_column_lookup(df, mapping["columns"])
+    resolved = build_column_lookup(df, all_columns(mapping))
 
     records = process_rows(df, mapping, resolved)
     valid_records = [r for r in records if r["reason"] is None]
@@ -909,9 +1016,13 @@ def run(args):
 
     out_path = None
     rejected_path = None
+    extra_paths = []
 
     if not args.dry_run and valid_records:
-        out_path = write_load_file(valid_records, mapping, args.screen)
+        if subform_defs(mapping):
+            out_path, extra_paths = _write_document_files(valid_records, mapping, args.screen)
+        else:
+            out_path = write_load_file(valid_records, mapping, args.screen)
 
     if rejected_records:
         rejected_path = write_rejected_file(rejected_records, df, args.screen)
@@ -923,6 +1034,10 @@ def run(args):
     report_path = write_report_file(report, enc_warnings, args.screen)
 
     print(report)
+    if extra_paths:
+        print("  קבצי מסך-משנה:")
+        for p in extra_paths:
+            print(f"    {p}")
     print(f"\nהדוח נשמר: {report_path}")
 
     append_history({

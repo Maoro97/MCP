@@ -1,0 +1,46 @@
+# ============================================================================
+# מיפוי "מסמך" עם מסך-משנה — טעינת מחירונים לפריט (דוגמה)
+# ----------------------------------------------------------------------------
+# קובץ אקסל שבו כל שורה = שורת מחירון לפריט. המפתח (מק"ט) חוזר על פני מספר שורות.
+# הכלי מייצר שני קבצי טעינה:
+#   1. קובץ אב  — רשימת הפריטים הייחודיים (PARTPRICE_load)
+#   2. קובץ מסך-משנה — שורות המחירון, מקושרות במק"ט (PARTPRICE_PRICELIST_load)
+#
+# document: true  -> המפתח חוזר בכל שורת בת, לכן כפילות מפתח *אינה* נחשבת שגיאה.
+# ============================================================================
+
+screen: PARTPRICE
+document: true
+interface_name: XXXX_LOADPLIST
+delimiter: tab
+encoding: windows-1255
+date_format: "%d/%m/%y"
+include_header: false
+key_fields: [PARTNAME]
+
+# עמודות האב (זהות הפריט)
+columns:
+  - source: ["מקט", 'מק"ט', "קוד פריט"]
+    target: PARTNAME
+    required: true
+    max_length: 22
+    transform: [strip, remove_spaces]
+
+# מסכי-משנה (שורות בת). אפשר להגדיר יותר ממסך-משנה אחד.
+subforms:
+  - name: PRICELIST
+    interface_name: XXXX_LOADPLIST_LINES
+    columns:
+      - source: ["מחירון", "שם מחירון", "קוד מחירון"]
+        target: PLNAME
+        required: true
+        max_length: 20
+        transform: [strip]
+      - source: ["מחיר"]
+        target: PRICE
+        type: number
+        decimals: 2
+      - source: ["מטבע", "קוד מטבע"]
+        target: CODE
+        value_map: {"שקל": "ILS", 'ש"ח': "ILS", "דולר": "USD", "אירו": "EUR"}
+        default: "ILS"

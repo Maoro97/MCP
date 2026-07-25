@@ -1,58 +1,67 @@
 # ============================================================================
-# קובץ מיפוי לדוגמה — מסך פריטים / מק"ט (PART)
-# הסדר של columns כאן = סדר העמודות בקובץ הפלט (חייב להתאים ל-Interface).
+# מיפוי — טעינת פריטים אל מסך כרטיס פריט בפריוריטי (PART)
+# ולידציית השדות (אורך, חובה, טיפוס, דיוק, בוליאני) נטענת אוטומטית
+# מ-specs/PART.yaml (קטלוג השדות הרשמי). ערך מפורש כאן גובר על הקטלוג.
 # ============================================================================
 
 screen: PART
-interface_name: XXXX_LOADPART      # שם ה-Interface בפריוריטי (תיעוד בלבד)
-
+interface_name: XXXX_LOADPART
 delimiter: tab
 encoding: windows-1255
 date_format: "%d/%m/%y"
 include_header: false
-key_fields: [PARTNAME]             # מק"ט = מזהה ייחודי
+key_fields: [PARTNAME]
 
 columns:
-  # מק"ט — מפתח, חובה, עד 20 תווים
-  - source: "מקט"
+  # מק"ט — מזהה, חובה (רוחב 22)
+  - source: ["מקט", 'מק"ט', "מק'ט", "קוד פריט"]
     target: PARTNAME
-    required: true
-    max_length: 20
     transform: [strip, remove_spaces]
 
-  # תאור הפריט — חובה, עד 48 תווים
-  - source: "תאור פריט"
+  # תאור מוצר — חובה (רוחב 59)
+  - source: ["תאור פריט", "תאור מוצר", "תיאור", "שם פריט"]
     target: PARTDES
-    required: true
-    max_length: 48
     transform: [strip]
 
-  # משפחת מוצר — עד 16 תווים
-  - source: "משפחה"
-    target: FAMILYNAME
-    max_length: 16
+  # סטטוס — חובה (רוחב 12), ברירת מחדל "פעיל"
+  - source: ["סטטוס", "פעיל"]
+    target: STATDES
+    default: "פעיל"
     transform: [strip]
 
-  # יחידת מידה — מיפוי לערכי פריוריטי, ברירת מחדל יח'
-  - source: "יחידת מידה"
+  # טיפוס P/R/O — חובה (רוחב 1). P=נקנה, R=מיוצר, O=אחר. ברירת מחדל P
+  - source: ["טיפוס", "סוג פריט"]
+    target: TYPE
+    value_map: {"קניה": "P", "נקנה": "P", "רכש": "P", "ייצור": "R", "מיוצר": "R", "אחר": "O",
+                "P": "P", "R": "R", "O": "O"}
+    default: "P"
+
+  # יחידת מידה — חובה (רוחב 3)
+  - source: ["יחידת מידה", "יחידה", 'יח"מ']
     target: UNITNAME
     value_map: {"יחידה": "יח'", "יח'": "יח'", "קג": "ק\"ג", 'ק"ג': "ק\"ג", "מטר": "מ'", "ליטר": "ל'"}
     default: "יח'"
 
-  # ברקוד — טקסט, ספרות בלבד, עד 20 תווים
-  - source: "ברקוד"
+  # יח' מפעל — חובה (רוחב 3), כברירת מחדל זהה ליחידת המידה
+  - source: ["יח' מפעל", "יחידת מפעל"]
+    target: PUNITNAME
+    default: "יח'"
+
+  # שעור המרת יחידות — חובה (מספר), ברירת מחדל 1
+  - source: ["שעור המרה", "המרת יחידות"]
+    target: CONV
+    default: "1"
+
+  # משפחת מוצר — חובה (רוחב 8)
+  - source: ["משפחה", "קוד משפחה", "קבוצה", "קבוצת מוצר"]
+    target: FAMILYNAME
+    transform: [strip]
+
+  # ברקוד — רוחב 22, ספרות בלבד
+  - source: ["ברקוד", "barcode"]
     target: BARCODE
-    max_length: 20
     transform: [digits_only]
 
-  # מחיר מחירון — מספר עם 2 ספרות אחרי הנקודה
-  - source: "מחיר"
-    target: PRICE
-    type: number
-    decimals: 2
-
-  # סטטוס פעיל/לא פעיל — 0=פעיל, 1=לא פעיל, ברירת מחדל פעיל
-  - source: "לא פעיל"
-    target: INACTIVE
-    value_map: {"פעיל": "0", "לא פעיל": "1", "כן": "1", "לא": "0"}
-    default: "0"
+  # מחיר קניה — מספר עם 2 ספרות (מהקטלוג)
+  - source: ["מחיר", "מחיר קניה", "עלות"]
+    target: PURPRICE

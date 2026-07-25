@@ -1,0 +1,797 @@
+# מפרט שדות מסך כרטיס פריט (PART) בפריוריטי — נוצר מקטלוג השדות של הלקוח.
+# אכיפה אוטומטית: max_length, required (M), type (DATE/REAL/INT), decimals, boolean.
+screen: PART
+source: Priority PART (item card) field catalog
+fields:
+  PARTNAME:
+    title: מק"ט
+    max_length: 22
+    required: true
+  BARCODE:
+    title: ברקוד
+    max_length: 22
+  PARTDES:
+    title: תאור מוצר
+    max_length: 59
+    required: true
+  EPARTDES:
+    max_length: 59
+  STATDES:
+    title: סטטוס
+    max_length: 12
+    required: true
+  TYPE:
+    title: טיפוס P/R/O
+    max_length: 1
+    required: true
+  INVFLAG:
+    max_length: 1
+    boolean: true
+  NSFLAG:
+    max_length: 1
+    boolean: true
+  SERNFLAG:
+    title: מנוהל מס. סידוריים?
+    max_length: 1
+    boolean: true
+  ENVSERNFLAG:
+    title: מס.סידוריים רב חברתי
+    max_length: 1
+    boolean: true
+  SHOWINWEB:
+    title: רכש אינטרנט?
+    max_length: 1
+    boolean: true
+  OWNERLOGIN:
+    title: שם משתמש
+    max_length: 20
+    required: true
+  CREATEDDATE:
+    title: תאריך פתיחה
+    type: date
+    readonly: true
+  PUNITNAME:
+    title: יח' מפעל
+    max_length: 3
+    required: true
+  UNITNAME:
+    title: יח' מפעל
+    max_length: 3
+    required: true
+  EXTFILENAME:
+    max_length: 80
+  CONV:
+    title: שעור המרת יחידות
+    type: number
+    max_length: 14
+    required: true
+    decimals: 0
+  NOTFIXEDCONV:
+    title: שעור המרה לא קבוע
+    max_length: 1
+    boolean: true
+  FAMILYNAME:
+    title: משפחה
+    max_length: 8
+    required: true
+  FAMILYDES:
+    title: תאור משפחה
+    max_length: 32
+    readonly: true
+  FTCODE:
+    title: טיפוס משפחה
+    max_length: 4
+    readonly: true
+  FTNAME:
+    title: תאור טיפוס משפחה
+    max_length: 20
+    readonly: true
+  ISMPART:
+    title: מושבת/פריט מרכז
+    max_length: 1
+    readonly: true
+    boolean: true
+  MPARTNAME:
+    title: מק"ט
+    max_length: 22
+  MPARTDES:
+    title: תאור מוצר
+    max_length: 59
+    readonly: true
+  SUPNAME:
+    title: מס' ספק
+    max_length: 16
+  SUPDES:
+    title: שם ספק
+    max_length: 48
+    readonly: true
+  SIZEBARCODE:
+    title: קוד סרגל מידות
+    max_length: 6
+  SIZEBARNAME:
+    title: שם סרגל מידות
+    max_length: 20
+    readonly: true
+  UNSPSCCODE:
+    title: קוד סל מאפיינים
+    max_length: 8
+  UNSPSCDES:
+    title: תאור סל מאפיינים
+    max_length: 56
+    readonly: true
+  BASEPLPRICE:
+    max_length: 13
+  BASEPLCODE:
+    title: מטבע
+    max_length: 3
+  VATPRICE:
+    max_length: 13
+  WSPLPRICE:
+    max_length: 13
+  WSPLCODE:
+    title: מטבע
+    max_length: 3
+  LASTPRICE:
+    max_length: 13
+    readonly: true
+  CODE:
+    title: מטבע
+    max_length: 3
+    readonly: true
+  CURDATE:
+    title: תאריך מחיר אחרון
+    type: date
+    readonly: true
+  CFNAME:
+    title: מקור עלות
+    max_length: 10
+    readonly: true
+  PRICE:
+    max_length: 13
+  COST:
+    max_length: 13
+    readonly: true
+  SECONDPRICE:
+    max_length: 13
+  SECONDCOST:
+    max_length: 13
+    readonly: true
+  COSTDATE:
+    title: ת. מחיר
+    type: date
+    readonly: true
+  MINCODE:
+    title: מטבע
+    max_length: 3
+    readonly: true
+  MINPRICE:
+    title: מחיר מינימום
+    type: number
+    max_length: 13
+    decimals: 2
+  PURPRICE:
+    title: מחיר קניה
+    type: number
+    max_length: 13
+    decimals: 2
+  PURCODE:
+    title: מטבע
+    max_length: 3
+  FOBPRICE:
+    title: מחיר FOB
+    type: number
+    max_length: 13
+    decimals: 2
+  MAXREPAIRPRICE:
+    title: סכום מירבי לתיקון
+    type: number
+    max_length: 13
+    decimals: 2
+  REPAIRCODE:
+    title: מטבע
+    max_length: 3
+  COMMISSION:
+    title: אחוז עמלה
+    type: number
+    max_length: 6
+    decimals: 2
+  PARTNAMEPATNAME:
+    title: תבנית
+    max_length: 12
+  SALETRANSDATE:
+    title: ת. יציאה אחרונה
+    type: date
+    readonly: true
+  PURTRANSDATE:
+    title: ת. כניסה אחרונה
+    type: date
+    readonly: true
+  WARHSTRANSDATE:
+    title: ת. תנועת מלאי אחרונה
+    type: date
+    readonly: true
+  PARTTYPECODE:
+    title: קוד סוג פריט
+    max_length: 3
+  PARTTYPEDES:
+    title: תאור סוג פריט
+    max_length: 32
+    readonly: true
+  EXTFILEFLAG:
+    title: נספחים?
+    max_length: 1
+    readonly: true
+    boolean: true
+  USERLOGIN:
+    title: שם משתמש
+    max_length: 20
+    readonly: true
+  UDATE:
+    title: ת. חתימה
+    type: date
+    readonly: true
+  SPEC1:
+    max_length: 48
+  SPEC2:
+    max_length: 20
+  SPEC3:
+    max_length: 20
+  SPEC4:
+    max_length: 20
+  SPEC5:
+    max_length: 20
+  SPEC6:
+    max_length: 12
+  SPEC7:
+    max_length: 12
+  SPEC8:
+    max_length: 12
+  SPEC9:
+    max_length: 12
+  SPEC10:
+    max_length: 12
+  SPEC11:
+    max_length: 12
+  SPEC12:
+    max_length: 12
+  SPEC13:
+    max_length: 12
+  SPEC14:
+    max_length: 12
+  SPEC15:
+    max_length: 12
+  SPEC16:
+    max_length: 12
+  SPEC17:
+    max_length: 12
+  SPEC18:
+    max_length: 12
+  SPEC19:
+    max_length: 12
+  SPEC20:
+    max_length: 12
+  WEBLEVEL:
+    max_length: 1
+  PRICEPOLICY:
+    title: מדיניות מחירים
+    max_length: 2
+  SUPERPHARM:
+    title: מאפיין סופר פארם
+    type: number
+    max_length: 2
+    decimals: 0
+  STORAGETYPECODE:
+    title: קוד אסטרטגית איחסון
+    max_length: 8
+  STORAGETYPEDES:
+    title: תאור אסטרטגית איחסון
+    max_length: 32
+    readonly: true
+  PIKORDER:
+    title: סדר ליקוט
+    type: number
+    max_length: 6
+    decimals: 0
+  PICKBYPACKS:
+    title: ליקוט אריזות ממשטחים
+    max_length: 1
+    boolean: true
+  COMPANYNAME:
+    title: תת חברה
+    max_length: 8
+  COMPANYDES:
+    title: שם תת חברה
+    max_length: 48
+    readonly: true
+  WMSSERVFLAG:
+    title: פריט שירות?
+    max_length: 1
+    boolean: true
+  BUYERLOGIN:
+    title: שם משתמש
+    max_length: 20
+  DCMONTHS:
+    title: חודשי DC מותרים
+    type: number
+    max_length: 3
+    decimals: 0
+  PUTDCMONTHS:
+    title: חודשי DC לאחסון
+    type: number
+    max_length: 2
+    decimals: 0
+  MINEXPDAYS:
+    title: מינימום ימי תוקף
+    type: number
+    max_length: 3
+    decimals: 0
+  CONFIDENTIAL:
+    title: מק"ט חסוי?
+    max_length: 1
+    boolean: true
+  DS:
+    title: ?DS
+    max_length: 1
+    boolean: true
+  AFLAG:
+    title: חיוב נלווה?
+    max_length: 1
+    boolean: true
+  RESERVFLAG:
+    title: פריט לשריון מלאי
+    max_length: 1
+    boolean: true
+  ERPG_ORDWARRANTY:
+    title: אחריות לפתיחת הזמנה
+    max_length: 1
+    boolean: true
+  ERPG_ORDBAR:
+    title: בר לפתיחת הזמנה
+    max_length: 1
+    boolean: true
+  ERPG_ORDATT:
+    title: נלווים לפתיחת הזמנה
+    max_length: 1
+    boolean: true
+  ERPG_PDM_PARTID:
+    title: מפתח ב-PDM
+    max_length: 32
+  ERPG_SENGEXTFILENAME:
+    title: קישור למערכת הנדסית
+    max_length: 80
+  IGNT_INTWORKFORC:
+    title: Itrl. work for Chare
+    max_length: 1
+    boolean: true
+  ERP_DEVMAINT:
+    title: אחזקת פיתוח
+    max_length: 1
+    boolean: true
+  ERP_DEV:
+    title: פיתוח
+    max_length: 1
+    boolean: true
+  IGNT_DEVELOPMENT:
+    title: Development
+    max_length: 1
+    boolean: true
+  IGNT_MAINTENCEOFDEV:
+    title: maintenance of dev.
+    max_length: 1
+    boolean: true
+  ERPG_IMPLIMENTHOURS:
+    title: שעות יישום
+    max_length: 1
+    boolean: true
+  ERPG_BOTTLEFLAG:
+    title: פיקדון בקבוק?
+    max_length: 1
+    boolean: true
+  ERPG_FUND:
+    title: קרן
+    max_length: 1
+    boolean: true
+  ERPG_ZOHOID:
+    title: מק"ט - מזהה בזוהו
+    max_length: 60
+  ERP_MONTHLY:
+    title: עלות חודשית
+    max_length: 1
+    boolean: true
+  ERPG_INDEX:
+    title: מדד
+    max_length: 1
+    boolean: true
+  ERPG_INTEREST:
+    title: ריבית
+    max_length: 1
+    boolean: true
+  MARK_FAI:
+    title: FAI
+    max_length: 1
+    boolean: true
+  ERPG_QUANTTYPE:
+    title: סוג חישוב כ.במכירה
+    max_length: 32
+  ERPG_LENGTH:
+    title: אורך יחידה במטר
+    type: number
+    max_length: 13
+    decimals: 2
+  ERPG_WIDTH_I:
+    title: רוחב יחידה במ"מ
+    type: number
+    max_length: 17
+    decimals: 0
+  ERPG_THICKNESS_I:
+    title: עובי יחידה במ"מ
+    type: number
+    max_length: 17
+    decimals: 0
+  ERPG_DEV_QA:
+    title: בדיקת פיתוחים
+    max_length: 1
+    boolean: true
+  ERPG_MNFPARTNAME:
+    title: מק"ט יצרן
+    max_length: 100
+  ERPG_SUPFLAG:
+    title: מק"ט תמיכה
+    max_length: 1
+    boolean: true
+  ERPG_FIXED:
+    title: עבודה בפיקס
+    max_length: 1
+    boolean: true
+  ERPG_BASEPLCPRICE:
+    max_length: 20
+  PRH_PICKINGLISTSORT:
+    title: מיון בטופס ליקוט
+    type: number
+    max_length: 3
+    decimals: 0
+  ERPG_ENTRANCEFLAG:
+    title: כניסה לחניון
+    max_length: 1
+    boolean: true
+  ERPG_MONTHLYFLAG:
+    title: חיוב חניה חודשי
+    max_length: 1
+    boolean: true
+  ERPG_MONTHSUPPORT:
+    title: תמיכה חודשית
+    max_length: 1
+    boolean: true
+  INACTIVE:
+    title: לא פעיל
+    max_length: 1
+    boolean: true
+  COSTQUANT:
+    title: כמות ליח' תמחיר
+    type: number
+    max_length: 9
+    decimals: 3
+  ACTUALCOSTTYPE:
+    title: שיטת תמחיר
+    max_length: 1
+  COLOR:
+    max_length: 13
+  CONFIRMED:
+    max_length: 1
+  DISTRTYPE:
+    max_length: 13
+  DUTYTYPE:
+    title: אופן העמסה
+    max_length: 1
+  EXTFILENUM:
+    title: מספרו
+    type: number
+    max_length: 13
+    decimals: 0
+  EXTPART:
+    title: מק"ט (ID)
+    type: number
+    max_length: 13
+  EXTTYPE:
+    max_length: 1
+  FAMAFLAG:
+    title: חיוב נלווה?
+    max_length: 1
+  FAMILYTYPE:
+    title: טיפוס משפחה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  FAMRESERVFLAG:
+    title: משפחה לשריון מלאי
+    max_length: 1
+  FATQUANT:
+    title: כמות אב
+    type: number
+    max_length: 16
+    decimals: 3
+  FENVSERNFLAG:
+    title: מס.סידוריים רב חברתי
+    max_length: 1
+  FOLLOWUPIV:
+    title: מק"ט (ID)
+    type: number
+    max_length: 13
+  FOLLOWUPTYPE:
+    title: טיפוס תעודה
+    max_length: 20
+  FOLLOWUPUSER:
+    title: משתמש (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  FROMDATE:
+    max_length: 8
+  FROMEDI:
+    title: עודכן מממשק אלקטרוני
+    max_length: 1
+    boolean: true
+  IVGUID:
+    title: מק"ט (ID)
+    type: number
+    max_length: 13
+  KLINE:
+    max_length: 13
+  LINKDOC:
+    title: מק"ט (ID)
+    type: number
+    max_length: 13
+  METERFLAG:
+    title: מונה?
+    max_length: 1
+  MPARTSIZEBAR:
+    title: סרגל מידות (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  MPARTUNIT:
+    title: יח' מפעל (ID)
+    type: number
+    max_length: 13
+  NSCUST:
+    title: מק"ט (ID)
+    type: number
+    max_length: 13
+  NUMPACK:
+    max_length: 13
+  PART:
+    title: מק"ט (ID)
+    type: number
+    max_length: 13
+  PART3:
+    title: מק"ט (ID)
+    type: number
+    max_length: 13
+  PART4:
+    title: מק"ט (ID)
+    type: number
+    max_length: 13
+  PARTREV:
+    title: מהדורה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  PARTTYPE:
+    title: סוג פריט
+    type: number
+    max_length: 13
+    decimals: 0
+  PATTERN:
+    title: תבנית (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  PPART:
+    title: מק"ט (ID)
+    type: number
+    max_length: 13
+  PRICE2:
+    title: עלות תקן {L.F}
+    type: number
+    max_length: 16
+    decimals: 2
+  PRICEFLAG:
+    title: מקור עלות תקן
+    max_length: 1
+  PROC:
+    title: תהליך (ID)
+    type: number
+    max_length: 13
+  PROCNAME:
+    max_length: 6
+  RENTFLAG:
+    title: השכרות?
+    max_length: 1
+  REPAIRCURRENCY:
+    title: מטבע תיקון (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  REV:
+    max_length: 13
+  REVFLAG:
+    title: ניהול מהדורות
+    max_length: 1
+  REVNAME:
+    max_length: 10
+  SECONDPRICE2:
+    title: עלות תקן {F.F}
+    type: number
+    max_length: 16
+    decimals: 2
+  SERIAL:
+    max_length: 13
+  SIZEBAR:
+    title: סרגל מידות (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  STATTYPE:
+    title: סוג תעודה
+    max_length: 20
+  STORAGETYPE:
+    title: אסטרטגית איחסון (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  TILLDATE:
+    max_length: 8
+  UNIT:
+    title: יח' מפעל (ID)
+    type: number
+    max_length: 13
+  WSPLCURRENCY:
+    title: מטבע (ID)
+    type: number
+    max_length: 13
+  WSPLDATE:
+    title: ת. מחירון
+    type: date
+  WSPLIST:
+    title: מחירון (ID)
+    type: number
+    max_length: 13
+  WSPLQUANT:
+    title: כמות
+    type: number
+    max_length: 17
+    decimals: 3
+  UNSPSC:
+    title: קוד ID) UN/SPCS)
+    type: number
+    max_length: 13
+    decimals: 0
+  PUNIT:
+    title: יח' (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  INACTIVEFLAG:
+    title: לא פעיל
+    max_length: 1
+  OWNER:
+    title: לטיפול (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  PARTSTAT:
+    title: סטטוס פריט (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  STATUSTYPE:
+    max_length: 20
+  USER:
+    title: משתמש (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  FAMILY:
+    title: משפחה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  LASTCURRENCY:
+    title: מטבע מחיר אחרון (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  LASTCOSTFLAG:
+    title: מקור מחיר אחרון
+    max_length: 1
+  PARTPARAM:
+    title: מאפיני מק"ט (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  SUP:
+    title: ספק (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  FOBCURRENCY:
+    title: מטבע קניה
+    type: number
+    max_length: 13
+    decimals: 0
+  SUPCURRENCY:
+    title: מטבע (ID)
+    type: number
+    max_length: 13
+  BASEPLCURRENCY:
+    title: מטבע (ID)
+    type: number
+    max_length: 13
+  PART2:
+    title: מק"ט (ID)
+    type: number
+    max_length: 13
+  KITFLAG:
+    title: מנופק לרשימות זווד
+    max_length: 1
+  PLDATE:
+    title: ת. מחירון
+    type: date
+  PLIST:
+    title: מחירון (ID)
+    type: number
+    max_length: 13
+  BASEPLQUANT:
+    title: כמות
+    type: number
+    max_length: 17
+    decimals: 3
+  MPART:
+    title: (ID) MPART
+    type: number
+    max_length: 13
+    decimals: 0
+  TAKEFLAG:
+    title: משיכה ידנית
+    max_length: 1
+  ACCFAMILY:
+    title: משפחת הנח"ש (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  BUYER:
+    title: קניין (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  COMPANY:
+    title: תת חברה (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  GETPART:
+    max_length: 15
+  CHANGEFLAG:
+    max_length: 1
+  COLORPART:
+    title: מק"ט מוביל (ID)
+    type: number
+    max_length: 13
+    decimals: 0
+  MPRICEPOLICY:
+    title: מדיניות מחירים
+    max_length: 2
+  XCOLORNAME:
+    max_length: 20
+  ERPG_WIDTH:
+    title: רוחב יחידה במטר
+    type: number
+    max_length: 13
+    decimals: 0
+  ERPG_THICKNESS:
+    title: עובי יחידה במטר
+    type: number
+    max_length: 13
+    decimals: 0
+  KOR_MATERIALNAME:
+    max_length: 20

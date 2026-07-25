@@ -356,8 +356,12 @@ GRID = """
  .legend i.sw-bad{background:var(--bad-bg)}.legend i.sw-warn{background:var(--warn-bg)}
  .legend i.sw-const{background:var(--surface-2)}.legend i.sw-ign{background:var(--ign-bg)}
  .msg{border-radius:12px;padding:11px 15px;margin:10px 0;font-weight:600}
- .msg.ok{background:var(--ok-bg);color:var(--ok-fg)}.msg.err{background:var(--bad-bg);color:var(--bad-fg)}
  .msg.warnbox{background:var(--warn-bg);color:var(--warn-fg);border:1px solid rgba(217,119,6,.3);font-weight:500}
+ .toast{position:fixed;bottom:26px;left:50%;transform:translate(-50%,16px);background:var(--surface);color:var(--text);
+  border:1px solid var(--border);border-left:3px solid var(--muted);border-radius:12px;padding:12px 20px;font-weight:600;font-size:14px;
+  box-shadow:0 16px 40px rgba(16,24,40,.18);opacity:0;pointer-events:none;transition:opacity .25s ease,transform .25s ease;z-index:60;max-width:90vw}
+ .toast.show{opacity:1;transform:translate(-50%,0)}
+ .toast.ok{border-left-color:#16a34a}.toast.err{border-left-color:var(--red)}
  .pager{display:flex;gap:10px;align-items:center;justify-content:center;margin:16px 0;font-size:14px;color:var(--muted)}
  .pager button{background:var(--surface);color:var(--text);border:1px solid var(--border)}.pager button:disabled{opacity:.4;cursor:default}
  .dl{display:inline-block;color:#fff;text-decoration:none;border-radius:11px;padding:11px 20px;font-weight:700;margin:6px 8px 6px 0;box-shadow:var(--shadow);transition:.15s;background:linear-gradient(140deg,#10b981,#059669)}
@@ -378,8 +382,7 @@ GRID = """
  .mapitem select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(99,102,241,.15)}
 </style></head><body><div class="wrap">
  <div class="apphead">
-  <div class="ttl"><h1>📋 טבלת טעינה — מסך {{ screen }}</h1>
-   <p class="sub">תקן תאים מסומנים (רחף לראות סיבה), מחק או התעלם משורות, סדר עמודות בגרירה — ואז הפק את קובץ הטעינה.</p></div>
+  <div class="ttl"><h1>טבלת טעינה — {{ screen }}</h1></div>
   <div style="display:flex;align-items:center;gap:14px">{{ brand|safe }}
    <button id="themebtn" class="themebtn" onclick="toggleTheme()">🌙 מצב כהה</button></div>
  </div>
@@ -397,13 +400,12 @@ GRID = """
   <a class="back" href="/history">📜 היסטוריה</a>
   <a class="back" href="/">＋ קובץ חדש</a>
  </div>
- <div id="banner"></div><div id="mapping"></div><div id="messages"></div>
+ <div id="banner"></div><div id="mapping"></div><div id="toast" class="toast"></div>
  <div class="legend">
-  <span><i class="sw-bad"></i>תא שגוי לתיקון</span>
-  <span><i class="sw-warn"></i>אזהרה (לא פוסל — כלול בטעינה)</span>
-  <span><i class="sw-const"></i>ערך קבוע (לא לעריכה)</span>
-  <span><i class="sw-ign"></i>מיוצא למרות בעיה (🚫)</span>
-  <span class="hint">🗑 מוחק שורה · 🚫 מייצא למרות בעיה · ⋮⋮ גרור כותרת לשינוי סדר · ↔ גרור את קצה הכותרת לשינוי רוחב · תאריך dd/mm/yy</span>
+  <span><i class="sw-bad"></i>שגוי</span>
+  <span><i class="sw-warn"></i>אזהרה</span>
+  <span><i class="sw-ign"></i>מיוצא למרות בעיה</span>
+  <span><i class="sw-const"></i>ערך קבוע</span>
  </div>
  <div class="tablewrap"><table id="grid"></table></div>
  <div class="pager" id="pager"></div>
@@ -625,8 +627,9 @@ async function post(url,body){
   }catch(e){flash('err','תקלה בתקשורת עם השרת: '+e);return null;}
 }
 let ft=null;
-function flash(kind,text){const box=document.createElement('div');box.className='msg '+(kind==='ok'?'ok':'err');box.textContent=text;
-  $('messages').prepend(box);clearTimeout(ft);ft=setTimeout(()=>{if(box.parentNode)box.remove();},6000);}
+function flash(kind,text){const t=$('toast');if(!t)return;
+  t.textContent=text;t.className='toast '+(kind==='ok'?'ok':'err')+' show';
+  clearTimeout(ft);ft=setTimeout(()=>{t.classList.remove('show');},3000);}
 
 function toggleTheme(){var r=document.documentElement,cur=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
   var nx=cur==='dark'?'light':'dark';r.setAttribute('data-theme',nx);try{localStorage.setItem('fl-theme',nx);}catch(e){}updateThemeBtn();}

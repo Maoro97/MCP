@@ -23,6 +23,7 @@ from flask import (
 )
 
 import main as core
+import journal as jrn
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 80 * 1024 * 1024  # מגבלת העלאה: 80MB
@@ -382,6 +383,14 @@ GRID = """
  .mapitem select{padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);font-family:inherit;font-size:13.5px}
  .mapitem.mapreq select{border-color:var(--bad-fg)}
  .mapitem select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+ .jbar{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);
+  padding:12px 16px;margin:8px 0;display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap}
+ .jbar .fld{display:flex;flex-direction:column;gap:4px}
+ .jbar .fld label{font-size:12px;color:var(--muted);font-weight:600}
+ .jbar .fld input{width:110px;padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);font-family:inherit;font-size:14px}
+ .jbar .fld input:focus{outline:none;border-color:var(--brand)}
+ .jbar .jt{font-weight:700;color:var(--brand);align-self:center;margin-inline-end:4px}
+ .b-jchk{background:#475569;color:#fff}.b-jbal{background:linear-gradient(140deg,#6366f1,#4f46e5);color:#fff}
 </style></head><body><div class="wrap">
  <div class="apphead">
   <div class="ttl"><h1>טבלת טעינה — {{ screen }}</h1></div>
@@ -403,7 +412,7 @@ GRID = """
   <a class="back" href="/history">📜 היסטוריה</a>
   <a class="back" href="/">＋ קובץ חדש</a>
  </div>
- <div id="banner"></div><div id="mapping"></div><div id="toast" class="toast"></div>
+ <div id="banner"></div><div id="mapping"></div><div id="journalbar"></div><div id="toast" class="toast"></div>
  <div class="legend">
   <span><i class="sw-bad"></i>שגוי</span>
   <span><i class="sw-warn"></i>אזהרה</span>
@@ -574,6 +583,36 @@ async function remap(){
   flash('ok','המיפוי עודכן — הטבלה חושבה מחדש.');
 }
 
+// --- מנוע הסבת תנועות יומן ---
+function renderJournal(){
+  const box=$('journalbar'); if(!box) return;
+  if(!GRID.journal){ box.innerHTML=''; return; }
+  box.innerHTML=
+   '<span class="jt">⚖️ תנועות יומן</span>'+
+   '<div class="fld"><label>מטבע ראשי</label><input id="j-primary" value="ILS"></div>'+
+   '<div class="fld"><label>מטבע משני</label><input id="j-secondary" value="USD"></div>'+
+   '<div class="fld"><label>סף איזון ראשי</label><input id="j-maxp" type="number" step="0.01" value="1"></div>'+
+   '<div class="fld"><label>סף איזון משני</label><input id="j-maxs" type="number" step="0.01" value="1"></div>'+
+   '<button class="b-jchk" onclick="journalCheck()">🔍 בדיקת תנועות</button>'+
+   '<button class="b-jbal" onclick="journalBalance()">⚖️ איזון תנועות</button>';
+}
+function journalOpts(){
+  return {secondary: ($('j-secondary')||{}).value||'', primary: ($('j-primary')||{}).value||'',
+          max_primary: ($('j-maxp')||{}).value||'0', max_secondary: ($('j-maxs')||{}).value||'0'};
+}
+async function journalCheck(){ await journalRun('/journal/check','נבדקו התנועות'); }
+async function journalBalance(){ await journalRun('/journal/balance','בוצע איזון תנועות'); }
+async function journalRun(url,label){
+  const body=collect(); body.opts=journalOpts();
+  const res=await post(url,body); if(!res)return;
+  GRID.rows=res.rows; render();
+  const s=res.summary||{};
+  flash(s.unbalanced? 'err':'ok',
+    label+': '+ (s.balanced||0)+'/'+(s.transactions||0)+' תנועות מאוזנות'+
+    (s.fixed? (' · אוזנו '+s.fixed):'')+
+    (s.unbalanced? (' · '+s.unbalanced+' לא מאוזנות (ראה הערות)'):''));
+}
+
 function renderBanner(){
   let b='';
   (GRID.map_warnings||[]).forEach(w=>{ b+='<div class="msg warnbox">🛈 '+esc(w)+'</div>'; });
@@ -650,7 +689,7 @@ function updateThemeBtn(){var b=$('themebtn');if(!b)return;
   b.textContent=cur==='dark'?'☀️ מצב בהיר':'🌙 מצב כהה';}
 
 if(GRID.mode==='errors'){ $('onlyerr').checked=true; const b=$('showallbtn'); if(b) b.style.display=''; }
-updateThemeBtn(); renderBanner(); renderMapping(); render();
+updateThemeBtn(); renderBanner(); renderMapping(); renderJournal(); render();
 </script></body></html>
 """
 
@@ -722,6 +761,7 @@ def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None):
         "map_warnings": core.mapping_field_warnings(mapping, screen),
         "excel_columns": list(df.columns), "assignment": assignment,
         "unmatched_required": req_missing, "unmatched_optional": opt_missing,
+        "journal": mapping.get("journal"),  # תפקידי עמודות להסבת תנועות יומן
     }
 
 
@@ -813,6 +853,108 @@ def grid_all():
         total_warn=sum(1 for r in rows_out if any(c.get("warning") for c in r["cells"])),
         warnings=warnings, warn_count=warn_count,
     )
+
+
+def _notes_target(mapping):
+    """מוצא את עמודת ההערות למיישם (manual + exclude)."""
+    for c in mapping["columns"]:
+        if c.get("manual") and c.get("exclude"):
+            return c["target"]
+    return None
+
+
+def _strip_auto_note(text):
+    """מסיר הערת-איזון אוטומטית קודמת (הכל מ-⚠ ואילך), משאיר הערה ידנית."""
+    return (str(text or "").split("⚠")[0]).rstrip()
+
+
+def _journal_process(mapping, rows_dicts, excel_rows, opts, do_balance):
+    """
+    מנוע האיזון: (א) איזון אוטומטי אופציונלי, (ב) בדיקת איזון לכל תנועה,
+    כתיבת הסבר לעמודת ההערות, וסימון (אזהרה) על שורות תנועה לא-מאוזנת.
+    מחזיר (rows_out, summary).
+    """
+    jc = mapping.get("journal") or {}
+    txn, dc = jc.get("txn"), jc.get("dc")
+    ap, asec = jc.get("amount_primary"), jc.get("amount_secondary")
+    tol_p = tol_s = 0.005
+    max_p = jrn.to_number(opts.get("max_primary")) or 0.0
+    max_s = jrn.to_number(opts.get("max_secondary")) or 0.0
+    use_sec = bool(opts.get("secondary")) and bool(asec)
+    notes_t = _notes_target(mapping)
+    groups = jrn.group_by_txn(rows_dicts, txn) if txn else {}
+
+    fixed = 0
+    if do_balance:
+        for key, idxs in groups.items():
+            if not key:
+                continue
+            fi, _ = jrn.auto_balance(rows_dicts, idxs, ap, dc, max_p, tol_p)
+            if fi is not None:
+                fixed += 1
+            if use_sec:
+                jrn.auto_balance(rows_dicts, idxs, asec, dc, max_s, tol_s)
+
+    flagged, unbalanced = set(), 0
+    for key, idxs in groups.items():
+        if not key:
+            continue
+        parts = []
+        bp = jrn.transaction_balance(rows_dicts, idxs, ap, dc, tol_p)
+        if not bp["balanced"]:
+            parts.append(f"מטבע ראשי חסר {jrn._fmt(abs(bp['diff']))}")
+        if use_sec:
+            bs = jrn.transaction_balance(rows_dicts, idxs, asec, dc, tol_s)
+            if not bs["balanced"]:
+                parts.append(f"מטבע משני חסר {jrn._fmt(abs(bs['diff']))}")
+        msg = " · ".join(parts)
+        for i in idxs:
+            if notes_t is not None:
+                base = _strip_auto_note(rows_dicts[i].get(notes_t, ""))
+                auto = f"⚠ תנועה לא מאוזנת ({msg})" if msg else ""
+                rows_dicts[i][notes_t] = (base + " " if base and auto else base) + auto
+            if msg:
+                flagged.add(i)
+        if msg:
+            unbalanced += 1
+
+    rows_out = core.evaluate_grid(mapping, rows_dicts, excel_rows=excel_rows)
+    for i in flagged:  # צביעה בכתום על תא הסכום הראשי בשורות לא-מאוזנות
+        for c in rows_out[i]["cells"]:
+            if c["target"] == ap and not c["error"] and not c["warning"]:
+                c["warning"] = "תנועה לא מאוזנת"
+    total_txn = sum(1 for k in groups if k)
+    return rows_out, {"unbalanced": unbalanced, "balanced": total_txn - unbalanced,
+                      "transactions": total_txn, "fixed": fixed}
+
+
+def _journal_endpoint(do_balance):
+    data = request.get_json(silent=True) or {}
+    run = RUNS.get(data.get("run_id"))
+    if not run:
+        return jsonify(error="הריצה פגה מהזיכרון — טען מחדש את הקובץ."), 400
+    try:
+        mapping = core.load_mapping(run["screen"])
+        if not (mapping.get("journal")):
+            return jsonify(error="המסך אינו מסך תנועות יומן."), 400
+        rows_dicts = list(data.get("rows") or [])
+        rows_out, summary = _journal_process(
+            mapping, rows_dicts, data.get("excel_rows"), data.get("opts") or {}, do_balance)
+    except core.UserError as e:
+        return jsonify(error=str(e)), 400
+    except Exception as e:  # noqa: BLE001
+        return jsonify(error=f"שגיאה בעיבוד תנועות: {e}"), 400
+    return jsonify(rows=rows_out, summary=summary)
+
+
+@app.route("/journal/check", methods=["POST"])
+def journal_check():
+    return _journal_endpoint(do_balance=False)
+
+
+@app.route("/journal/balance", methods=["POST"])
+def journal_balance():
+    return _journal_endpoint(do_balance=True)
 
 
 @app.route("/grid/validate", methods=["POST"])

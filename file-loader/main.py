@@ -310,6 +310,10 @@ def evaluate_grid(mapping, input_rows, reserved_keys=None, excel_rows=None):
         cells = []
         row_valid = True
         for col in columns:
+            if col.get("generate") == "rownum":  # מספור שורות רץ אוטומטי
+                cells.append({"target": col["target"], "value": str(i + 1),
+                              "error": None, "warning": None})
+                continue
             value, err = process_value(row.get(col["target"]), col, date_format)
             if not err:
                 err = validators.validate_cell(value, col)
@@ -659,6 +663,10 @@ def process_value(raw, column, date_format):
     error מוחזר רק עבור שגיאות שמתגלות כבר בשלב ההמרה (למשל תאריך פגום);
     שאר הוולידציות רצות בנפרד ב-validators.validate_cell.
     """
+    # עמודה ידנית (המיישם מקליד בטבלה) — משמרים את הערך שהוקלד, לא ברירת מחדל
+    if column.get("manual"):
+        return transforms.auto_clean(raw), None
+
     # עמודת ערך קבוע (ללא source) — הערך הוא ה-default לכל השורות
     if column.get("source") is None:
         default = column.get("default", "")
@@ -733,6 +741,12 @@ def process_rows(df, mapping, resolved):
         warnings = []
 
         for col in columns:
+            if col.get("generate") == "rownum":  # מספור שורות רץ אוטומטי
+                v = str(pos + 1)
+                if col["target"] in main_targets:
+                    values.append(v)
+                row_dict[col["target"]] = v
+                continue
             actual = resolved.get(col["target"])
             raw = row[actual] if actual is not None else None
 
@@ -847,12 +861,15 @@ def build_load_content(valid_records, mapping) -> str:
     delimiter = _DELIMITERS[mapping.get("delimiter", "tab")]
     include_header = bool(mapping.get("include_header", False))
     columns = mapping["columns"]
+    # עמודות עם exclude:true מוצגות בטבלה אך אינן נכתבות לקובץ (למשל הערות למיישם)
+    keep = [i for i, c in enumerate(columns) if not c.get("exclude")]
 
     lines = []
     if include_header:
-        lines.append(delimiter.join(c["target"] for c in columns))
+        lines.append(delimiter.join(columns[i]["target"] for i in keep))
     for rec in valid_records:
-        lines.append(delimiter.join(rec["values"]))
+        vals = rec["values"]
+        lines.append(delimiter.join(vals[i] for i in keep if i < len(vals)))
 
     # שורות מופרדות ב-CRLF (תקן קבצי טקסט ב-Windows / פריוריטי און-פרם)
     content = "\r\n".join(lines)

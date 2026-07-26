@@ -102,7 +102,9 @@ def _prune_runs():
 def _columns_meta(mapping):
     return [{
         "target": c["target"], "source": c.get("source"),
-        "constant": c.get("source") is None, "type": c.get("type", "text"),
+        # ערך קבוע/אוטומטי = לא לעריכה; עמודה ידנית (manual) כן ניתנת לעריכה
+        "constant": c.get("source") is None and not c.get("manual"),
+        "type": c.get("type", "text"),
     } for c in core.all_columns(mapping)]
 
 

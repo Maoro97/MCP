@@ -224,7 +224,29 @@ NAMED_TRANSFORMS = {
     "collapse_spaces": clean_whitespace,
     "digits_only": lambda v: re.sub(r"\D", "", v),
     "remove_spaces": lambda v: v.replace(" ", ""),
+    "blank_if_zero": lambda v: "" if _is_zero(v) else v,   # אסמכתא 0 -> ריק
+    "abs": lambda v: _abs_str(v),                          # ערך מוחלט (חיובי)
 }
+
+
+def _is_zero(v: str) -> bool:
+    """האם הערך הוא אפס מספרי (0 / 0.0 / -0 וכו')."""
+    s = v.strip().replace(",", "")
+    try:
+        return float(s) == 0
+    except (ValueError, TypeError):
+        return False
+
+
+def _abs_str(v: str) -> str:
+    """מחזיר את הערך המספרי בערך מוחלט (מסיר סימן מינוס). לא-מספרי — ללא שינוי."""
+    s = v.strip().replace(",", "")
+    try:
+        n = float(s)
+    except (ValueError, TypeError):
+        return v
+    n = abs(n)
+    return str(int(n)) if n.is_integer() else ("%f" % n).rstrip("0").rstrip(".")
 
 
 def apply_named_transforms(value: str, names) -> str:

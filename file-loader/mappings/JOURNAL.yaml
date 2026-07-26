@@ -1,19 +1,12 @@
 # ============================================================================
-# מיפוי — הסבת תנועות יומן אל "טבלת טעינה לתנועות יומן" בפריוריטי  (שלד ראשוני)
+# מיפוי — הסבת תנועות יומן ל"טבלת טעינה לתנועות יומן" בפריוריטי
 # ----------------------------------------------------------------------------
-# זהו שלד עבודה שמדגים את יכולות המנוע הנדרשות להסבת תנועות יומן. חלק מהשדות
-# והכללים (סימני C/D, איזון תנועות, המרות מט"ח, קודי מטבע) יושלמו לאחר שתאושר
-# הגדרת השדות המדויקת של המסך וכללי ההסבה. התאם את שמות ה-target לשמות השדות
-# בהגדרת ה-Interface שלך בפריוריטי.
+# מותאם למבנה קובץ תנועות היומן (22 עמודות). סדר העמודות כאן = סדר הפלט,
+# ותואם למבנה הקובץ. שמות ה-target הם תוויות פנימיות בלבד (הפלט ללא כותרת),
+# לכן מה שקובע הוא הסדר והערכים.
 #
-# יכולות שממומשות כבר כאן:
-#   generate: rownum   — מספור שורות רץ אוטומטי
-#   manual: true       — עמודה שהמיישם מקליד בטבלה (לא מגיעה מהקובץ)
-#   exclude: true      — עמודה שמוצגת בטבלה אך *אינה* נכתבת לקובץ הסופי
-#   transform: [blank_if_zero]  — אסמכתא 0 -> ריק
-#   transform: [abs]            — ערך מוחלט (חיובי תמיד)
-#   format: ref        — אזהרה על אסמכתא בת תו אחד (לבדיקה)
-#   type: date         — תאריך בפורמט פריוריטי (dd/mm/yy)
+# כללי ההסבה החשבונאיים (איזון תנועות, סימני C/D, המרות מט"ח, השלמת סכום דולרי)
+# ייושמו בשלב הבא כמנוע ייעודי; כאן מוגדרים המיפוי, הניקיון והפורמטים.
 # ============================================================================
 
 screen: JOURNAL
@@ -22,34 +15,39 @@ delimiter: tab
 encoding: windows-1255
 date_format: "%d/%m/%y"
 include_header: false
-key_fields: []            # קיבוץ התנועה לאיזון ייקבע לפי הגדרת המשתמש (אסמכתא/מספר תנועה)
+key_fields: []           # קיבוץ התנועה לאיזון: לפי TRANSNUM (מס' תנועת היומן)
+
+# הגדרות ההסבה (לשלב מנוע האיזון/המט"ח)
+journal:
+  txn: TRANSNUM              # מספר תנועת יומן — קיבוץ לאיזון
+  dc: DC                    # עמודת חובה/זכות (C/D)
+  amount_primary: AMOUNT_LOCAL
+  amount_secondary: AMOUNT_SECONDARY
+  amount_fx: AMOUNT_FX
+  currency_fx: FXCURRENCY
 
 columns:
-  # מספר שורה רץ — אוטומטי
-  - target: LINE
-    generate: rownum
-
-  # תוכנת מקור — ערך קבוע שהמיישם מגדיר (עדכן את ה-default)
-  - target: XXXX_SOURCEAPP
-    default: "חשבשבת"
-
-  # אסמכתא — 0 הופך לריק; תו בודד מסומן לבדיקה
-  - source: ["אסמכתא", "אסמכתא 1", "מספר אסמכתא"]
-    target: REFERENCE
-    transform: [strip, blank_if_zero]
-    format: ref
-
-  # תאריך התנועה — פורמט פריוריטי
-  - source: ["תאריך", "תאריך תנועה", "ת. ערך"]
-    target: TRANSDATE
-    type: date
-
-  # פרטים/תיאור
-  - source: ["פרטים", "תיאור", "פרוט"]
-    target: DETAILS
-    transform: [strip]
-
-  # הערות למיישם — עמודה ידנית, מוצגת בטבלה אך *לא* נכתבת לקובץ הסופי
-  - target: NOTES
-    manual: true
-    exclude: true
+  - {source: ["מס. תנועת היומן", "מס תנועת היומן", "מספר תנועת יומן"], target: TRANSNUM, transform: [strip]}
+  - {target: LINE, generate: rownum}                                   # מספור שורות רץ אוטומטי
+  - {source: ["תוכנת מקור"], target: SOURCEAPP, default: "", transform: [strip]}
+  - {source: ["ת. למאזן", "תאריך מאזן"], target: BALANCEDATE, type: date}
+  - {source: ["ת. ערך", "תאריך ערך"], target: VALUEDATE, type: date}
+  - {source: ["ת. אסמכתא", "תאריך אסמכתא"], target: REFDATE, type: date}
+  - {source: ["חשבון", "מפתח חשבון"], target: ACCOUNT, transform: [strip]}
+  - {source: ["חובה/זכות", "חובה זכות", "C/D"], target: DC, transform: [strip]}
+  - {source: ["סכום במטבע לוקאלי", "סכום במטבע לוקאל", "סכום מטבע ראשי"], target: AMOUNT_LOCAL, transform: [strip]}
+  - {source: ["סכום במטבע משני USD", "סכום במטבע משני", "סכום דולרי"], target: AMOUNT_SECONDARY, transform: [strip]}
+  - {source: ["סכום במטבע העסקה", "סכום מטח עסקה"], target: AMOUNT_FX, transform: [strip]}
+  - {source: ["מטבע העסקה", "מטח עסקה"], target: FXCURRENCY, transform: [strip]}
+  - {target: SPARE1, default: ""}                                      # עמודה ריקה (שמירת מבנה)
+  - {target: SPARE2, default: ""}                                      # עמודה ריקה (שמירת מבנה)
+  - {source: ["קוד מרכז רווח", "מרכז רווח"], target: COSTCENTER, transform: [strip]}
+  - {source: ["אסמכתא"], target: REF1, transform: [strip, blank_if_zero], format: ref}
+  - {source: ["אסמכתא 2"], target: REF2, transform: [strip, blank_if_zero]}
+  - {source: ['אסמכתא 1 שורת ת"י', "אסמכתא 1 שורת תי"], target: REF1LINE, transform: [strip]}
+  - {source: ['אסמכתא 2 שורת ת"י', "אסמכתא 2 שורת תי"], target: REF2LINE, transform: [strip]}
+  - {source: ['פרטים שורת ת"י', "פרטים שורת תי", "פרטים"], target: DETAILS, transform: [strip]}
+  - {source: ["סוג תנועה"], target: TRANSTYPE, transform: [strip]}
+  - {source: ["משתמש"], target: JUSER, transform: [strip]}
+  # עמודת הערות למיישם — מוצגת בטבלה אך אינה נכתבת לקובץ הסופי
+  - {target: NOTES, manual: true, exclude: true}

@@ -395,6 +395,7 @@ GRID = """
   <span class="pill warn" id="p-warn">אזהרות 0</span>
   <span class="pill ign" id="p-ign">מיוצאות למרות בעיה 0</span>
   <span class="spacer"></span>
+  <button class="b-check" id="showallbtn" onclick="showAll()" style="display:none">📋 הצג את כל השורות</button>
   <label class="chk" id="filterwrap"><input type="checkbox" id="onlyerr" onchange="render()"> הצג רק שורות לטיפול</label>
   <button class="b-check" onclick="ignoreAllWarnings()" title="סמן את כל שורות האזהרה כמיוצאות">🚫 התעלם מאזהרות</button>
   <button class="b-check" onclick="revalidate()">🔄 בדוק מחדש</button>
@@ -600,6 +601,15 @@ function keepIgnore(newRows){   // שמירת סימוני ההתעלמות אח
   newRows.forEach((r,i)=>{ if(old[i]) r.ignore=old[i].ignore; });
   return newRows;
 }
+async function showAll(){
+  const res=await post('/grid/all',collect()); if(!res)return;
+  GRID.rows=res.rows; GRID.server_valid=0; GRID.overflow=0; GRID.total=res.total;
+  GRID.total_warn=res.total_warn; GRID.warnings=res.warnings; GRID.warn_count=res.warn_count;
+  GRID.mode='all'; page=0; $('onlyerr').checked=false;
+  const b=$('showallbtn'); if(b) b.style.display='none';
+  renderBanner(); render();
+  flash('ok','נטענו כל '+res.total+' השורות.');
+}
 async function revalidate(){
   const res=await post('/grid/validate',collect()); if(!res)return;
   GRID.rows=keepIgnore(res.rows); render();
@@ -639,7 +649,7 @@ function updateThemeBtn(){var b=$('themebtn');if(!b)return;
   var cur=document.documentElement.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
   b.textContent=cur==='dark'?'☀️ מצב בהיר':'🌙 מצב כהה';}
 
-if(GRID.mode==='errors') $('onlyerr').checked=true;
+if(GRID.mode==='errors'){ $('onlyerr').checked=true; const b=$('showallbtn'); if(b) b.style.display=''; }
 updateThemeBtn(); renderBanner(); renderMapping(); render();
 </script></body></html>
 """
@@ -761,6 +771,48 @@ def grid_remap():
     except Exception as e:  # noqa: BLE001
         return jsonify(error=f"שגיאה במיפוי מחדש: {e}"), 400
     return jsonify(payload)
+
+
+@app.route("/grid/all", methods=["POST"])
+def grid_all():
+    """טוען את *כל* השורות לטבלה (כולל התקינות ששמורות בשרת), עם שמירת העריכות."""
+    data = request.get_json(silent=True) or {}
+    run = RUNS.get(data.get("run_id"))
+    if not run:
+        return jsonify(error="הריצה פגה מהזיכרון — טען מחדש את הקובץ."), 400
+    try:
+        mapping = core.load_mapping(run["screen"])
+        targets = [c["target"] for c in core.all_columns(mapping)]
+
+        # שורות מוצגות (עם העריכות של המשתמש) + שורות תקינות שמורות + overflow
+        inputs = list(data.get("rows") or [])
+        excel = list(data.get("excel_rows") or [])
+        for rec in run.get("valid", []):
+            vals = rec["values"]
+            inputs.append({targets[k]: (vals[k] if k < len(vals) else "") for k in range(len(targets))})
+            excel.append(rec.get("excel_row"))
+        for excel_row, values, _reason in run.get("overflow", []):
+            inputs.append(dict(values))
+            excel.append(excel_row)
+
+        order = sorted(range(len(inputs)), key=lambda i: excel[i] if excel[i] is not None else 0)
+        inputs = [inputs[i] for i in order]
+        excel = [excel[i] for i in order]
+        rows_out = core.evaluate_grid(mapping, inputs, excel_rows=excel)
+    except core.UserError as e:
+        return jsonify(error=str(e)), 400
+    except Exception as e:  # noqa: BLE001
+        return jsonify(error=f"שגיאה בטעינת כל השורות: {e}"), 400
+
+    # מעתה הלקוח מחזיק את כל השורות — מנקים את השמור בשרת כדי לא לספור פעמיים
+    run["valid"], run["reserved"], run["overflow"] = [], set(), []
+    warnings, warn_count = _sample_warnings(
+        mapping, core.grid_valid_records([r for r in rows_out if r["valid"]]))
+    return jsonify(
+        rows=rows_out, server_valid=0, overflow=0, total=len(rows_out),
+        total_warn=sum(1 for r in rows_out if any(c.get("warning") for c in r["cells"])),
+        warnings=warnings, warn_count=warn_count,
+    )
 
 
 @app.route("/grid/validate", methods=["POST"])

@@ -503,43 +503,15 @@ def _build_unique_headers(header_vals):
     return names
 
 
-def read_excel(source, sheet, header_row=None, expected_sources=None):
-    """
-    קורא קובץ אקסל. source יכול להיות נתיב (str) או אובייקט קובץ בזיכרון
-    (file-like) — כך שאותה פונקציה משרתת גם את ה-CLI וגם את הממשק הוובי.
-
-    תומך בקבצים שבהם שורת הכותרת אינה הראשונה:
-    - header_row (1-based) — לכפות שורת כותרת מפורשת.
-    - אחרת — זיהוי אוטומטי לפי expected_sources (שמות העמודות במיפוי).
-    """
-    name = source if isinstance(source, str) else "הקובץ שהועלה"
-    if isinstance(source, str) and not os.path.exists(source):
-        raise UserError(f"קובץ הקלט לא נמצא: {source}")
-    try:
-        # קוראים ללא כותרת (header=None) כדי לאתר בעצמנו את שורת הכותרת
-        raw = pd.read_excel(
-            source,
-            sheet_name=sheet if sheet is not None else 0,
-            header=None,
-            dtype=object,
-            engine="openpyxl",
-        )
-    except ValueError as e:
-        # לרוב: שם גיליון שגוי
-        raise UserError(f"לא ניתן לקרוא את הגיליון '{sheet}' מ{name}.\n{e}")
-    except Exception as e:  # noqa: BLE001 — נציג הודעה ידידותית במקום stack trace
-        raise UserError(f"שגיאה בקריאת קובץ האקסל ({name}):\n{e}")
-
+def _finalize_raw(raw, header_row, expected_sources, name):
+    """מ-DataFrame גולמי (ללא כותרת) -> DataFrame עם כותרות מזוהות ושורות נתונים."""
     if raw.empty:
-        raise UserError(f"הגיליון ב{name} ריק — אין שורות לעיבוד.")
-
-    # מיקום שורת הכותרת
+        raise UserError(f"{name} ריק — אין שורות לעיבוד.")
     if header_row is not None:
         hidx = int(header_row) - 1
         if hidx < 0 or hidx >= len(raw):
             raise UserError(
-                f"שורת הכותרת שצוינה ({header_row}) מחוץ לטווח הקובץ "
-                f"(יש {len(raw)} שורות)."
+                f"שורת הכותרת שצוינה ({header_row}) מחוץ לטווח הקובץ (יש {len(raw)} שורות)."
             )
     else:
         hidx = detect_header_row(raw, expected_sources)
@@ -547,14 +519,71 @@ def read_excel(source, sheet, header_row=None, expected_sources=None):
     columns = _build_unique_headers(raw.iloc[hidx].tolist())
     df = raw.iloc[hidx + 1:].copy()
     df.columns = columns
-    # מסירים שורות ריקות לגמרי (נפוץ בסופי קבצי יצוא)
-    df = df.dropna(how="all").reset_index(drop=True)
-
+    df = df.dropna(how="all").reset_index(drop=True)  # מסירים שורות ריקות לגמרי
     if df.empty:
-        raise UserError(
-            f"לא נמצאו שורות נתונים מתחת לשורת הכותרת (שורה {hidx + 1}) ב{name}."
-        )
+        raise UserError(f"לא נמצאו שורות נתונים מתחת לשורת הכותרת (שורה {hidx + 1}) ב{name}.")
     return df
+
+
+def _read_delimited_raw(source, name):
+    """קורא קובץ טקסט מופרד (.txt/.dat/.csv/.tsv). מזהה קידוד ומפריד אוטומטית."""
+    import csv
+    import io as _io
+    data = open(source, "rb").read() if isinstance(source, str) else source.read()
+    text = None
+    for enc in ("cp1255", "utf-8-sig", "utf-8"):  # פריוריטי און-פרם בד"כ windows-1255
+        try:
+            text = data.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    if text is None:
+        text = data.decode("cp1255", errors="replace")
+    sample = "\n".join(text.splitlines()[:20])
+    delim = "\t"
+    try:  # ניחוש מפריד (טאב / פסיק / נקודה-פסיק / pipe)
+        delim = csv.Sniffer().sniff(sample, delimiters="\t,;|").delimiter
+    except csv.Error:
+        counts = {d: sample.count(d) for d in ("\t", "|", ";", ",")}
+        delim = max(counts, key=counts.get) if any(counts.values()) else "\t"
+    return pd.read_csv(_io.StringIO(text), sep=delim, header=None, dtype=object,
+                       engine="python", keep_default_na=True)
+
+
+def read_input(source, sheet=None, header_row=None, expected_sources=None, filename=None):
+    """
+    קורא קובץ קלט לפי הסוג: xlsx / txt / dat / csv / tsv.
+    source — נתיב או file-like. filename — לזיהוי הסוג כשמדובר ב-file-like.
+    שורת הכותרת מזוהה אוטומטית (או header_row מפורש).
+    """
+    name = filename or (source if isinstance(source, str) else "הקובץ שהועלה")
+    if isinstance(source, str) and not os.path.exists(source):
+        raise UserError(f"קובץ הקלט לא נמצא: {source}")
+    ext = os.path.splitext(str(name))[1].lower().lstrip(".")
+
+    if ext in ("xlsx", "xlsm", "xls", ""):
+        try:
+            raw = pd.read_excel(source, sheet_name=sheet if sheet is not None else 0,
+                                header=None, dtype=object, engine="openpyxl")
+        except ValueError as e:
+            raise UserError(f"לא ניתן לקרוא את הגיליון '{sheet}' מ{name}.\n{e}")
+        except Exception as e:  # noqa: BLE001
+            raise UserError(f"שגיאה בקריאת קובץ האקסל ({name}):\n{e}")
+    elif ext in ("txt", "dat", "csv", "tsv"):
+        try:
+            raw = _read_delimited_raw(source, name)
+        except Exception as e:  # noqa: BLE001
+            raise UserError(f"שגיאה בקריאת קובץ הטקסט ({name}):\n{e}")
+    else:
+        raise UserError(
+            f"סוג קובץ לא נתמך: '.{ext}'. סוגים נתמכים: xlsx, txt, dat, csv."
+        )
+    return _finalize_raw(raw, header_row, expected_sources, name)
+
+
+# תאימות לאחור — הקוד הקיים קורא ל-read_excel
+def read_excel(source, sheet=None, header_row=None, expected_sources=None):
+    return read_input(source, sheet, header_row, expected_sources)
 
 
 def _source_aliases(source):

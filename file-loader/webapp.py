@@ -235,9 +235,9 @@ UPLOAD = """
     <div><label for="header_row">שורת כותרת (רשות)</label>
      <input type="number" id="header_row" name="header_row" min="1" placeholder="זיהוי אוטומטי"></div>
    </div>
-   <label>קובץ האקסל</label>
-   <div class="drop" id="drop"><span class="ico">📄</span><b>גרור לכאן קובץ</b> או לחץ לבחירה<small>קבצי .xlsx בלבד</small>
-    <input type="file" id="file" name="file" accept=".xlsx" hidden required>
+   <label>קובץ קלט</label>
+   <div class="drop" id="drop"><span class="ico">📄</span><b>גרור לכאן קובץ</b> או לחץ לבחירה<small>xlsx · txt · dat · csv</small>
+    <input type="file" id="file" name="file" accept=".xlsx,.xls,.txt,.dat,.csv,.tsv" hidden required>
     <div class="fname" id="fname"></div></div>
    <button type="submit">טען לטבלה ←</button>{% endif %}
   </form>
@@ -722,14 +722,14 @@ def process():
     upload = request.files.get("file")
 
     if not upload or not upload.filename:
-        return _upload_error("לא נבחר קובץ אקסל.")
-    if not upload.filename.lower().endswith(".xlsx"):
-        return _upload_error("יש להעלות קובץ בפורמט .xlsx בלבד.")
+        return _upload_error("לא נבחר קובץ.")
+    if not upload.filename.lower().endswith((".xlsx", ".xls", ".txt", ".dat", ".csv", ".tsv")):
+        return _upload_error("יש להעלות קובץ בפורמט xlsx / txt / dat / csv.")
 
     try:
         mapping = core.load_mapping(screen)
-        df = core.read_excel(
-            io.BytesIO(upload.read()), sheet,
+        df = core.read_input(
+            io.BytesIO(upload.read()), sheet, filename=upload.filename,
             header_row=header_row if header_row is not None else mapping.get("header_row"),
             expected_sources=core._expected_sources(mapping),
         )

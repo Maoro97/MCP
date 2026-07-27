@@ -80,6 +80,28 @@ def lookup_value(name, value):
     return load_lookup(name).get(_norm_header(value))
 
 
+_LOOKUP_PAIRS_CACHE = {}
+
+
+def lookup_pairs(name):
+    """מחזיר רשימת (code, desc) מטבלת lookups/<name>.csv, לפי סדר הקובץ."""
+    if name in _LOOKUP_PAIRS_CACHE:
+        return _LOOKUP_PAIRS_CACHE[name]
+    import csv
+    pairs, path = [], os.path.join(LOOKUPS_DIR, f"{name}.csv")
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    code = (row.get("code") or "").strip()
+                    if code:
+                        pairs.append((code, (row.get("desc") or "").strip()))
+        except OSError:
+            pairs = []
+    _LOOKUP_PAIRS_CACHE[name] = pairs
+    return pairs
+
+
 def append_history(entry):
     """מוסיף רשומת היסטוריה (שורת JSON) על ריצת טעינה. שקט בכל שגיאה."""
     import json

@@ -24,6 +24,7 @@ from flask import (
 
 import main as core
 import journal as jrn
+import boi_rates as boi
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 80 * 1024 * 1024  # מגבלת העלאה: 80MB
@@ -217,6 +218,7 @@ UPLOAD = """
 </style></head><body><div class="wrap">
  <div class="topbar">{{ brand|safe }}
   <div style="display:flex;gap:8px;align-items:center">
+   <a class="themebtn" style="text-decoration:none" href="/rates">💱 שערי בנק ישראל</a>
    <a class="themebtn" style="text-decoration:none" href="/history">📜 היסטוריה</a>
    <button id="themebtn" class="themebtn" onclick="toggleTheme()">🌙 מצב כהה</button></div></div>
  <div class="hero">
@@ -1243,6 +1245,192 @@ HISTORY = """
 @app.route("/history")
 def history():
     return render_template_string(HISTORY, rows=core.read_history(200))
+
+
+# ---------------------------------------------------------------------------
+# מסך שערי בנק ישראל — אימות שליפת הנתונים החיה מ-BoI
+# ---------------------------------------------------------------------------
+# רשימת מטבעות ברירת מחדל להצגה (מול השקל). ניתן להוסיף/להסיר במסך.
+_DEFAULT_RATE_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD"]
+
+
+def _currency_desc_map():
+    return {code: desc for code, desc in core.lookup_pairs("currencies")}
+
+
+RATES = """
+<!doctype html><html lang="he" dir="rtl"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>שערי בנק ישראל — אימות משיכת נתונים</title>
+<script>(function(){try{var t=localStorage.getItem('fl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+ :root{--bg:#eef2f9;--surface:#fff;--surface-2:#f7f9fc;--border:#e5eaf2;--text:#0f172a;--muted:#64748b;
+  --brand:#4f46e5;--brand-2:#6366f1;--green:#059669;--red:#dc2626;--amber:#b45309;--radius:18px;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 8px 24px rgba(16,24,40,.07);}
+ @media (prefers-color-scheme:dark){:root:not([data-theme]){--bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;
+  --text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--brand-2:#a5b4fc;--green:#34d399;--red:#f87171;--amber:#fbbf24;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.4);}}
+ :root[data-theme="dark"]{--bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;
+  --text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--brand-2:#a5b4fc;--green:#34d399;--red:#f87171;--amber:#fbbf24;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.4);}
+ .brand{display:flex;align-items:center;gap:11px}.brand .logo-img{height:46px;width:auto}
+ .brand-tx{display:flex;flex-direction:column;line-height:1.05}
+ .brand-name{font-weight:800;font-size:21px;color:var(--text)}.brand-sub{font-weight:600;font-size:12.5px;color:#1e50c8}
+ *{box-sizing:border-box}
+ body{margin:0;min-height:100vh;color:var(--text);line-height:1.6;
+  font-family:"Assistant",-apple-system,"Segoe UI",system-ui,Arial,sans-serif;
+  background:radial-gradient(1100px 500px at 100% -10%,rgba(99,102,241,.18),transparent 60%),
+   radial-gradient(900px 500px at -10% 0%,rgba(16,185,129,.12),transparent 55%),var(--bg);}
+ .wrap{max-width:900px;margin:0 auto;padding:26px 20px 70px}
+ .topbar{display:flex;align-items:center;justify-content:space-between;margin:0 auto 18px}
+ .themebtn{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;
+  padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:none}
+ .themebtn:hover{background:var(--surface-2)}
+ .hero{text-align:center;margin-bottom:22px}
+ .logo{width:58px;height:58px;border-radius:18px;margin:0 auto 14px;display:grid;place-items:center;
+  font-size:28px;color:#fff;background:linear-gradient(140deg,var(--brand-2),var(--brand));box-shadow:0 10px 24px rgba(79,70,229,.4)}
+ h1{font-size:26px;font-weight:800;margin:0 0 6px;letter-spacing:-.02em}.hero p{color:var(--muted);margin:0}
+ .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow);margin-bottom:18px}
+ label{display:block;font-weight:600;margin:0 0 7px;font-size:14px}
+ input[type=date],input[type=text]{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;
+  font-size:15px;font-family:inherit;background:var(--surface-2);color:var(--text)}
+ input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 4px rgba(99,102,241,.15);background:var(--surface)}
+ .row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}.row>div{flex:1;min-width:180px}
+ .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+ .chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1.5px solid var(--border);
+  border-radius:999px;padding:7px 13px;font-size:13.5px;font-weight:600;cursor:pointer;user-select:none;transition:.12s}
+ .chip.on{background:rgba(99,102,241,.14);border-color:var(--brand);color:var(--brand)}
+ .chip small{color:var(--muted);font-weight:500}
+ button.go{width:auto;background:linear-gradient(140deg,var(--brand-2),var(--brand));color:#fff;border:0;border-radius:12px;
+  padding:13px 26px;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 8px 20px rgba(79,70,229,.32);font-family:inherit}
+ button.go:hover{transform:translateY(-1px)}button.go:disabled{opacity:.6;cursor:default;transform:none}
+ table{border-collapse:collapse;width:100%;font-size:14.5px}
+ th,td{text-align:right;padding:12px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+ th{background:var(--surface-2);font-weight:700;position:sticky;top:0}
+ td.rate{font-weight:800;font-variant-numeric:tabular-nums;font-size:16px}
+ .ok{color:var(--green);font-weight:700}.bad{color:var(--red);font-weight:700}.warn{color:var(--amber);font-weight:700}
+ .muted{color:var(--muted);font-size:13px}
+ .note{background:rgba(99,102,241,.07);border:1px solid var(--border);border-radius:12px;padding:12px 15px;color:var(--muted);font-size:13px;margin-top:12px}
+ .spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.5);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-left:7px}
+ @keyframes sp{to{transform:rotate(360deg)}}
+ code{background:var(--surface-2);border:1px solid var(--border);padding:2px 7px;border-radius:6px;font-size:12.5px;direction:ltr;display:inline-block}
+ a.back{color:var(--brand);text-decoration:none;font-weight:700}
+ .empty{padding:34px;text-align:center;color:var(--muted)}
+</style></head><body><div class="wrap">
+ <div class="topbar">{{ brand|safe }}
+  <div style="display:flex;gap:8px;align-items:center">
+   <a class="themebtn" href="/">→ חזרה לטעינה</a>
+   <button id="themebtn" class="themebtn" onclick="toggleTheme()">🌙 מצב כהה</button></div></div>
+ <div class="hero"><div class="logo">💱</div>
+  <h1>שערי בנק ישראל</h1>
+  <p>משיכה חיה מ-API של בנק ישראל (מול השקל) — לאימות שהנתונים נמשכים כראוי.</p></div>
+
+ <div class="card">
+  <div class="row">
+   <div><label for="rdate">תאריך</label><input type="date" id="rdate"></div>
+   <div style="flex:none"><button class="go" id="gobtn" onclick="fetchRates()">משוך שערים ←</button></div>
+  </div>
+  <label style="margin-top:16px">מטבעות</label>
+  <div class="chips" id="chips"></div>
+  <div class="row" style="margin-top:12px">
+   <div><label for="addcur">הוספת מטבע (קוד ISO, למשל SEK)</label>
+    <input type="text" id="addcur" placeholder="קוד מטבע" maxlength="3"
+     onkeydown="if(event.key==='Enter'){addCur();event.preventDefault();}"></div>
+  </div>
+ </div>
+
+ <div class="card"><div id="results"><div class="empty">בחר תאריך ומטבעות ולחץ "משוך שערים".</div></div>
+  <div class="note">מקור: בנק ישראל (EDGE / SDMX). אם אין פרסום לתאריך המבוקש (סופ"ש/חג) —
+   נלקח השער הזמין האחרון עד 7 ימים אחורה, והתאריך בפועל מוצג בעמודה נפרדת.</div>
+ </div>
+</div><script>
+ const DEFAULT={{ currencies|tojson }};
+ const DESC={{ desc|tojson }};
+ let picked=new Set(DEFAULT);
+ const $=id=>document.getElementById(id);
+ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+ function renderChips(){
+  $('chips').innerHTML=[...picked].map(c=>
+   '<span class="chip on" onclick="toggle(\\''+esc(c)+'\\')">'+esc(c)+
+   (DESC[c]?' <small>'+esc(DESC[c])+'</small>':'')+' ✕</span>').join('');
+ }
+ function toggle(c){picked.delete(c);renderChips();}
+ function addCur(){let v=($('addcur').value||'').trim().toUpperCase();if(!v)return;picked.add(v);$('addcur').value='';renderChips();}
+ async function fetchRates(){
+  const curs=[...picked];
+  if(!curs.length){$('results').innerHTML='<div class="empty bad">בחר לפחות מטבע אחד.</div>';return;}
+  const btn=$('gobtn');btn.disabled=true;const old=btn.innerHTML;btn.innerHTML='מושך<span class="spin"></span>';
+  $('results').innerHTML='<div class="empty">מושך שערים מבנק ישראל…</div>';
+  try{
+   const r=await fetch('/rates/fetch',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({date:$('rdate').value,currencies:curs})});
+   const j=await r.json();
+   if(!r.ok||j.error){$('results').innerHTML='<div class="empty bad">שגיאה: '+esc(j.error||r.status)+'</div>';return;}
+   render(j);
+  }catch(e){$('results').innerHTML='<div class="empty bad">תקלה בתקשורת: '+esc(e)+'</div>';}
+  finally{btn.disabled=false;btn.innerHTML=old;}
+ }
+ function render(j){
+  let h='<div style="overflow-x:auto"><table><thead><tr><th>מטבע</th><th>שם</th><th>שער (₪)</th>'+
+        '<th>תאריך בפועל</th><th>סטטוס</th></tr></thead><tbody>';
+  j.rates.forEach(x=>{
+   const fb=x.effective && j.requested && x.effective!==j.requested;
+   let st = x.rate==null ? '<span class="bad">לא נמצא</span>'
+          : (fb ? '<span class="warn">שער קודם (fallback)</span>' : '<span class="ok">✓ תקין</span>');
+   h+='<tr><td><code>'+esc(x.currency)+'</code></td><td>'+esc(x.desc||'')+'</td>'+
+      '<td class="rate">'+(x.rate==null?'—':esc(x.rate))+'</td>'+
+      '<td class="muted">'+esc(x.effective||'—')+'</td><td>'+st+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  const ok=j.rates.filter(x=>x.rate!=null).length;
+  h+='<p class="muted" style="margin:14px 2px 0">נמשכו '+ok+' מתוך '+j.rates.length+
+     ' שערים · תאריך מבוקש: '+esc(j.requested||'—')+'</p>';
+  $('results').innerHTML=h;
+ }
+ function toggleTheme(){var r=document.documentElement,cur=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+  var nx=cur==='dark'?'light':'dark';r.setAttribute('data-theme',nx);try{localStorage.setItem('fl-theme',nx);}catch(e){}updateThemeBtn();}
+ function updateThemeBtn(){var b=$('themebtn');if(!b)return;
+  var cur=document.documentElement.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+  b.textContent=cur==='dark'?'☀️ מצב בהיר':'🌙 מצב כהה';}
+ $('rdate').value=today();updateThemeBtn();renderChips();
+</script></body></html>
+"""
+
+
+@app.route("/rates")
+def rates_page():
+    return render_template_string(
+        RATES, brand=brand_html(),
+        currencies=_DEFAULT_RATE_CURRENCIES, desc=_currency_desc_map())
+
+
+@app.route("/rates/fetch", methods=["POST"])
+def rates_fetch():
+    data = request.get_json(silent=True) or {}
+    date = (data.get("date") or "").strip() or None
+    currencies = [str(c).strip().upper() for c in (data.get("currencies") or []) if str(c).strip()]
+    currencies = list(dict.fromkeys(currencies))[:30]   # ייחודיים, תקרה בטיחותית
+    if not currencies:
+        return jsonify(error="לא נבחרו מטבעות."), 400
+    descs = _currency_desc_map()
+    requested = None
+    if date:
+        try:
+            requested = boi._to_date(date).strftime("%Y-%m-%d")
+        except ValueError:
+            return jsonify(error=f"תאריך לא תקין: {date}"), 400
+    out = []
+    for cur in currencies:
+        try:
+            rate, effective = boi.get_rate(cur, date)
+        except Exception:  # noqa: BLE001 — כשל רשת/פירוק לא יפיל את המסך
+            rate, effective = None, None
+        out.append({"currency": cur, "desc": descs.get(cur, ""),
+                    "rate": rate, "effective": effective})
+    return jsonify(requested=requested, rates=out)
 
 
 def _upload_error(msg):

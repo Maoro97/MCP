@@ -1,0 +1,165 @@
+# מפרט שדות מסך תנועות היומן בפריוריטי — נוצר מקטלוג השדות של הלקוח.
+# הכלי אוכף אוטומטית: max_length, required (M), type (DATE/REAL/INT), decimals.
+screen: JOURNAL
+source: Priority JOURNAL (LOADGL) field catalog
+fields:
+  FNCNUM:
+    title: "מס. תנועת היומן"
+    max_length: 8
+    required: true
+  LINE:
+    title: "שורה"
+    type: number
+    decimals: 0
+  FNCPATNAME:
+    title: "סוג תנועה"
+    max_length: 5
+  IVNUM:
+    title: "אסמכתא"
+    max_length: 16
+  FNCREF2:
+    title: "אסמכתא 2"
+    max_length: 48
+  BALDATE:
+    title: "ת. למאזן"
+    type: date
+  CURDATE:
+    title: "ת. אסמכתא"
+    type: date
+  FNCDATE:
+    title: "ת. ערך"
+    type: date
+  ACCNAME:
+    title: "חשבון"
+    max_length: 16
+  IACCNAME:
+    title: "חשבון נגדי"
+    max_length: 16
+  BUDCODE:
+    title: "תקציב"
+    max_length: 30
+  COSTCNAME:
+    title: "מרכז רווח"
+    max_length: 16
+  DEBIT:
+    title: "חובה/זכות"
+    max_length: 1
+  SUM1:
+    title: "סכום ב{LC.F}"
+    type: number
+    decimals: 2
+  SUM2:
+    title: "סכום ב{FC.F}"
+    type: number
+    decimals: 2
+  EXCHANGE2:
+    title: "שער ה{FS.F}"
+    type: number
+    decimals: 4
+  SUM3:
+    title: "סכום במט\"ח"
+    type: number
+    decimals: 2
+  EXCHANGE3:
+    title: "שער מט\"ח"
+    type: number
+    decimals: 4
+  CODE3:
+    title: "מט\"ח"
+    max_length: 3
+  DNAME:
+    title: "תוכנת מקור"
+    max_length: 8
+  TEXT:
+    title: "הערה"
+    max_length: 32
+  CASHFLOWCODE:
+    title: "קוד תזרים"
+    max_length: 8
+  FNCICODE:
+    title: "קוד מיון שורת ת\"י"
+    max_length: 8
+  FNCIREF1:
+    title: "אסמכתא 1 שורת ת\"י"
+    max_length: 16
+  FNCIREF2:
+    title: "אסמכתא 2 שורת ת\"י"
+    max_length: 48
+  FNCIREF3:
+    title: "אסמכתא 3 שורת ת\"י"
+    max_length: 16
+  DETAILS:
+    title: "פרטים שורת ת\"י"
+    max_length: 24
+  COSTCNAME2:
+    title: "מרכז רווח 2"
+    max_length: 16
+  COSTCNAME3:
+    title: "מרכז רווח 3"
+    max_length: 16
+  COSTCNAME4:
+    title: "מרכז רווח 4"
+    max_length: 16
+  COSTCNAME5:
+    title: "מרכז רווח 5"
+    max_length: 16
+  QUANT1:
+    title: "כמות"
+    type: number
+    decimals: 2
+  SUM4:
+    title: "סכום ב{LC.F} ממודדים"
+    type: number
+    decimals: 2
+  SUM5:
+    title: "סכום במט\"ח עסקה"
+    type: number
+    decimals: 2
+  EXCHANGE5:
+    title: "שער מט\"ח עסקה"
+    type: number
+    decimals: 4
+  CODE5:
+    title: "מט\"ח עסקה"
+    max_length: 3
+  DOCNO:
+    title: "פרויקט"
+    max_length: 20
+  WBS:
+    title: "מספר פעילות(WBS)"
+    max_length: 24
+  CUSTNAME:
+    title: "מס' לקוח לוגיסטי"
+    max_length: 16
+  BRANCHNAME:
+    title: "סניף"
+    max_length: 6
+  VATTYPE:
+    title: "סוג רשומה למע\"מ"
+    max_length: 1
+  IVCOUNT:
+    title: "מונה חשבוניות"
+    type: number
+    decimals: 0
+  LOTNUM:
+    title: "מס. מנה"
+    max_length: 8
+  USERLOGIN:
+    title: "שם משתמש"
+    max_length: 20
+  PDACCNAME:
+    title: "חש. יעד להכנסות/הוצ'"
+    max_length: 16
+  ACTDATE:
+    title: "ת. פעילות"
+    type: date
+  VATDATE:
+    title: "תאריך דווח למע\"מ"
+    type: date
+  USER:
+    title: "משתמש (ID)"
+    type: number
+    decimals: 0
+  BUDGETDATE:
+    title: "תאריך ניצול תקציב"
+    type: date

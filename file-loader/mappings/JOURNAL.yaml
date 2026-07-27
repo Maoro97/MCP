@@ -1,12 +1,13 @@
 # ============================================================================
-# מיפוי — הסבת תנועות יומן ל"טבלת טעינה לתנועות יומן" בפריוריטי
+# מיפוי — הסבת תנועות יומן ל"טעינת תנועות יומן" בפריוריטי (מסך JOURNAL / LOADGL)
 # ----------------------------------------------------------------------------
-# מותאם למבנה קובץ תנועות היומן (22 עמודות). סדר העמודות כאן = סדר הפלט,
-# ותואם למבנה הקובץ. שמות ה-target הם תוויות פנימיות בלבד (הפלט ללא כותרת),
-# לכן מה שקובע הוא הסדר והערכים.
+# שמות ה-target תואמים לשמות השדות הרשמיים של מסך היומן בפריוריטי (עמודת המסך),
+# וסדר העמודות כאן = סדר הפלט, לפי הסדר בקטלוג השדות הרשמי.
+# ולידציית השדות (אורך, חובה, טיפוס, דיוק עשרוני) נטענת אוטומטית מ-
+# specs/JOURNAL.yaml (קטלוג השדות הרשמי). ערך מפורש כאן גובר על הקטלוג.
 #
-# כללי ההסבה החשבונאיים (איזון תנועות, סימני C/D, המרות מט"ח, השלמת סכום דולרי)
-# ייושמו בשלב הבא כמנוע ייעודי; כאן מוגדרים המיפוי, הניקיון והפורמטים.
+# כללי ההסבה החשבונאיים (איזון תנועות, סימני C/D, המרות מט"ח) מיושמים במנוע
+# הייעודי (journal.py) דרך הגדרת ה-journal למטה.
 # ============================================================================
 
 screen: JOURNAL
@@ -15,39 +16,37 @@ delimiter: tab
 encoding: windows-1255
 date_format: "%d/%m/%y"
 include_header: false
-key_fields: []           # קיבוץ התנועה לאיזון: לפי TRANSNUM (מס' תנועת היומן)
+key_fields: []           # קיבוץ התנועה לאיזון: לפי FNCNUM (מס' תנועת היומן)
 
-# הגדרות ההסבה (לשלב מנוע האיזון/המט"ח)
+# הגדרות ההסבה (מנוע האיזון/המט"ח)
 journal:
-  txn: TRANSNUM              # מספר תנועת יומן — קיבוץ לאיזון
-  dc: DC                    # עמודת חובה/זכות (C/D)
-  amount_primary: AMOUNT_LOCAL
-  amount_secondary: AMOUNT_SECONDARY
-  amount_fx: AMOUNT_FX
-  currency_fx: FXCURRENCY
+  txn: FNCNUM               # מספר תנועת יומן — קיבוץ לאיזון
+  dc: DEBIT                 # עמודת חובה/זכות (C/D)
+  amount_primary: SUM1      # סכום במטבע מקומי (ראשי)
+  amount_secondary: SUM2    # סכום במטבע בסיס/משני ({FC.F}, למשל USD)
+  amount_fx: SUM5           # סכום במטבע העסקה (מט"ח עסקה)
+  currency_fx: CODE5        # קוד מטבע העסקה
 
 columns:
-  - {source: ["מס. תנועת היומן", "מס תנועת היומן", "מספר תנועת יומן"], target: TRANSNUM, transform: [strip]}
+  - {source: ["מס. תנועת היומן", "מס תנועת היומן", "מספר תנועת יומן"], target: FNCNUM, transform: [strip]}
   - {target: LINE, generate: rownum}                                   # מספור שורות רץ אוטומטי
-  - {source: ["תוכנת מקור"], target: SOURCEAPP, default: "", transform: [strip]}
-  - {source: ["ת. למאזן", "תאריך מאזן"], target: BALANCEDATE, type: date}
-  - {source: ["ת. ערך", "תאריך ערך"], target: VALUEDATE, type: date}
-  - {source: ["ת. אסמכתא", "תאריך אסמכתא"], target: REFDATE, type: date}
-  - {source: ["חשבון", "מפתח חשבון"], target: ACCOUNT, transform: [strip]}
-  - {source: ["חובה/זכות", "חובה זכות", "C/D"], target: DC, transform: [strip]}
-  - {source: ["סכום במטבע לוקאלי", "סכום במטבע לוקאל", "סכום מטבע ראשי"], target: AMOUNT_LOCAL, transform: [strip]}
-  - {source: ["סכום במטבע משני USD", "סכום במטבע משני", "סכום דולרי"], target: AMOUNT_SECONDARY, transform: [strip]}
-  - {source: ["סכום במטבע העסקה", "סכום מטח עסקה"], target: AMOUNT_FX, transform: [strip]}
-  - {source: ["מטבע העסקה", "מטח עסקה"], target: FXCURRENCY, transform: [strip], lookup: currencies}
-  - {target: SPARE1, default: ""}                                      # עמודה ריקה (שמירת מבנה)
-  - {target: SPARE2, default: ""}                                      # עמודה ריקה (שמירת מבנה)
-  - {source: ["קוד מרכז רווח", "מרכז רווח"], target: COSTCENTER, transform: [strip]}
-  - {source: ["אסמכתא"], target: REF1, transform: [strip, blank_if_zero], format: ref}
-  - {source: ["אסמכתא 2"], target: REF2, transform: [strip, blank_if_zero]}
-  - {source: ['אסמכתא 1 שורת ת"י', "אסמכתא 1 שורת תי"], target: REF1LINE, transform: [strip]}
-  - {source: ['אסמכתא 2 שורת ת"י', "אסמכתא 2 שורת תי"], target: REF2LINE, transform: [strip]}
+  - {source: ["סוג תנועה"], target: FNCPATNAME, transform: [strip]}
+  - {source: ["אסמכתא"], target: IVNUM, transform: [strip, blank_if_zero], format: ref}
+  - {source: ["אסמכתא 2"], target: FNCREF2, transform: [strip, blank_if_zero]}
+  - {source: ["ת. למאזן", "תאריך מאזן"], target: BALDATE, type: date}
+  - {source: ["ת. אסמכתא", "תאריך אסמכתא"], target: CURDATE, type: date}
+  - {source: ["ת. ערך", "תאריך ערך"], target: FNCDATE, type: date}
+  - {source: ["חשבון", "מפתח חשבון"], target: ACCNAME, transform: [strip]}
+  - {source: ["קוד מרכז רווח", "מרכז רווח"], target: COSTCNAME, transform: [strip]}
+  - {source: ["חובה/זכות", "חובה זכות", "C/D"], target: DEBIT, transform: [strip]}
+  - {source: ["סכום במטבע לוקאלי", "סכום במטבע לוקאל", "סכום מטבע ראשי"], target: SUM1, transform: [strip]}
+  - {source: ["סכום במטבע משני USD", "סכום במטבע משני", "סכום דולרי"], target: SUM2, transform: [strip]}
+  - {source: ["תוכנת מקור"], target: DNAME, default: "", transform: [strip]}
+  - {source: ['אסמכתא 1 שורת ת"י', "אסמכתא 1 שורת תי"], target: FNCIREF1, transform: [strip]}
+  - {source: ['אסמכתא 2 שורת ת"י', "אסמכתא 2 שורת תי"], target: FNCIREF2, transform: [strip]}
   - {source: ['פרטים שורת ת"י', "פרטים שורת תי", "פרטים"], target: DETAILS, transform: [strip]}
-  - {source: ["סוג תנועה"], target: TRANSTYPE, transform: [strip]}
-  - {source: ["משתמש"], target: JUSER, transform: [strip]}
+  - {source: ["סכום במטבע העסקה", "סכום מטח עסקה"], target: SUM5, transform: [strip]}
+  - {source: ["מטבע העסקה", "מטח עסקה"], target: CODE5, transform: [strip], lookup: currencies}
+  - {source: ["משתמש", "שם משתמש"], target: USERLOGIN, transform: [strip]}
   # עמודת הערות למיישם — מוצגת בטבלה אך אינה נכתבת לקובץ הסופי
   - {target: NOTES, manual: true, exclude: true}

@@ -38,7 +38,7 @@ columns:
   - {source: ["סכום במטבע לוקאלי", "סכום במטבע לוקאל", "סכום מטבע ראשי"], target: AMOUNT_LOCAL, transform: [strip]}
   - {source: ["סכום במטבע משני USD", "סכום במטבע משני", "סכום דולרי"], target: AMOUNT_SECONDARY, transform: [strip]}
   - {source: ["סכום במטבע העסקה", "סכום מטח עסקה"], target: AMOUNT_FX, transform: [strip]}
-  - {source: ["מטבע העסקה", "מטח עסקה"], target: FXCURRENCY, transform: [strip]}
+  - {source: ["מטבע העסקה", "מטח עסקה"], target: FXCURRENCY, transform: [strip], lookup: currencies}
   - {target: SPARE1, default: ""}                                      # עמודה ריקה (שמירת מבנה)
   - {target: SPARE2, default: ""}                                      # עמודה ריקה (שמירת מבנה)
   - {source: ["קוד מרכז רווח", "מרכז רווח"], target: COSTCENTER, transform: [strip]}

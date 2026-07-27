@@ -37,10 +37,47 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MAPPINGS_DIR = os.path.join(HERE, "mappings")
 OUTPUT_DIR = os.path.join(HERE, "output")
 SPECS_DIR = os.path.join(HERE, "specs")
+LOOKUPS_DIR = os.path.join(HERE, "lookups")
 HISTORY_FILE = os.path.join(OUTPUT_DIR, "history.jsonl")
 
-# מטמון למפרטי השדות (specs/<SCREEN>.yaml)
+# מטמון למפרטי השדות (specs/<SCREEN>.yaml) וטבלאות lookup
 _SPEC_CACHE = {}
+_LOOKUP_CACHE = {}
+
+
+def load_lookup(name):
+    """
+    טוען טבלת lookup מ-lookups/<name>.csv (עמודות code,desc).
+    מחזיר dict מנורמל: {ערך_מנורמל: code} — תואם גם לקוד וגם לתיאור,
+    כדי שהמערכת תזהה ערך שמגיע בכל צורה ותתאים לו את הקוד הנכון.
+    """
+    if name in _LOOKUP_CACHE:
+        return _LOOKUP_CACHE[name]
+    import csv
+    table = {}
+    path = os.path.join(LOOKUPS_DIR, f"{name}.csv")
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    code = (row.get("code") or "").strip()
+                    desc = (row.get("desc") or "").strip()
+                    if not code:
+                        continue
+                    table[_norm_header(code)] = code
+                    if desc:
+                        table.setdefault(_norm_header(desc), code)
+        except OSError:
+            table = {}
+    _LOOKUP_CACHE[name] = table
+    return table
+
+
+def lookup_value(name, value):
+    """מתאים ערך (קוד/תיאור) לקוד לפי טבלת lookup. אם לא נמצא — מחזיר None."""
+    if value == "":
+        return ""
+    return load_lookup(name).get(_norm_header(value))
 
 
 def append_history(entry):
@@ -326,6 +363,8 @@ def evaluate_grid(mapping, input_rows, reserved_keys=None, excel_rows=None):
                     err = msg
                 elif severity != "error":
                     warning = msg
+            if warning is None:
+                warning = lookup_warning(col, value)
             if err:
                 row_valid = False
             cells.append({"target": col["target"], "value": value,
@@ -700,7 +739,24 @@ def process_value(raw, column, date_format):
         if value == "" and default is not None:
             value = str(default)
 
+    # התאמת ערך לפי טבלת lookup (מטבעות / קודי תשלום וכו') — קוד/תיאור -> קוד
+    lk = column.get("lookup")
+    if lk and value != "":
+        code = lookup_value(lk, value)
+        if code:
+            value = code
+
     return value, None
+
+
+def lookup_warning(column, value):
+    """אזהרה אם ערך של עמודת lookup לא נמצא בטבלה (לא הותאם לקוד)."""
+    lk = column.get("lookup")
+    if not lk or value == "":
+        return None
+    if _norm_header(value) not in load_lookup(lk):
+        return f"ערך לא נמצא בטבלת '{lk}': '{value}'"
+    return None
 
 
 def categorize_error(reason: str) -> str:
@@ -764,6 +820,9 @@ def process_rows(df, mapping, resolved):
                     reason = msg
                 elif severity != "error":
                     warnings.append(msg)
+            lw = lookup_warning(col, value)
+            if lw:
+                warnings.append(lw)
 
             # 'values' = עמודות המסך הראשי בלבד (סדר הפלט); row_dict = כל השדות
             if col["target"] in main_targets:

@@ -87,8 +87,10 @@ columns:
     target: CODE
     value_map: {"שקל": "ILS", 'ש"ח': "ILS", "שח": "ILS", "דולר": "USD", "אירו": "EUR", "יורו": "EUR"}
     default: "ILS"
+    lookup: currencies      # התאמת קוד/תיאור מטבע מול טבלת המטבעות
 
-  # קוד תנאי תשלום — CHAR 4
+  # קוד תנאי תשלום — CHAR 4; התאמה מול טבלת קודי התשלום (קוד/תיאור -> קוד)
   - source: ["קוד תנאי תשלום", "תנאי תשלום", "קוד תשלום"]
     target: PAYCODE
     transform: [strip]
+    lookup: paycodes

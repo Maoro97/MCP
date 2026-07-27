@@ -391,6 +391,11 @@ GRID = """
  .jbar .fld input:focus{outline:none;border-color:var(--brand)}
  .jbar .jt{font-weight:700;color:var(--brand);align-self:center;margin-inline-end:4px}
  .b-jchk{background:#475569;color:#fff}.b-jbal{background:linear-gradient(140deg,#6366f1,#4f46e5);color:#fff}
+ .bar2{margin-top:-6px;padding:10px 14px}.tool-lbl{font-weight:700;color:var(--muted);font-size:14px}
+ .bar2 .mini{padding:7px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);font-family:inherit;font-size:14px}
+ .bar2 .mini#bulkval{min-width:200px}
+ tr.filterrow th{padding:4px 6px;position:sticky;top:0}
+ tr.filterrow input{width:100%;min-width:90px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font:inherit;font-size:13px}
 </style></head><body><div class="wrap">
  <div class="apphead">
   <div class="ttl"><h1>טבלת טעינה — {{ screen }}</h1></div>
@@ -412,6 +417,14 @@ GRID = """
   <a class="back" href="/history">📜 היסטוריה</a>
   <a class="back" href="/">＋ קובץ חדש</a>
  </div>
+ <div class="bar bar2">
+  <span class="tool-lbl">🔧 עדכון גורף</span>
+  <select id="bulkcol" class="mini"></select>
+  <input id="bulkval" class="mini" placeholder="ערך חדש לכל השורות">
+  <button class="b-check" onclick="bulkUpdate()">החל על הכל</button>
+  <span class="spacer"></span>
+  <label class="chk"><input type="checkbox" id="showfilters" onchange="render()"> 🔎 סינון עמודות</label>
+ </div>
  <div id="banner"></div><div id="mapping"></div><div id="journalbar"></div><div id="toast" class="toast"></div>
  <div class="legend">
   <span><i class="sw-bad"></i>שגוי</span>
@@ -428,7 +441,30 @@ const PAGE_SIZE = 100;
 let page = 0;
 let colOrder = GRID.columns.map((_, i) => i);   // סדר תצוגה/ייצוא של העמודות
 let colWidths = {};                             // רוחב מותאם לעמודה (ci -> px)
+let colFilter = {};                             // סינון לכל עמודה (ci -> טקסט)
 const $ = id => document.getElementById(id);
+
+// עדכון גורף — קובע ערך זהה לכל השורות בעמודה נבחרת
+function fillBulkSelect(){
+  const sel=$('bulkcol'); if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML=GRID.columns.map((c,ci)=>c.constant?'':'<option value="'+ci+'">'+esc(c.target)+'</option>').join('');
+  if(cur) sel.value=cur;
+}
+function bulkUpdate(){
+  const sel=$('bulkcol'); if(!sel||sel.value==='') return;
+  const ci=+sel.value, val=($('bulkval')||{}).value||'';
+  GRID.rows.forEach(r=>{ if(r.cells[ci]) r.cells[ci].value=val; });
+  render(); flash('ok','עודכנו '+GRID.rows.length+' שורות בעמודה '+GRID.columns[ci].target+'.');
+}
+function setFilter(ci,v){ if(v) colFilter[ci]=v; else delete colFilter[ci]; page=0; render(); }
+function matchesFilters(r){
+  for(const ci in colFilter){
+    const cell=r.cells[ci];
+    if(!cell || String(cell.value||'').toLowerCase().indexOf(colFilter[ci].toLowerCase())<0) return false;
+  }
+  return true;
+}
 
 // --- שינוי רוחב עמודה בגרירה ---
 function applyWidth(ci,w){
@@ -462,7 +498,7 @@ function displayed(){
   GRID.rows.forEach((r,gi)=>{
     // "לטיפול" = יש בעיה ולא סומן להתעלמות
     const attention = !r.ignore && (!r.valid || r.cells.some(c=>c.warning));
-    if(!onlyErr || attention) out.push([gi,r]);
+    if((!onlyErr || attention) && matchesFilters(r)) out.push([gi,r]);
   });
   return out;
 }
@@ -480,7 +516,14 @@ function render(){
        ')"></span><span class="grip">⋮⋮</span><span class="tgt">'+esc(c.target)+
        '</span><span class="src">'+(c.constant?'ערך קבוע':esc(c.source||''))+'</span></th>';
   }
-  h+='</tr></thead><tbody>';
+  h+='</tr>';
+  if($('showfilters') && $('showfilters').checked){   // שורת סינון לכל עמודה
+    h+='<tr class="filterrow"><th class="act"></th><th class="rownum">🔎</th>';
+    for(const ci of colOrder)
+      h+='<th><input value="'+esc(colFilter[ci]||'')+'" placeholder="סנן" oninput="setFilter('+ci+',this.value)"></th>';
+    h+='</tr>';
+  }
+  h+='</thead><tbody>';
   for(const [gi,r] of slice){
     const problem = !r.valid || r.cells.some(c=>c.warning);
     const rowcls = r.ignore ? 'rowign' : (r.valid ? '' : 'rowbad');
@@ -593,6 +636,7 @@ function renderJournal(){
    '<div class="fld"><label>מטבע משני</label><input id="j-secondary" value="USD"></div>'+
    '<div class="fld"><label>סף איזון ראשי</label><input id="j-maxp" type="number" step="0.01" value="1"></div>'+
    '<div class="fld"><label>סף איזון משני</label><input id="j-maxs" type="number" step="0.01" value="1"></div>'+
+   '<button class="b-jchk" onclick="journalFx()">💱 טיוב מט"ח</button>'+
    '<button class="b-jchk" onclick="journalCheck()">🔍 בדיקת תנועות</button>'+
    '<button class="b-jbal" onclick="journalBalance()">⚖️ איזון תנועות</button>';
 }
@@ -600,6 +644,7 @@ function journalOpts(){
   return {secondary: ($('j-secondary')||{}).value||'', primary: ($('j-primary')||{}).value||'',
           max_primary: ($('j-maxp')||{}).value||'0', max_secondary: ($('j-maxs')||{}).value||'0'};
 }
+async function journalFx(){ await journalRun('/journal/fx','טיוב מט"ח'); }
 async function journalCheck(){ await journalRun('/journal/check','נבדקו התנועות'); }
 async function journalBalance(){ await journalRun('/journal/balance','בוצע איזון תנועות'); }
 async function journalRun(url,label){
@@ -609,6 +654,7 @@ async function journalRun(url,label){
   const s=res.summary||{};
   flash(s.unbalanced? 'err':'ok',
     label+': '+ (s.balanced||0)+'/'+(s.transactions||0)+' תנועות מאוזנות'+
+    (s.fx_changed? (' · מט"ח: '+s.fx_changed+' שורות'):'')+
     (s.fixed? (' · אוזנו '+s.fixed):'')+
     (s.unbalanced? (' · '+s.unbalanced+' לא מאוזנות (ראה הערות)'):''));
 }
@@ -689,7 +735,7 @@ function updateThemeBtn(){var b=$('themebtn');if(!b)return;
   b.textContent=cur==='dark'?'☀️ מצב בהיר':'🌙 מצב כהה';}
 
 if(GRID.mode==='errors'){ $('onlyerr').checked=true; const b=$('showallbtn'); if(b) b.style.display=''; }
-updateThemeBtn(); renderBanner(); renderMapping(); renderJournal(); render();
+updateThemeBtn(); fillBulkSelect(); renderBanner(); renderMapping(); renderJournal(); render();
 </script></body></html>
 """
 
@@ -868,7 +914,53 @@ def _strip_auto_note(text):
     return (str(text or "").split("⚠")[0]).rstrip()
 
 
-def _journal_process(mapping, rows_dicts, excel_rows, opts, do_balance):
+# מילים נרדפות נפוצות לשקל בקבצי תנועות יומן — אינן בטבלת המטבעות, ולכן ממופות ידנית
+_ILS_ALIASES = {'ILS', 'NIS', 'שח', 'ש"ח', 'ש”ח', 'שקל', 'שקלים', '₪'}
+
+
+def _cur_key(value):
+    """מפתח השוואת מטבעות עמיד: פותר קוד/תיאור מול טבלת המטבעות, עם מיפוי שקל."""
+    v = str(value or "").strip()
+    if v == "":
+        return ""
+    if core._norm_header(v) in {core._norm_header(a) for a in _ILS_ALIASES}:
+        return "ILS"
+    code = core.lookup_value("currencies", v) or v
+    return core._norm_header(code)
+
+
+def _journal_fx(mapping, rows_dicts, primary, secondary):
+    """
+    כללי מט"ח לתנועות יומן:
+    1) מטח עסקה = מטבע ראשי (ש"ח) -> לא תקין: מחיקת מטבע העסקה והסכום.
+    2) מטח עסקה = מטבע משני -> העתקת סכום מטח העסקה לעמודת הסכום המשני.
+    מחזיר מספר שורות שהושפעו.
+    """
+    jc = mapping.get("journal") or {}
+    cf, af, asec = jc.get("currency_fx"), jc.get("amount_fx"), jc.get("amount_secondary")
+    if not cf:
+        return 0
+    prim = _cur_key(primary)
+    sec = _cur_key(secondary)
+    changed = 0
+    for row in rows_dicts:
+        raw = str(row.get(cf, "") or "").strip()
+        if raw == "":
+            continue
+        n = _cur_key(raw)
+        if prim and n == prim:                       # (1) = ראשי -> מחיקה
+            row[cf] = ""
+            if af:
+                row[af] = ""
+            changed += 1
+        elif sec and n == sec and asec and af:       # (2) = משני -> העתקת הסכום
+            if str(row.get(af, "") or "").strip() != "":
+                row[asec] = row.get(af, "")
+                changed += 1
+    return changed
+
+
+def _journal_process(mapping, rows_dicts, excel_rows, opts, do_balance, do_fx=False):
     """
     מנוע האיזון: (א) איזון אוטומטי אופציונלי, (ב) בדיקת איזון לכל תנועה,
     כתיבת הסבר לעמודת ההערות, וסימון (אזהרה) על שורות תנועה לא-מאוזנת.
@@ -882,8 +974,12 @@ def _journal_process(mapping, rows_dicts, excel_rows, opts, do_balance):
     max_s = jrn.to_number(opts.get("max_secondary")) or 0.0
     use_sec = bool(opts.get("secondary")) and bool(asec)
     notes_t = _notes_target(mapping)
-    groups = jrn.group_by_txn(rows_dicts, txn) if txn else {}
 
+    fx_changed = 0
+    if do_fx:
+        fx_changed = _journal_fx(mapping, rows_dicts, opts.get("primary"), opts.get("secondary"))
+
+    groups = jrn.group_by_txn(rows_dicts, txn) if txn else {}
     fixed = 0
     if do_balance:
         for key, idxs in groups.items():
@@ -925,10 +1021,10 @@ def _journal_process(mapping, rows_dicts, excel_rows, opts, do_balance):
                 c["warning"] = "תנועה לא מאוזנת"
     total_txn = sum(1 for k in groups if k)
     return rows_out, {"unbalanced": unbalanced, "balanced": total_txn - unbalanced,
-                      "transactions": total_txn, "fixed": fixed}
+                      "transactions": total_txn, "fixed": fixed, "fx_changed": fx_changed}
 
 
-def _journal_endpoint(do_balance):
+def _journal_endpoint(do_balance=False, do_fx=False):
     data = request.get_json(silent=True) or {}
     run = RUNS.get(data.get("run_id"))
     if not run:
@@ -939,7 +1035,8 @@ def _journal_endpoint(do_balance):
             return jsonify(error="המסך אינו מסך תנועות יומן."), 400
         rows_dicts = list(data.get("rows") or [])
         rows_out, summary = _journal_process(
-            mapping, rows_dicts, data.get("excel_rows"), data.get("opts") or {}, do_balance)
+            mapping, rows_dicts, data.get("excel_rows"), data.get("opts") or {},
+            do_balance, do_fx)
     except core.UserError as e:
         return jsonify(error=str(e)), 400
     except Exception as e:  # noqa: BLE001
@@ -955,6 +1052,11 @@ def journal_check():
 @app.route("/journal/balance", methods=["POST"])
 def journal_balance():
     return _journal_endpoint(do_balance=True)
+
+
+@app.route("/journal/fx", methods=["POST"])
+def journal_fx():
+    return _journal_endpoint(do_fx=True)
 
 
 @app.route("/grid/validate", methods=["POST"])

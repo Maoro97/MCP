@@ -29,6 +29,7 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 80 * 1024 * 1024  # מגבלת העלאה: 80MB
 
 WEB_OUTPUT = os.path.join(core.OUTPUT_DIR, "web")
+os.makedirs(WEB_OUTPUT, exist_ok=True)   # נדרש גם בהרצת production (gunicorn) שלא עוברת דרך __main__
 _RUN_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 # בקבצים עד גודל זה — כל השורות ניתנות לעריכה בטבלה.

@@ -1,0 +1,9 @@
+**/__pycache__/
+**/*.pyc
+apps/
+node_modules/
+.git/
+file-loader/output/*
+!file-loader/output/.gitignore
+file-loader/examples/
+*.log

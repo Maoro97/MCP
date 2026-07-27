@@ -1,0 +1,19 @@
+# ============================================================================
+# Render Blueprint — פריסת "ממשק הכנת קבצי טעינה לפריוריטי" בענן.
+# ----------------------------------------------------------------------------
+# פריסה בלחיצה: היכנס ל-https://dashboard.render.com/blueprints, חבר את מאגר
+# הגיטהאב Maoro97/MCP, ו-Render יקרא קובץ זה ויפרוס אוטומטית.
+# התוכנית free חינמית לחלוטין (ללא כרטיס אשראי). כתובת ציבורית (https) תתקבל בסיום.
+# ============================================================================
+services:
+  - type: web
+    name: priority-file-loader
+    runtime: python
+    plan: free
+    rootDir: file-loader          # שורש הפרויקט לפריסה — תיקיית הכלי בלבד
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn webapp:app --workers 1 --threads 8 --timeout 120 --bind 0.0.0.0:$PORT
+    # worker יחיד: מצב-הריצה (RUNS) נשמר בזיכרון התהליך, ולכן ריבוי workers היה
+    # מפצל אותו. threads מאפשרים כמה משתמשים במקביל על אותו worker.
+    autoDeploy: true              # פריסה מחדש אוטומטית בכל דחיפה לענף המחובר
+    healthCheckPath: /

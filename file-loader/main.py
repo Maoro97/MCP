@@ -338,6 +338,56 @@ def build_subform_records(valid_rows_out, mapping, subform):
     return recs
 
 
+def build_leveled_content(valid_records, mapping) -> str:
+    """
+    פורמט טעינה רב-רמתי בקובץ אחד (טעינת טופס בפריוריטי): כל שורה מתחילה במזהה
+    רמה — 1 = רשומת אב (המסך הראשי), 2 = רשומת בן (מסך-המשנה הראשון), 3 = מסך-משנה
+    שני, וכן הלאה. שורות הבן של אותו אב מקובצות מתחתיו לפי key_fields, בסדר ההופעה.
+
+    valid_records: רשימת {"values": [...]} כאשר values מסודר לפי all_columns
+    (עמודות האב ואחריהן עמודות מסכי-המשנה).
+    """
+    delimiter = _DELIMITERS[mapping.get("delimiter", "tab")]
+    parent_cols = mapping["columns"]
+    n_parent = len(parent_cols)
+    parent_targets = [c["target"] for c in parent_cols]
+    key_fields = mapping.get("key_fields") or []
+    key_idx = [parent_targets.index(k) for k in key_fields if k in parent_targets]
+
+    # טווח הערכים (offset) וברשימת העמודות לכל מסך-משנה, לפי רמות 2,3,...
+    levels, start = [], n_parent
+    for i, sf in enumerate(subform_defs(mapping)):
+        cols = sf.get("columns", [])
+        levels.append((str(i + 2), start, cols))
+        start += len(cols)
+
+    def _line(prefix, cols, vals, offset):
+        keep = [j for j, c in enumerate(cols) if not c.get("exclude")]
+        return delimiter.join([prefix] + [
+            vals[offset + j] if offset + j < len(vals) else "" for j in keep])
+
+    order, groups = [], {}
+    for rec in valid_records:
+        vals = rec["values"]
+        key = tuple(vals[i] for i in key_idx) if key_idx else (len(order),)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(vals)
+
+    lines = []
+    for key in order:
+        rows = groups[key]
+        lines.append(_line("1", parent_cols, rows[0], 0))          # שורת האב
+        for vals in rows:                                          # שורות הבן
+            for level_no, offset, cols in levels:
+                lines.append(_line(level_no, cols, vals, offset))
+    content = "\r\n".join(lines)
+    if lines:
+        content += "\r\n"
+    return content
+
+
 def rows_from_dataframe(df, mapping, resolved):
     """הופך DataFrame לרשימת שורות {target: ערך_גולמי} לפי מיפוי העמודות."""
     columns = all_columns(mapping)

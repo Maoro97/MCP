@@ -1139,10 +1139,11 @@ def grid_generate():
     still_invalid = [r for r in rows_out if not r["valid"]]
     valid_records = run["valid"] + core.grid_valid_records(now_valid)
 
-    # סדר עמודות מבוקש (אם המשתמש סידר מחדש בטבלה) — חל על קובץ הטעינה ועל rejected
+    # סדר עמודות מבוקש (אם המשתמש סידר מחדש בטבלה) — חל על קובץ הטעינה ועל rejected.
+    # לא רלוונטי למסמכים (אב/בן) שבהם הסדר קבוע לפי הרמות.
     order = data.get("order")
     export_mapping = mapping
-    if order:
+    if order and not mapping.get("leveled") and not core.subform_defs(mapping):
         valid_records, export_mapping = core.reorder_for_export(valid_records, mapping, order)
 
     run_id = uuid.uuid4().hex
@@ -1151,7 +1152,14 @@ def grid_generate():
 
     files = []  # קבצי טעינה שנוצרו: [{name, label}]
     load_name = f"{screen}_load.{core.load_file_extension(mapping)}"
-    if core.subform_defs(mapping):
+    if mapping.get("leveled"):
+        # מסמך רב-רמתי — קובץ אחד עם מזהה רמה (1=אב, 2=בן) בעמודה הראשונה
+        content = core.build_leveled_content(valid_records, mapping)
+        if content:
+            with open(os.path.join(run_dir, load_name), "wb") as f:
+                f.write(core.load_content_bytes(content, mapping))
+            files.append({"name": load_name, "label": f"קובץ טעינה רב-רמתי · {screen}"})
+    elif core.subform_defs(mapping):
         # מסמך: קובץ אב (ייחודי לפי מפתח) + קובץ לכל מסך-משנה (מקושר במפתח)
         parent_records = core.build_parent_records(now_valid, mapping)
         if parent_records:

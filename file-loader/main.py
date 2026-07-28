@@ -35,9 +35,15 @@ class UserError(Exception):
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MAPPINGS_DIR = os.path.join(HERE, "mappings")
-OUTPUT_DIR = os.path.join(HERE, "output")
 SPECS_DIR = os.path.join(HERE, "specs")
 LOOKUPS_DIR = os.path.join(HERE, "lookups")
+
+# תיקיית הפלט: ניתנת לדריסה במשתנה סביבה. בפלטפורמות serverless (Vercel) שאר
+# מערכת הקבצים היא לקריאה-בלבד — ורק /tmp ניתן לכתיבה — לכן שם ברירת המחדל /tmp.
+OUTPUT_DIR = (
+    os.environ.get("FILE_LOADER_OUTPUT")
+    or ("/tmp/fl-output" if os.environ.get("VERCEL") else os.path.join(HERE, "output"))
+)
 HISTORY_FILE = os.path.join(OUTPUT_DIR, "history.jsonl")
 
 # מטמון למפרטי השדות (specs/<SCREEN>.yaml) וטבלאות lookup

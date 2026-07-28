@@ -1,0 +1,11 @@
+apps/
+node_modules/
+.git/
+**/__pycache__/
+**/*.pyc
+file-loader/examples/
+file-loader/output/
+*.log
+pnpm-lock.yaml
+pnpm-workspace.yaml
+package.json

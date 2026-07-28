@@ -1153,8 +1153,9 @@ def grid_generate():
     files = []  # קבצי טעינה שנוצרו: [{name, label}]
     load_name = f"{screen}_load.{core.load_file_extension(mapping)}"
     if mapping.get("leveled"):
-        # מסמך רב-רמתי — קובץ אחד עם מזהה רמה (1=אב, 2=בן) בעמודה הראשונה
-        content = core.build_leveled_content(valid_records, mapping)
+        # מסמך רב-רמתי — קובץ אחד עם מזהה רמה (1=אב, 2=בן) בעמודה הראשונה.
+        # סדר העמודות שהמשתמש קבע בטבלה מיושם בתוך כל רמה בנפרד.
+        content = core.build_leveled_content(valid_records, mapping, order=order)
         if content:
             with open(os.path.join(run_dir, load_name), "wb") as f:
                 f.write(core.load_content_bytes(content, mapping))

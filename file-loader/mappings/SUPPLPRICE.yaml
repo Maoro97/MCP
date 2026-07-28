@@ -23,11 +23,18 @@ include_header: false
 key_fields: [SUPNAME]
 
 # --- עמודות האב (מחירוני ספקים) — רמה 1 ---
+# ניתן לסדר את העמודות מחדש בטבלה; הסידור מיושם על שורת האב בפלט.
 columns:
   - source: ["מספר מחירון", "קוד מחירון", "מחירון", "מס מחירון", "מס' מחירון", "מזהה מחירון", "מספר ספק", "קוד ספק", "ספק"]
     target: SUPNAME
     required: true
     max_length: 16
+    transform: [strip]
+  # תאריך המחירון — שדה חובה מסוג תאריך בפורמט פריוריטי (dd/mm/yy)
+  - source: ["תאריך מחירון", "תאריך", "ת. מחירון", "תאריך תוקף", "מתאריך", "תאריך התחלה"]
+    target: SUPPLDATE
+    required: true
+    type: date
     transform: [strip]
   - source: ["תיאור מחירון", "תאור מחירון", "שם מחירון", "שם המחירון"]
     target: SUPPLDES

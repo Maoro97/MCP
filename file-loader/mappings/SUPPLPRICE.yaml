@@ -5,7 +5,7 @@
 # בכל שורה. הקיבוץ לאב הוא לפי SUPPLNAME (מזהה המחירון).
 #
 # פלט (leveled: true): קובץ טקסט אחד שבו העמודה הראשונה היא מזהה הרמה —
-#   1  = שורת אב  (מחירון):  1 <TAB> SUPPLNAME <TAB> SUPPLDES
+#   1  = שורת אב  (מחירון):  1 <TAB> SUPNAME <TAB> SUPPLDES
 #   2  = שורת בן  (מוצר):    2 <TAB> PARTNAME <TAB> PARTDES <TAB> QUANT <TAB> PRICE <TAB> PERCENT <TAB> CODE <TAB> SUPPARTNAME
 # כל שורות הבן של מחירון מסוים מקובצות מתחת לשורת האב שלו.
 #
@@ -20,14 +20,14 @@ delimiter: tab
 encoding: windows-1255
 date_format: "%d/%m/%y"
 include_header: false
-key_fields: [SUPPLNAME]
+key_fields: [SUPNAME]
 
 # --- עמודות האב (מחירוני ספקים) — רמה 1 ---
 columns:
-  - source: ["מספר מחירון", "קוד מחירון", "מחירון", "מס מחירון", "מס' מחירון", "מזהה מחירון"]
-    target: SUPPLNAME
+  - source: ["מספר מחירון", "קוד מחירון", "מחירון", "מס מחירון", "מס' מחירון", "מזהה מחירון", "מספר ספק", "קוד ספק", "ספק"]
+    target: SUPNAME
     required: true
-    max_length: 8
+    max_length: 16
     transform: [strip]
   - source: ["תיאור מחירון", "תאור מחירון", "שם מחירון", "שם המחירון"]
     target: SUPPLDES

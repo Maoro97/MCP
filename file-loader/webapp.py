@@ -11,6 +11,7 @@ webapp.py — ממשק וובי מקומי להכנת קבצי טעינה לפר
 """
 
 import base64
+import hmac
 import io
 import os
 import re
@@ -20,6 +21,7 @@ import uuid
 import pandas as pd
 from flask import (
     Flask, request, jsonify, render_template_string, send_from_directory, abort,
+    session, redirect,
 )
 
 import main as core
@@ -28,6 +30,34 @@ import boi_rates as boi
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 80 * 1024 * 1024  # מגבלת העלאה: 80MB
+# מפתח לחתימת ה-cookie של ההתחברות (session). מומלץ להגדיר SECRET_KEY בסביבה
+# (ב-Vercel/Render). ה-session נשמר בצד הלקוח כ-cookie חתום — עובד גם ב-serverless.
+app.secret_key = os.environ.get("SECRET_KEY") or os.environ.get("APP_SECRET") \
+    or "priority-file-loader-dev-secret-change-in-production"
+
+# מסך התחברות: מופעל רק אם הוגדרה סיסמה במשתנה הסביבה APP_PASSWORD.
+# ללא APP_PASSWORD — האפליקציה פתוחה (מתאים להרצה מקומית). עם APP_PASSWORD —
+# כל העמודים דורשים התחברות. שם המשתמש: APP_USERNAME (ברירת מחדל admin).
+AUTH_USER = os.environ.get("APP_USERNAME", "admin")
+AUTH_PASS = os.environ.get("APP_PASSWORD")
+# נתיבי JSON (נקראים ב-fetch) — עליהם נחזיר 401 במקום הפניה לעמוד התחברות
+_AUTH_JSON_PREFIXES = ("/grid/", "/journal/", "/rates/fetch")
+_AUTH_OPEN_ENDPOINTS = {"login", "logout", "static"}
+
+
+@app.before_request
+def _require_login():
+    if not AUTH_PASS or session.get("auth"):
+        return None
+    if request.endpoint in _AUTH_OPEN_ENDPOINTS:
+        return None
+    if request.path.startswith(_AUTH_JSON_PREFIXES):
+        return jsonify(error="ההתחברות פגה — רענן את העמוד והתחבר מחדש."), 401
+    return redirect("/login?next=" + request.path)
+
+
+def _auth_on():
+    return bool(AUTH_PASS)
 
 WEB_OUTPUT = os.path.join(core.OUTPUT_DIR, "web")
 os.makedirs(WEB_OUTPUT, exist_ok=True)   # נדרש גם בהרצת production (gunicorn) שלא עוברת דרך __main__
@@ -220,6 +250,7 @@ UPLOAD = """
   <div style="display:flex;gap:8px;align-items:center">
    <a class="themebtn" style="text-decoration:none" href="/rates">💱 שערי בנק ישראל</a>
    <a class="themebtn" style="text-decoration:none" href="/history">📜 היסטוריה</a>
+   {% if auth_on %}<a class="themebtn" style="text-decoration:none" href="/logout">🚪 יציאה</a>{% endif %}
    <button id="themebtn" class="themebtn" onclick="toggleTheme()">🌙 מצב כהה</button></div></div>
  <div class="hero">
   <div class="logo">📥</div>
@@ -748,7 +779,8 @@ updateThemeBtn(); fillBulkSelect(); renderBanner(); renderMapping(); renderJourn
 # ---------------------------------------------------------------------------
 @app.route("/")
 def index():
-    return render_template_string(UPLOAD, screens=core.available_screens(), error=None, brand=brand_html())
+    return render_template_string(UPLOAD, screens=core.available_screens(), error=None,
+                                  brand=brand_html(), auth_on=_auth_on())
 
 
 def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None):
@@ -1433,8 +1465,88 @@ def rates_fetch():
     return jsonify(requested=requested, rates=out)
 
 
+LOGIN = """
+<!doctype html><html lang="he" dir="rtl"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>התחברות — Priority ERP</title>
+<script>(function(){try{var t=localStorage.getItem('fl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+ :root{--bg:#eef2f9;--surface:#fff;--surface-2:#f7f9fc;--border:#e5eaf2;--text:#0f172a;--muted:#64748b;
+  --brand:#4f46e5;--brand-2:#6366f1;--red:#dc2626;--radius:18px;--shadow:0 20px 50px rgba(37,40,90,.16);}
+ @media (prefers-color-scheme:dark){:root:not([data-theme]){--bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;
+  --text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--brand-2:#a5b4fc;--red:#f87171;--shadow:0 24px 60px rgba(0,0,0,.55);}}
+ :root[data-theme="dark"]{--bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;
+  --text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--brand-2:#a5b4fc;--red:#f87171;--shadow:0 24px 60px rgba(0,0,0,.55);}
+ .brand{display:flex;align-items:center;gap:11px;justify-content:center;margin-bottom:20px}
+ .brand .logo-img{height:46px;width:auto}.brand-tx{display:flex;flex-direction:column;line-height:1.05;text-align:right}
+ .brand-name{font-weight:800;font-size:21px;color:var(--text)}.brand-sub{font-weight:600;font-size:12.5px;color:#1e50c8}
+ *{box-sizing:border-box}
+ body{margin:0;min-height:100vh;display:grid;place-items:center;color:var(--text);
+  font-family:"Assistant",-apple-system,"Segoe UI",system-ui,Arial,sans-serif;
+  background:radial-gradient(1100px 500px at 100% -10%,rgba(99,102,241,.18),transparent 60%),
+   radial-gradient(900px 500px at -10% 0%,rgba(16,185,129,.12),transparent 55%),var(--bg);}
+ .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:34px 30px;box-shadow:var(--shadow);width:min(400px,92vw)}
+ .logo{width:56px;height:56px;border-radius:16px;margin:0 auto 14px;display:grid;place-items:center;
+  font-size:26px;color:#fff;background:linear-gradient(140deg,var(--brand-2),var(--brand));box-shadow:0 10px 24px rgba(79,70,229,.4)}
+ h1{font-size:22px;font-weight:800;margin:0 0 4px;text-align:center}
+ .sub{color:var(--muted);text-align:center;margin:0 0 22px;font-size:14px}
+ label{display:block;font-weight:600;margin:14px 0 6px;font-size:14px}
+ input{width:100%;padding:12px 13px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;
+  font-family:inherit;background:var(--surface-2);color:var(--text)}
+ input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 4px rgba(99,102,241,.15);background:var(--surface)}
+ button{width:100%;margin-top:22px;background:linear-gradient(140deg,var(--brand-2),var(--brand));color:#fff;border:0;
+  border-radius:12px;padding:13px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 8px 20px rgba(79,70,229,.32);font-family:inherit}
+ button:hover{transform:translateY(-1px)}
+ .err{background:rgba(220,38,38,.09);border:1px solid rgba(220,38,38,.32);color:var(--red);
+  border-radius:12px;padding:11px 14px;font-size:13.5px;margin-top:16px;text-align:center}
+</style></head><body>
+ <form class="card" method="post" action="/login">
+  {{ brand|safe }}
+  <div class="logo">🔒</div>
+  <h1>התחברות למערכת</h1>
+  <p class="sub">הכנת קבצי טעינה ל-Priority ERP</p>
+  <input type="hidden" name="next" value="{{ next }}">
+  <label for="username">שם משתמש</label>
+  <input id="username" name="username" autocomplete="username" autofocus>
+  <label for="password">סיסמה</label>
+  <input id="password" name="password" type="password" autocomplete="current-password">
+  {% if error %}<div class="err">❌ {{ error }}</div>{% endif %}
+  <button type="submit">התחבר ←</button>
+ </form>
+</body></html>
+"""
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if not AUTH_PASS:            # אימות כבוי — אין מסך התחברות
+        return redirect("/")
+    nxt = request.values.get("next") or "/"
+    if not nxt.startswith("/"):  # מניעת open-redirect — רק נתיבים פנימיים
+        nxt = "/"
+    error = None
+    if request.method == "POST":
+        user_ok = hmac.compare_digest(request.form.get("username", ""), AUTH_USER)
+        pass_ok = hmac.compare_digest(request.form.get("password", ""), AUTH_PASS)
+        if user_ok and pass_ok:
+            session["auth"] = True
+            return redirect(nxt)
+        error = "שם משתמש או סיסמה שגויים."
+    return render_template_string(LOGIN, brand=brand_html(), error=error, next=nxt)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
+
 def _upload_error(msg):
-    return render_template_string(UPLOAD, screens=core.available_screens(), error=msg, brand=brand_html())
+    return render_template_string(UPLOAD, screens=core.available_screens(), error=msg,
+                                  brand=brand_html(), auth_on=_auth_on())
 
 
 if __name__ == "__main__":

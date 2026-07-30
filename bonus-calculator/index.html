@@ -69,21 +69,27 @@
 
     .subtitle { color: var(--muted); margin-top: 8px; font-size: 15px; }
 
-    /* Sticker */
+    /* Stickers */
     .sticker-box {
       display: flex;
       justify-content: center;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 18px;
       margin: 18px 0 6px;
     }
-    .sticker-box img {
-      width: 190px;
-      max-width: 60vw;
+    .sticker { display: flex; flex-direction: column; align-items: center; }
+    .sticker img {
+      width: 175px;
+      max-width: 44vw;
       filter: drop-shadow(0 10px 24px rgba(0,0,0,0.45));
       animation: float 4s ease-in-out infinite;
     }
+    .sticker:nth-child(2) img { animation-delay: 1.2s; }
+    .sticker-name { margin-top: 6px; font-weight: 800; color: var(--gold-light); font-size: 14px; }
     .sticker-fallback {
       display: none;
-      width: 190px; height: 210px;
+      width: 175px; height: 200px;
       border: 2px dashed var(--gold);
       border-radius: 18px;
       align-items: center; justify-content: center;
@@ -181,11 +187,23 @@
       <p class="subtitle">מאור המלך · מאור המלך · מאור המלך 👑</p>
 
       <div class="sticker-box">
-        <img id="sticker" src="maor-sticker.png" alt="מאור המלך"
-             onerror="this.style.display='none'; document.getElementById('stickerFallback').style.display='flex';" />
-        <div class="sticker-fallback" id="stickerFallback">
-          כאן ייכנס<br />הסטיקר של<br />מאור המלך 👑<br />
-          <small style="font-weight:400">(העלה קובץ בשם maor-sticker.png)</small>
+        <div class="sticker">
+          <img src="maor-sticker.png" alt="מאור המלך"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <div class="sticker-fallback">
+            הסטיקר של<br />מאור המלך 👑<br />
+            <small style="font-weight:400">(קובץ: maor-sticker.png)</small>
+          </div>
+          <div class="sticker-name">מאור המלך 👑</div>
+        </div>
+        <div class="sticker">
+          <img src="dog-sticker.png" alt="הכלב של מאור המלך"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <div class="sticker-fallback">
+            הסטיקר של<br />הכלב ❤️<br />
+            <small style="font-weight:400">(קובץ: dog-sticker.png)</small>
+          </div>
+          <div class="sticker-name">הכלב של המלך ❤️</div>
         </div>
       </div>
     </header>

@@ -26,3 +26,14 @@ next-env.d.ts
 __pycache__/
 *.pyc
 file-loader/sample_customers.xlsx
+
+# python virtualenvs
+.venv/
+.venv-*/
+venv/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/

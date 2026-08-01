@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Mimshak>
+  <GIRSAT-MIVNE-ACHID>2.9</GIRSAT-MIVNE-ACHID>
+  <YeshutYatzran>
+    <KOD-MEZAHE-YATZRAN>520023185</KOD-MEZAHE-YATZRAN>
+    <SHEM-YATZRAN>הפניקס</SHEM-YATZRAN>
+  </YeshutYatzran>
+  <Mutzarim>
+    <Mutzar>
+      <YeshutLakoach>
+        <MISPAR-ZIHUY-LAKOACH>039472519</MISPAR-ZIHUY-LAKOACH>
+        <SHEM-PRATI>דנה</SHEM-PRATI>
+        <SHEM-MISHPACHA>כהן</SHEM-MISHPACHA>
+        <TAARICH-LEIDA>19840317</TAARICH-LEIDA>
+      </YeshutLakoach>
+      <HeshbonotOPolisot>
+        <EIN-MEIDA>1</EIN-MEIDA>      </HeshbonotOPolisot>
+    </Mutzar>
+  </Mutzarim>
+</Mimshak>

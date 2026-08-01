@@ -1,0 +1,267 @@
+# מיפוי "המבנה האחיד להעברת מידע בשוק החיסכון הפנסיוני" → מודל קנוני
+#
+# ⚠️ שמות התגים כאן הם ייצוגיים ונגזרו מהמבנה המקובל. לפני Sprint 1 יש להחליף
+#    אותם ב-XPaths המדויקים מתוך ה-XSD הרשמי שיסופק ע"י רשות שוק ההון.
+#    בדיוק לשם כך המיפוי הוא נתונים ולא קוד: ההחלפה היא עדכון רשומות,
+#    לא שינוי קוד ולא Deploy.
+#
+# בייצור התוכן הזה יושב בטבלת clearing.field_mappings עם effective_from/to.
+
+version: "2026.03"
+standard_version: "2.9"
+
+codes:
+  product_type:
+    "1": pension_comprehensive   # קרן פנסיה מקיפה
+    "2": pension_general         # קרן פנסיה כללית
+    "3": pension_old             # קרן ותיקה
+    "4": provident_fund          # קופת גמל
+    "5": study_fund              # קרן השתלמות
+    "6": managers_insurance      # ביטוח מנהלים
+    "7": provident_investment    # גמל להשקעה
+  product_status:
+    "1": active
+    "2": paid_up                 # מסולק
+    "3": frozen
+    "4": closed
+  coverage_type:
+    "1": disability              # אובדן כושר עבודה
+    "2": survivors               # שאירים
+    "3": death                   # ריסק למקרה מוות
+    "4": ltc                     # סיעוד
+    "5": surgery                 # ניתוחים
+  relation:
+    "1": spouse
+    "2": child
+    "3": parent
+    "4": other
+
+sections:
+
+  provider:
+    tag: YeshutYatzran
+    fields:
+      - canonical: provider_code
+        label_he: קוד יצרן
+        xpath: ./KOD-MEZAHE-YATZRAN
+        on_missing: reject
+      - canonical: provider_name
+        label_he: שם יצרן
+        xpath: ./SHEM-YATZRAN
+
+  subject:
+    tag: YeshutLakoach
+    fields:
+      - canonical: national_id
+        label_he: תעודת זהות
+        xpath: ./MISPAR-ZIHUY-LAKOACH
+        on_missing: reject
+      - canonical: first_name
+        label_he: שם פרטי
+        xpath: ./SHEM-PRATI
+      - canonical: last_name
+        label_he: שם משפחה
+        xpath: ./SHEM-MISHPACHA
+      - canonical: birth_date
+        label_he: תאריך לידה
+        xpath: ./TAARICH-LEIDA
+        type: date
+
+  product:
+    tag: HeshbonOPolisa
+    fields:
+      - canonical: policy_number
+        label_he: מספר פוליסה/חשבון
+        xpath: ./MISPAR-POLISA-O-HESHBON
+        fallback_xpaths:
+          - ./MISPAR-HESHBON
+        on_missing: reject
+
+      - canonical: product_type
+        label_he: סוג מוצר
+        xpath: ./SUG-MUTZAR
+        code_table: product_type
+        default: unknown
+        on_missing: flag_for_review
+
+      - canonical: product_name
+        label_he: שם התוכנית
+        xpath: ./SHEM-TOCHNIT
+        fallback_xpaths:
+          - ./SHEM-MUTZAR
+
+      - canonical: employer_name
+        label_he: מעסיק
+        xpath: ./SHEM-MAASIK
+
+      - canonical: join_date
+        label_he: תאריך הצטרפות
+        xpath: ./TAARICH-HITZTARFUT-MUTZAR
+        type: date
+        # מזין את R-PEN-001: הצטרפות טרם 2013 ⇒ בדיקת מקדם קצבה מובטח
+        required_for: [rules.R-PEN-001]
+
+      - canonical: status
+        label_he: סטטוס
+        xpath: ./STATUS-POLISA-O-CHESHBON
+        code_table: product_status
+        default: unknown
+
+      - canonical: report_date
+        label_he: תאריך נכונות הנתונים
+        xpath: ./NetuneiMutzar/TAARICH-NECHONUT
+        fallback_xpaths:
+          - ../../TAARICH-NECHONUT
+        type: date
+        on_missing: flag_for_review
+        required_for: [portfolio.snapshot]
+
+      # --- יתרות ---
+      - canonical: total_balance
+        label_he: יתרה צבורה
+        xpath: ./NetuneiMutzar/TOTAL-CHISACHON-MTZBR
+        fallback_xpaths:
+          - ./YitraLeSofShana/TOTAL-CHISACHON-MTZBR
+        type: decimal
+        range: {min: 0, max: 100000000}
+        on_missing: flag_for_review
+        required_for: [recommendation.balance_comparison]
+
+      - canonical: employee_component
+        label_he: תגמולי עובד
+        xpath: ./NetuneiMutzar/TOTAL-CHISACHON-MTZBR-TAGMULIM-OVED
+        type: decimal
+        range: {min: 0, max: 100000000}
+
+      - canonical: employer_component
+        label_he: תגמולי מעסיק
+        xpath: ./NetuneiMutzar/TOTAL-CHISACHON-MTZBR-TAGMULIM-MAAVID
+        type: decimal
+        range: {min: 0, max: 100000000}
+
+      - canonical: severance_component
+        label_he: פיצויים
+        xpath: ./NetuneiMutzar/TOTAL-CHISACHON-MTZBR-PITZUIM
+        type: decimal
+        range: {min: 0, max: 100000000}
+
+      - canonical: ytd_yield_pct
+        label_he: תשואה מתחילת שנה
+        xpath: ./NetuneiMutzar/SHEUR-TSUA-NETO
+        type: percent
+        range: {min: -100, max: 100}
+
+      # --- דמי ניהול ---
+      # allow_zero=false: "0" בדמי ניהול הוא כמעט תמיד "לא דווח" ולא "אפס".
+      # הצגתו כאפס היא התקלה שמטעה סוכנים במערכות הקיימות.
+      - canonical: fee_on_deposit_pct
+        label_he: דמי ניהול מהפקדה
+        xpath: ./NetuneiMutzar/SHEUR-DMEI-NIHUL-ME-HAFKADA
+        fallback_xpaths:
+          - ./DmeiNihul/SHEUR-DMEI-NIHUL-HAFKADA
+        type: percent
+        args: {allow_zero: false, fraction_threshold: 0.06}
+        range: {min: 0, max: 10}
+        on_missing: flag_for_review
+        required_for: [recommendation.fee_comparison]
+
+      - canonical: fee_on_balance_pct
+        label_he: דמי ניהול מצבירה
+        xpath: ./NetuneiMutzar/SHEUR-DMEI-NIHUL-ME-HATZVIRA
+        fallback_xpaths:
+          - ./DmeiNihul/SHEUR-DMEI-NIHUL-TZVIRA
+          - ./YitraLeSofShana/SHEUR-DMEI-NIHUL
+        type: percent
+        args: {allow_zero: false, fraction_threshold: 0.06}
+        range: {min: 0, max: 3}
+        on_missing: flag_for_review
+        required_for: [recommendation.fee_comparison]
+
+      - canonical: fee_agreement_end
+        label_he: מועד סיום הטבת דמי ניהול
+        xpath: ./NetuneiMutzar/TAARICH-SIYUM-HATAVAT-DMEI-NIHUL
+        type: date
+
+      # --- מסלול השקעה ---
+      - canonical: track_code
+        label_he: קוד מסלול
+        xpath: ./PirteiMaslulHashkaa/KOD-MASLUL-HASHKAA
+        fallback_xpaths:
+          - ./KOD-MASLUL-HASHKAA
+      - canonical: track_name
+        label_he: שם מסלול
+        xpath: ./PirteiMaslulHashkaa/SHEM-MASLUL-HASHKAA
+        fallback_xpaths:
+          - ./SHEM-MASLUL-HASHKAA
+
+      # --- דגלים לחוקי הסיכון ---
+      - canonical: has_guaranteed_annuity_factor
+        label_he: קיום מקדם קצבה מובטח
+        xpath: ./NetuneiMutzar/KIYUM-MEKADEM-MUVTACH
+        type: bool
+        required_for: [rules.R-PEN-001]
+      - canonical: guaranteed_factor_value
+        label_he: ערך מקדם הקצבה
+        xpath: ./NetuneiMutzar/MEKADEM-KITZBA-MUVTACH
+        type: decimal
+        range: {min: 0, max: 500}
+
+    children:
+      coverages:
+        iterate: ./PirteiKisuiim/PirteiKisuy
+        fields:
+          - canonical: coverage_type
+            xpath: ./KOD-SUG-KISUY
+            code_table: coverage_type
+            default: other
+          - canonical: coverage_name
+            xpath: ./SHEM-KISUY
+          - canonical: sum_insured
+            xpath: ./SCHUM-KISUY
+            type: decimal
+            range: {min: 0, max: 100000000}
+          - canonical: monthly_benefit
+            xpath: ./SCHUM-KITZBA-CHODSHIT
+            type: decimal
+            range: {min: 0, max: 1000000}
+          - canonical: cost_monthly
+            xpath: ./ALUT-KISUY-CHODSHI
+            type: decimal
+            range: {min: 0, max: 100000}
+          - canonical: waiting_period_m
+            xpath: ./TKUFAT-ACHSHARA-CHODASHIM
+            type: int
+            range: {min: 0, max: 120}
+
+      beneficiaries:
+        iterate: ./Mutavim/Mutav
+        fields:
+          - canonical: full_name
+            xpath: ./SHEM-MUTAV
+          - canonical: relation
+            xpath: ./KIRVA-MISHPACHTIT
+            code_table: relation
+            default: other
+          - canonical: share_pct
+            xpath: ./ACHUZ-ZAKAUT
+            type: decimal
+            range: {min: 0, max: 100}
+          - canonical: updated_on
+            xpath: ./TAARICH-IDKUN
+            type: date
+
+# --- דריסות ברמת יצרן -------------------------------------------------
+# דוגמה אמיתית לסוג הסטייה שהרישום נועד לספוג: יצרן שמדווח את דמי הניהול
+# מצבירה תחת נתיב אחר, וכשבר עשרוני (0.0035) במקום באחוזים (0.35).
+providers:
+  "999999999":
+    product:
+      fields:
+        - canonical: fee_on_balance_pct
+          label_he: דמי ניהול מצבירה
+          xpath: ./DmeiNihulMeyuchadim/SHEUR-TZVIRA
+          type: percent
+          args: {allow_zero: false, fraction_threshold: 0.06}
+          range: {min: 0, max: 3}
+          on_missing: flag_for_review
+          required_for: [recommendation.fee_comparison]

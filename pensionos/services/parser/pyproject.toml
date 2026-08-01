@@ -1,0 +1,37 @@
+[project]
+name = "pensionos-parser"
+version = "1.0.0"
+description = "PensionOS clearing-house XML ingestion & normalization engine"
+requires-python = ">=3.11"
+dependencies = [
+    "lxml>=5.0",
+    "charset-normalizer>=3.3",
+    "pydantic>=2.6",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov>=5.0", "ruff>=0.6"]
+
+[project.scripts]
+pensionos-parse = "pensionos_parser.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["pensionos_parser"]
+include-package-data = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 96
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S"]
+ignore = ["S101"]

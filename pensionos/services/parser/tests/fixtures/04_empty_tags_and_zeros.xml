@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Mimshak>
+  <GIRSAT-MIVNE-ACHID>2.9</GIRSAT-MIVNE-ACHID>
+  <YeshutYatzran>
+    <KOD-MEZAHE-YATZRAN>520023185</KOD-MEZAHE-YATZRAN>
+    <SHEM-YATZRAN>מנורה מבטחים</SHEM-YATZRAN>
+  </YeshutYatzran>
+  <Mutzarim>
+    <Mutzar>
+      <YeshutLakoach>
+        <MISPAR-ZIHUY-LAKOACH>039472519</MISPAR-ZIHUY-LAKOACH>
+        <SHEM-PRATI>דנה</SHEM-PRATI>
+        <SHEM-MISHPACHA>כהן</SHEM-MISHPACHA>
+        <TAARICH-LEIDA>19840317</TAARICH-LEIDA>
+      </YeshutLakoach>
+      <HeshbonotOPolisot>
+        <HeshbonOPolisa>
+          <MISPAR-POLISA-O-HESHBON>5512340</MISPAR-POLISA-O-HESHBON>
+          <SUG-MUTZAR>1</SUG-MUTZAR>
+          <SHEM-TOCHNIT>מסלול כללי</SHEM-TOCHNIT>
+          <SHEM-MAASIK>אלפא טכנולוגיות בע"מ</SHEM-MAASIK>
+          <TAARICH-HITZTARFUT-MUTZAR>20090601</TAARICH-HITZTARFUT-MUTZAR>
+          <STATUS-POLISA-O-CHESHBON>1</STATUS-POLISA-O-CHESHBON>
+          <PirteiMaslulHashkaa>
+            <KOD-MASLUL-HASHKAA>2001</KOD-MASLUL-HASHKAA>
+            <SHEM-MASLUL-HASHKAA>מסלול תלוי גיל</SHEM-MASLUL-HASHKAA>
+          </PirteiMaslulHashkaa>
+          <NetuneiMutzar>
+            <TAARICH-NECHONUT>00000000</TAARICH-NECHONUT>
+            <TOTAL-CHISACHON-MTZBR></TOTAL-CHISACHON-MTZBR>
+            <TOTAL-CHISACHON-MTZBR-TAGMULIM-OVED>310400</TOTAL-CHISACHON-MTZBR-TAGMULIM-OVED>
+            <TOTAL-CHISACHON-MTZBR-TAGMULIM-MAAVID>402300.55</TOTAL-CHISACHON-MTZBR-TAGMULIM-MAAVID>
+            <TOTAL-CHISACHON-MTZBR-PITZUIM>129400</TOTAL-CHISACHON-MTZBR-PITZUIM>
+            <SHEUR-TSUA-NETO>6.31</SHEUR-TSUA-NETO>
+            <SHEUR-DMEI-NIHUL-ME-HAFKADA>0</SHEUR-DMEI-NIHUL-ME-HAFKADA>
+            <SHEUR-DMEI-NIHUL-ME-HATZVIRA></SHEUR-DMEI-NIHUL-ME-HATZVIRA>
+          </NetuneiMutzar>
+          <Mutavim>
+            <Mutav>
+              <SHEM-MUTAV>יוסי כהן</SHEM-MUTAV>
+              <KIRVA-MISHPACHTIT>1</KIRVA-MISHPACHTIT>
+              <ACHUZ-ZAKAUT>100</ACHUZ-ZAKAUT>
+              <TAARICH-IDKUN>20180204</TAARICH-IDKUN>
+            </Mutav>
+          </Mutavim>
+        </HeshbonOPolisa>      </HeshbonotOPolisot>
+    </Mutzar>
+  </Mutzarim>
+</Mimshak>

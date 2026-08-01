@@ -1,0 +1,83 @@
+name: PensionOS CI
+
+on:
+  push:
+    paths: ['pensionos/**', '.github/workflows/pensionos.yml']
+  pull_request:
+    paths: ['pensionos/**', '.github/workflows/pensionos.yml']
+
+defaults:
+  run:
+    working-directory: pensionos
+
+jobs:
+  parser:
+    name: מנוע פענוח
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: התקנת תלויות
+        working-directory: pensionos/services/parser
+        run: pip install -e ".[dev]"
+
+      - name: יצירת קורפוס הבדיקות
+        working-directory: pensionos/services/parser
+        run: python tools/make_fixtures.py
+
+      - name: Lint
+        working-directory: pensionos/services/parser
+        run: ruff check .
+
+      # בדיקות האבטחה חוסמות merge: XXE, billion laughs, ZIP-bomb,
+      # ואי-התאמת ת"ז. כשל כאן הוא רגרסיה באבטחה, לא באג פונקציונלי.
+      - name: בדיקות אבטחה
+        working-directory: pensionos/services/parser
+        run: pytest tests/test_security.py -v
+
+      - name: חבילת בדיקות מלאה
+        working-directory: pensionos/services/parser
+        run: pytest --cov=pensionos_parser --cov-report=term-missing --cov-fail-under=85
+
+  database:
+    name: סכמה ובידוד Tenant
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pensionos
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+        ports: ['5432:5432']
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: pensionos
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: הרצת מיגרציות
+        working-directory: pensionos/db
+        run: |
+          for f in migrations/*.sql; do
+            echo "── $f"
+            psql -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      # הבדיקה החוסמת: טבלה חדשה עם tenant_id ללא RLS מפילה את ה-CI כאן,
+      # ולא בייצור.
+      - name: בדיקת בידוד Tenant
+        working-directory: pensionos/db
+        run: psql -v ON_ERROR_STOP=1 -f tests/rls_test.sql
+
+      - name: אימות אידמפוטנטיות של המיגרציות
+        working-directory: pensionos/db
+        run: psql -v ON_ERROR_STOP=1 -q -f migrations/0003_seed_reference.sql

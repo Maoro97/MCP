@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Mimshak>
+  <GIRSAT-MIVNE-ACHID>2.9</GIRSAT-MIVNE-ACHID>
+  <YeshutYatzran>
+    <KOD-MEZAHE-YATZRAN>520023185</KOD-MEZAHE-YATZRAN>
+    <SHEM-YATZRAN>מנורה מבטחים</SHEM-YATZRAN>
+  </YeshutYatzran>
+  <Mutzarim>
+    <Mutzar>
+      <YeshutLakoach>
+        <MISPAR-ZIHUY-LAKOACH>039472519</MISPAR-ZIHUY-LAKOACH>
+        <SHEM-PRATI>דנה</SHEM-PRATI>
+        <SHEM-MISHPACHA>כהן</SHEM-MISHPACHA>
+        <TAARICH-LEIDA>19840317</TAARICH-LEIDA>
+      </YeshutLakoach>
+      <HeshbonotOPolisot>
+        <HeshbonOPolisa>
+          <MISPAR-POLISA-O-HESHBON>5512340</MISPAR-POLISA-O-HESHBON>
+          <SUG-MUTZAR>1</SUG-MUTZAR>
+          <SHEM-TOCHNIT>מסלול כללי</SHEM-TOCHNIT>
+          <SHEM-MAASIK>אלפא טכנולוגיות בע"מ</SHEM-MAASIK>
+          <TAARICH-HITZTARFUT-MUTZAR>01.06.2009</TAARICH-HITZTARFUT-MUTZAR>
+          <STATUS-POLISA-O-CHESHBON>1</STATUS-POLISA-O-CHESHBON>
+          <PirteiMaslulHashkaa>
+            <KOD-MASLUL-HASHKAA>2001</KOD-MASLUL-HASHKAA>
+            <SHEM-MASLUL-HASHKAA>מסלול תלוי גיל</SHEM-MASLUL-HASHKAA>
+          </PirteiMaslulHashkaa>
+          <NetuneiMutzar>
+            <TAARICH-NECHONUT>12/03/2026</TAARICH-NECHONUT>
+            <TOTAL-CHISACHON-MTZBR>1,284,300.75</TOTAL-CHISACHON-MTZBR>
+            <TOTAL-CHISACHON-MTZBR-TAGMULIM-OVED>310400</TOTAL-CHISACHON-MTZBR-TAGMULIM-OVED>
+            <TOTAL-CHISACHON-MTZBR-TAGMULIM-MAAVID>402300.55</TOTAL-CHISACHON-MTZBR-TAGMULIM-MAAVID>
+            <TOTAL-CHISACHON-MTZBR-PITZUIM>129400</TOTAL-CHISACHON-MTZBR-PITZUIM>
+            <SHEUR-TSUA-NETO>3.20-</SHEUR-TSUA-NETO>
+            <SHEUR-DMEI-NIHUL-ME-HAFKADA>1,49</SHEUR-DMEI-NIHUL-ME-HAFKADA>
+            <SHEUR-DMEI-NIHUL-ME-HATZVIRA>0.0035</SHEUR-DMEI-NIHUL-ME-HATZVIRA>
+          </NetuneiMutzar>
+          <PirteiKisuiim>
+            <PirteiKisuy>
+              <KOD-SUG-KISUY>1</KOD-SUG-KISUY>
+              <SHEM-KISUY>אובדן כושר עבודה</SHEM-KISUY>
+              <SCHUM-KITZBA-CHODSHIT>9400</SCHUM-KITZBA-CHODSHIT>
+              <ALUT-KISUY-CHODSHI>112.5</ALUT-KISUY-CHODSHI>
+              <TKUFAT-ACHSHARA-CHODASHIM>3</TKUFAT-ACHSHARA-CHODASHIM>
+            </PirteiKisuy>
+            <PirteiKisuy>
+              <KOD-SUG-KISUY>2</KOD-SUG-KISUY>
+              <SHEM-KISUY>שאירים</SHEM-KISUY>
+              <SCHUM-KITZBA-CHODSHIT>6200</SCHUM-KITZBA-CHODSHIT>
+              <ALUT-KISUY-CHODSHI>78</ALUT-KISUY-CHODSHI>
+            </PirteiKisuy>
+          </PirteiKisuiim>
+          <Mutavim>
+            <Mutav>
+              <SHEM-MUTAV>יוסי כהן</SHEM-MUTAV>
+              <KIRVA-MISHPACHTIT>1</KIRVA-MISHPACHTIT>
+              <ACHUZ-ZAKAUT>100</ACHUZ-ZAKAUT>
+              <TAARICH-IDKUN>20180204</TAARICH-IDKUN>
+            </Mutav>
+          </Mutavim>
+        </HeshbonOPolisa>      </HeshbonotOPolisot>
+    </Mutzar>
+  </Mutzarim>
+</Mimshak>

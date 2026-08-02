@@ -81,3 +81,83 @@ jobs:
       - name: אימות אידמפוטנטיות של המיגרציות
         working-directory: pensionos/db
         run: psql -v ON_ERROR_STOP=1 -q -f migrations/0003_seed_reference.sql
+
+  api-and-web:
+    name: API, Frontend ובידוד דרך HTTP
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pensionos
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+        ports: ['5432:5432']
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: pensionos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      - name: סכמה + סוכנויות לבדיקה
+        working-directory: pensionos/db
+        run: |
+          for f in migrations/*.sql; do psql -v ON_ERROR_STOP=1 -q -f "$f"; done
+          psql -v ON_ERROR_STOP=1 -q -f dev/local-setup.sql
+          psql -v ON_ERROR_STOP=1 -q -c "
+            INSERT INTO identity.tenants (id, legal_name, license_number, tax_id, kms_key_arn)
+            VALUES ('22222222-2222-2222-2222-222222222222','סוכנות ב','LIC-B','515000002','arn:ci')
+            ON CONFLICT DO NOTHING;
+            INSERT INTO identity.users (id, tenant_id, cognito_sub, full_name, email, role)
+            VALUES ('bbbbbbbb-0000-0000-0000-000000000001',
+                    '22222222-2222-2222-2222-222222222222','ci-b','רון','ron@b.co.il','agency_admin')
+            ON CONFLICT DO NOTHING;"
+
+      - name: הרמת מנוע הפענוח
+        working-directory: pensionos/services/parser
+        run: |
+          pip install -e ".[dev,server]"
+          python tools/make_fixtures.py
+          nohup uvicorn pensionos_parser.server:app --port 8081 &
+          for i in $(seq 30); do
+            curl -sf localhost:8081/internal/health && break || sleep 1
+          done
+
+      - name: בניית API והרמתו
+        working-directory: pensionos/apps/api
+        env:
+          DATABASE_URL: postgres://pensionos_api:devpass@localhost:5432/pensionos
+          PARSER_URL: http://127.0.0.1:8081
+          AUTH_MODE: dev
+          JWT_SECRET: ci-secret
+          MASTER_KEY_HEX: '1111111111111111111111111111111111111111111111111111111111111111'
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx tsc -p tsconfig.json
+          nohup node dist/main.js &
+          for i in $(seq 30); do
+            curl -sf localhost:8080/v1/ingestion/health && break || sleep 1
+          done
+
+      # מכסה את מה שבדיקות יחידה לא תופסות: בידוד Tenant דרך HTTP,
+      # ואת כלל ה-Reconcile בין קבצים.
+      - name: בדיקות אינטגרציה
+        working-directory: pensionos/apps/api
+        run: npx tsx --test test/api.test.ts
+
+      - name: בניית ה-Frontend
+        working-directory: pensionos/apps/web
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx next build
+

@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* גופן עברי מוטמע. בייצור נטען כקובץ מקומי (self-hosted) ולא מ-CDN:
+   CSP חוסמת מקורות חיצוניים, וגם אין לשלוח בקשות לצד ג' מדף שמציג PII. */
+@layer base {
+  html {
+    font-family: Assistant, Rubik, 'Segoe UI', system-ui, sans-serif;
+  }
+  body {
+    @apply bg-surface-sunken text-ink antialiased;
+  }
+  /* מספרים תמיד LTR גם בתוך טקסט עברי, אחרת "1,284,300" מוצג הפוך */
+  .num {
+    direction: ltr;
+    unicode-bidi: isolate;
+    display: inline-block;
+    font-variant-numeric: tabular-nums;
+  }
+}

@@ -251,6 +251,23 @@ def build() -> dict[str, bytes]:
         "<GIRSAT-MIVNE-ACHID>9.9</GIRSAT-MIVNE-ACHID>",
     ).encode("utf-8")
 
+    # 16. לקוח אחר, דיווח דל — מדגים את מצב "לא התקבל" בממשק
+    out["16_other_client_sparse.xml"] = _doc(
+        _account(
+            policy="4410077",
+            sug="4",
+            balance="",
+            fee_deposit="",
+            fee_balance="",
+            report="20260201",
+            with_coverage=False,
+            with_beneficiary=False,
+        ),
+        national_id=OTHER_ID,
+        provider_name="הראל",
+        provider_code="520033613",
+    ).encode("utf-8")
+
     # 15. קובץ גדול — 400 חשבונות, לבדיקת streaming
     out["15_large.xml"] = _doc(
         "".join(_account(policy=f"90{i:05d}") for i in range(400))

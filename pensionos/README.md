@@ -7,23 +7,41 @@
 
 ## מה קיים בקוד כרגע
 
-**Increment 1 — מנוע קליטה ופענוח + שכבת הנתונים** (Epic E4 + חלק מ-E0).
+**Increment 1** — מנוע קליטה ופענוח + שכבת הנתונים (E4 + חלק מ-E0).
+**Increment 2** — API ותיק לקוח 360° (E5 + חלק מ-E0/E2).
 
 | רכיב | מיקום | סטטוס |
 |---|---|---|
-| מנוע פענוח XML של המסלקה | `services/parser/` | ✅ 106 בדיקות עוברות, 88% כיסוי |
-| קורפוס קבצים תקינים ופגומים | `services/parser/tests/fixtures/` | ✅ 15 קבצים, נוצרים מהמחולל |
+| מנוע פענוח XML של המסלקה | `services/parser/` | ✅ 106 בדיקות, 88% כיסוי |
+| שירות HTTP של המנוע | `services/parser/…/server.py` | ✅ `POST /internal/parse` |
+| קורפוס קבצים תקינים ופגומים | `services/parser/tests/fixtures/` | ✅ 16 קבצים מהמחולל |
 | Mapping Registry מונחה-דאטה | `services/parser/mappings/` | ✅ YAML; בייצור — טבלת DB |
 | סכמת PostgreSQL + RLS | `db/migrations/` | ✅ מאומתת מול PostgreSQL 16 |
-| בדיקת בידוד Tenant | `db/tests/rls_test.sql` | ✅ 8 בדיקות עוברות |
-| CI | `../.github/workflows/pensionos.yml` | ✅ |
+| בדיקת בידוד Tenant | `db/tests/rls_test.sql` | ✅ 8 בדיקות |
+| **API (NestJS)** | `apps/api/` | ✅ לקוחות, קליטה, תיק 360° |
+| **בדיקות אינטגרציה** | `apps/api/test/` | ✅ 10 בדיקות |
+| **Frontend (Next.js, RTL)** | `apps/web/` | ✅ רשימת לקוחות + תיק 360° |
+| CI | `../.github/workflows/pensionos.yml` | ✅ 3 jobs |
 
-**עדיין לא נבנה:** API (NestJS), Frontend, אינטגרציה למסלקה, מנוע החוקים,
-מחולל ההנמקה, e-Sign. ראה "הצעד הבא".
+**עדיין לא נבנה:** אינטגרציה למסלקה (E3), מנוע החוקים (E6), מחולל ההנמקה (E7),
+e-Sign (E8), Cognito. ראה "הצעד הבא".
 
 ---
 
 ## הרצה מקומית
+
+### הכל בפקודה אחת
+
+```bash
+./scripts/dev-up.sh      # DB → פענוח → API → Frontend
+./scripts/demo.sh        # הזרימה המלאה מקצה לקצה בטרמינל
+```
+
+| שירות | כתובת |
+|---|---|
+| Frontend | http://localhost:3000 |
+| API | http://localhost:8080 |
+| מנוע הפענוח | http://localhost:8081/internal/docs |
 
 ### מנוע הפענוח
 
@@ -65,7 +83,22 @@ python -m pensionos_parser tests/fixtures/01_clean_menora.xml
 createdb pensionos
 cd db
 for f in migrations/*.sql; do psql -d pensionos -v ON_ERROR_STOP=1 -f "$f"; done
+psql -d pensionos -v ON_ERROR_STOP=1 -f dev/local-setup.sql
 psql -d pensionos -v ON_ERROR_STOP=1 -f tests/rls_test.sql
+```
+
+### API ובדיקות אינטגרציה
+
+```bash
+cd apps/api && npm ci && cp .env.example .env
+npm run dev                       # :8080
+npx tsx --test test/api.test.ts   # דורש DB + parser + API רצים
+```
+
+### Frontend
+
+```bash
+cd apps/web && npm ci && npm run dev   # :3000
 ```
 
 ---
@@ -94,17 +127,38 @@ psql -d pensionos -v ON_ERROR_STOP=1 -f tests/rls_test.sql
 
 **6. RLS היא רשת הביטחון, לא ההגנה היחידה.**
 בדיקות `db/tests/rls_test.sql` רצות בתפקיד ללא `BYPASSRLS` — בדיקה שרצה
-כ-superuser תעבור גם כשההגנה שבורה לגמרי.
+כ-superuser תעבור גם כשההגנה שבורה לגמרי. ה-API מסרב לעלות אם הוא מחובר
+כ-superuser: שרת מוגדר לא נכון עדיף שלא יעלה מאשר שיעבוד בלי בידוד.
+
+**7. `withTenant` היא הדרך היחידה לגעת בנתוני לקוח.**
+היא פותחת טרנזקציה, מזריקה את הקשר ה-RLS מתוך ה-JWT, ורק אז מריצה את
+הקוד. אין ב-API אף שאילתה על נתוני לקוח מחוץ לה.
+
+**8. דיווח חדש לא דורס דיווח טוב יותר.**
+כלל ה-Reconcile חל גם **בין קבצים**: תאריך נכונות עדכני מנצח, ובתיקו —
+הרשומה השלמה יותר. הדילוג מדווח למשתמש (`staleSkipped`) ולא נעשה בשקט.
+
+**9. מרווחים לוגיים ב-RTL — היזהרו מ-`direction` מקומי.**
+`ms-*`/`me-*` נפתרים לפי כיוון **האלמנט עצמו**. אלמנט עם `direction: ltr`
+(כמו `.num`) יקבל את המרווח בצד ההפוך. המרווח תמיד על העוטף, לא על הרצף
+המבודד. מספרים ומזהים בתוך טקסט עברי נעטפים ב-`<bdi>`.
 
 ---
 
 ## מה נבדק, ומה עוד לא
 
-**נבדק ועובד:** 106 בדיקות יחידה ואינטגרציה על מנוע הפענוח (כולל XXE,
-Billion Laughs, ZIP-bomb, קידודים, ואי-התאמת ת"ז), ו-8 בדיקות בידוד Tenant
-מול PostgreSQL 16 אמיתי.
+**נבדק ועובד:**
+- 106 בדיקות על מנוע הפענוח (XXE, Billion Laughs, ZIP-bomb, קידודים, אי-התאמת ת"ז)
+- 8 בדיקות בידוד Tenant מול PostgreSQL 16, בתפקיד ללא `BYPASSRLS`
+- 10 בדיקות אינטגרציה דרך ה-HTTP: אימות, בידוד בין סוכנויות (404 ולא 403),
+  אי-דריסת דיווח טוב, הסגר על קובץ של לקוח אחר, ואי-הצגת חוסר כאפס
+- `tsc --noEmit` נקי ב-API וב-Frontend; בניית Next.js עוברת
 
-**לא נבדק כי טרם נבנה:** כל מה שמעבר לפענוח ולסכמה.
+**לא נבדק כי טרם נבנה:** אינטגרציה למסלקה, מנוע החוקים, מחולל ההנמקה, e-Sign.
+
+**⚠️ אימות מול Cognito טרם מומש.** `AUTH_MODE=dev` מנפיק טוקן HS256 מקומי;
+המערכת מסרבת לעלות עם `AUTH_MODE=oidc` (זריקה מפורשת ב-`auth.guard.ts`)
+ועם `AUTH_MODE=dev` כש-`NODE_ENV=production`.
 
 **⚠️ מגבלה מהותית שיש להכיר:** שמות תגי ה-XML ב-`mappings/standard-2.9.yaml`
 הם **ייצוגיים**, ונגזרו מהמבנה המקובל ולא מה-XSD הרשמי. הקורפוס נבנה לפי
@@ -124,8 +178,11 @@ Billion Laughs, ZIP-bomb, קידודים, ואי-התאמת ת"ז), ו-8 בדי�
 לפי סדר התלות:
 
 1. **Clearing Client + Saga (E3)** — מול Mock Server, עם `Idempotency-Key`
-   ו-Step Functions. הרכיב שמחבר את המנוע לעולם האמיתי.
-2. **Core API (NestJS)** — מודול `clearing` + `portfolio`, כתיבה לשכבה
-   הקנונית, ו-Interceptor שמזריק את הקשר ה-RLS.
-3. **תיק 360° (E5)** — המסך הראשון שסוכן יראה.
-4. **Rules Engine (E6)** — `rule_catalog` כבר בסכמה; חסרים תנאי ה-JSONLogic.
+   ו-Step Functions. מחליף את ההעלאה הידנית ומייתר את `source='manual_upload'`
+   כמסלול העיקרי.
+2. **Rules Engine (E6)** — `rule_catalog` כבר בסכמה עם 9 חוקים; חסרים תנאי
+   ה-JSONLogic ומנגנון ה-Snapshot הנעול. ה-`advisories` שבתיק 360° הם
+   תצוגה בלבד ואינם תחליף.
+3. **Cognito** — החלפת `dev-login`. נקודת ההחלפה מוגדרת ב-`auth.guard.ts`
+   וב-`lib/api.ts#getToken`; שאר הקוד לא משתנה.
+4. **מחולל ההנמקה (E7)** — Compliance Linter + PDF/A.

@@ -47,7 +47,9 @@ require_source: [FNCNUM]
 exclude_if_all_zero: [SUM1, SUM2, SUM5]
 
 columns:
-  - {source: ["מס. תנועת היומן", "מס תנועת היומן", "מספר תנועת יומן", "תנועה"], target: FNCNUM, transform: [strip]}
+  # מס' תנועת היומן = מספר הכותרת (מאגד את שורות התנועה). "תנועה" בכרטסת הוא מספר
+  # השורה/התזוזה — ולכן הקיבוץ לאיזון הוא לפי "כותרת", לא לפי "תנועה".
+  - {source: ["מס. תנועת היומן", "מס תנועת היומן", "מספר תנועת יומן", "כותרת"], target: FNCNUM, transform: [strip]}
   - {target: LINE, generate: rownum}                                   # מספור שורות רץ אוטומטי
   # סוג תנועה — נגזר אוטומטית מהסכום (הש/מ), אך אם קיים במקור נטען ממנו
   - {source: ["סוג תנועה"], target: FNCPATNAME, transform: [strip]}

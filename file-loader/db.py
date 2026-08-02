@@ -191,11 +191,15 @@ def list_loads(limit=200, screen=None):
                 cur.execute(
                     f"SELECT id,load_id,name,label,kind FROM load_files "
                     f"WHERE load_id IN ({marks})", ids)
-                files = {}
+                files, snap = {}, set()
                 for r in cur.fetchall():
-                    files.setdefault(r["load_id"], []).append(dict(r))
+                    if r["kind"] == "snapshot":     # תמונת-מצב לפתיחה מחדש — לא קובץ להורדה
+                        snap.add(r["load_id"])
+                    else:
+                        files.setdefault(r["load_id"], []).append(dict(r))
                 for l in loads:
                     l["files"] = files.get(l["id"], [])
+                    l["has_snapshot"] = l["id"] in snap
             return loads
     except Exception:  # noqa: BLE001
         return []
@@ -226,6 +230,19 @@ def status():
     except Exception as e:  # noqa: BLE001
         info["error"] = str(e)[:200]
     return info
+
+
+def get_snapshot(load_id):
+    """מחזיר את תמונת-המצב (JSON bytes) של טעינה לפתיחה מחדש, או None."""
+    try:
+        with _conn() as conn:
+            cur = _cursor(conn)
+            cur.execute(f"SELECT content FROM load_files WHERE load_id={PH} "
+                        f"AND kind='snapshot' ORDER BY id DESC LIMIT 1", (int(load_id),))
+            r = cur.fetchone()
+            return bytes(r["content"]) if r else None
+    except (Exception,):  # noqa: BLE001
+        return None
 
 
 def distinct_screens():

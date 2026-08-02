@@ -159,6 +159,26 @@ def _write_records(run_dir, fname, records, mp):
         f.write(core.load_content_bytes(content, mp))
 
 
+def _store_snapshot(load_id, mapping, screen, data, run):
+    """שומר תמונת-מצב של הטבלה (כל השורות + ערכים) לפתיחה מחדש מההיסטוריה."""
+    if not load_id:
+        return
+    import json
+    targets = [c["target"] for c in core.all_columns(mapping)]
+    rows = [dict(r) for r in (data.get("rows") or [])]
+    excel = list(data.get("excel_rows") or [])
+    for rec in run.get("valid", []):                 # שורות תקינות שהוסתרו (קובץ גדול)
+        rows.append(dict(zip(targets, rec.get("values", []))))
+        excel.append(rec.get("excel_row"))
+    for excel_row, values, _reason in run.get("overflow", []):   # שורות שגויות שהוסתרו
+        rows.append(dict(values))
+        excel.append(excel_row)
+    blob = json.dumps({"screen": screen, "rows": rows, "excel_rows": excel,
+                       "source_name": run.get("source_name", "")},
+                      ensure_ascii=False).encode("utf-8")
+    db.add_file(load_id, "__snapshot__.json", "טבלה", "snapshot", blob)
+
+
 def _store_run_files(load_id, run_dir, files, screen, has_rejected):
     """שומר את קובצי הפלט שנוצרו (טעינה/פסולות/דוח) במסד הנתונים, לאחזור עתידי."""
     if not load_id:
@@ -1306,6 +1326,7 @@ def _produce_load(save):
             "user": (session.get("user") if _auth_on() else "") or "",
         })
         _store_run_files(load_id, run_dir, files, screen, bool(rejected_items))
+        _store_snapshot(load_id, mapping, screen, data, run)
 
     return jsonify(
         run_id=run_id, load_name=load_name, files=files,
@@ -1374,6 +1395,7 @@ HISTORY = """
  th{background:var(--surface-2);font-weight:700}
  .ok{color:var(--ok-fg);font-weight:700}.bad{color:var(--bad-fg);font-weight:700}
  .dl{color:var(--brand);text-decoration:none;font-weight:600;margin-left:10px}
+ .dl.open{color:#fff;background:var(--brand);padding:5px 11px;border-radius:8px}
  .empty{padding:40px;text-align:center;color:var(--muted)}
  .tag{font-size:12px;color:var(--muted)}
 </style></head><body><div class="wrap">
@@ -1413,8 +1435,9 @@ HISTORY = """
   <td>{{ r.total }}</td><td class="ok">{{ r.valid }}</td>
   <td class="{{ 'bad' if r.invalid else '' }}">{{ r.invalid }}</td><td>{{ r.warnings }}</td>
   <td class="tag">{{ r.user or '' }}{% if r.via=='cli' %} · CLI{% endif %}</td>
-  <td>{% for f in r.files %}<a class="dl" href="/history/file/{{ f.id }}">{{ f.label }}</a>{% endfor %}
-      {% if not r.files %}<span class="tag">—</span>{% endif %}</td>
+  <td>{% if r.has_snapshot %}<a class="dl open" href="/history/open/{{ r.id }}">↗ פתח טבלה</a>{% endif %}
+      {% for f in r.files %}<a class="dl" href="/history/file/{{ f.id }}">{{ f.label }}</a>{% endfor %}
+      {% if not r.files and not r.has_snapshot %}<span class="tag">—</span>{% endif %}</td>
  </tr>
  {% endfor %}
  </tbody></table>
@@ -1430,6 +1453,30 @@ def history():
     return render_template_string(
         HISTORY, rows=core.read_history(300, screen=screen),
         screens=db.distinct_screens(), sel_screen=screen or "", dbinfo=db.status())
+
+
+@app.route("/history/open/<int:load_id>")
+def history_open(load_id):
+    """פותח מחדש את טבלת הטעינה שנשמרה — משחזר את השורות והעריכות."""
+    raw = db.get_snapshot(load_id)
+    if not raw:
+        return _upload_error("לא נמצאה תמונת-טבלה לטעינה זו (נשמרה לפני הוספת התכונה?).")
+    import json
+    try:
+        snap = json.loads(raw.decode("utf-8"))
+        screen = snap["screen"]
+        mapping = core.load_mapping(screen)
+        df = pd.DataFrame(snap.get("rows") or [])
+        # העמודות כבר בשמות ה-target; ממפים כל target לעמודה בעלת אותו שם
+        overrides = {c["target"]: c["target"]
+                     for c in core.all_columns(mapping) if c["target"] in df.columns}
+        payload = _build_grid(screen, mapping, df, overrides=overrides,
+                              source_name=snap.get("source_name") or "")
+    except core.UserError as e:
+        return _upload_error(str(e))
+    except Exception as e:  # noqa: BLE001
+        return _upload_error(f"שגיאה בפתיחת הטבלה מההיסטוריה:\n{e}")
+    return render_template_string(GRID, screen=screen, grid=payload, brand=brand_html())
 
 
 @app.route("/history/file/<int:file_id>")

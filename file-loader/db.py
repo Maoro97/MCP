@@ -1,22 +1,37 @@
 # -*- coding: utf-8 -*-
 """
-db.py — מסד נתונים (SQLite) להיסטוריית הטעינות.
+db.py — מסד נתונים להיסטוריית הטעינות, עם שני מנועים:
+
+  • Postgres  — כאשר מוגדר משתנה סביבה DATABASE_URL / POSTGRES_URL
+                (למשל Vercel Postgres / Neon). שמירה קבועה גם ב-serverless.
+  • SQLite    — ברירת מחדל (מקומי / Render עם דיסק קבוע). קובץ output/loads.db,
+                ניתן לדריסה ב-FILE_LOADER_DB.
 
 שומר כל טעינה (מסך, קובץ מקור, כמויות, זמן, משתמש) ואת קובצי הפלט שנוצרו
-(קובץ טעינה / פסולות / דוח) כ-BLOB, כדי שאפשר יהיה *לאחזר ולהוריד מחדש* טעינות
-קודמות גם אחרי שהריצה פגה מהזיכרון או שהשרת הופעל מחדש.
-
-מיקום הקובץ ניתן לדריסה ב-FILE_LOADER_DB. ברירת מחדל: ליד תיקיית הפלט
-(output/loads.db) — נשמר לצמיתות בהרצה מקומית ו-Render עם דיסק קבוע. בסביבת
-serverless (Vercel) המיקום ב-/tmp הוא זמני; לצורך שמירה קבועה שם הגדר
-FILE_LOADER_DB לנתיב על אחסון קבוע.
+(טעינה / פסולות / דוח) כ-BLOB, כדי שאפשר יהיה *לאחזר ולהוריד מחדש* טעינות קודמות.
 """
 import os
-import sqlite3
+import contextlib
 import datetime as _dt
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _MAX_BLOB = 25 * 1024 * 1024   # תקרת גודל לקובץ שנשמר במסד (25MB)
+
+
+def _pg_url():
+    """מחזיר את מחרוזת החיבור ל-Postgres אם הוגדרה (מעדיף חיבור ישיר, לא-pooled)."""
+    for k in ("DATABASE_URL", "POSTGRES_URL_NON_POOLING", "POSTGRES_URL"):
+        v = os.environ.get(k)
+        if v:
+            return v.strip()
+    return None
+
+
+_PG_URL = _pg_url()
+IS_PG = bool(_PG_URL)
+PH = "%s" if IS_PG else "?"           # תו ה-placeholder לפי המנוע
+_BLOB_COL = "BYTEA" if IS_PG else "BLOB"
+_ID_COL = "BIGSERIAL PRIMARY KEY" if IS_PG else "INTEGER PRIMARY KEY AUTOINCREMENT"
 
 
 def _base_dir():
@@ -27,37 +42,74 @@ def _base_dir():
 DB_PATH = os.environ.get("FILE_LOADER_DB") or os.path.join(_base_dir(), "loads.db")
 
 
-def _connect():
+def _raw_connect():
+    if IS_PG:
+        import psycopg2
+        return psycopg2.connect(_PG_URL)
+    import sqlite3
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
     try:
         conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
     except sqlite3.Error:
         pass
     return conn
 
 
+@contextlib.contextmanager
+def _conn():
+    """חיבור עם commit/rollback וסגירה, לשני המנועים."""
+    conn = _raw_connect()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        raise
+    finally:
+        try:
+            conn.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _cursor(conn):
+    if IS_PG:
+        import psycopg2.extras
+        return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    return conn.cursor()
+
+
+def _binary(content):
+    if IS_PG:
+        import psycopg2
+        return psycopg2.Binary(content)
+    import sqlite3
+    return sqlite3.Binary(content)
+
+
 def init_db():
-    """יוצר את הטבלאות (אם אינן קיימות) ומייבא היסטוריה ישנה מ-history.jsonl פעם אחת."""
-    with _connect() as c:
-        c.executescript("""
-        CREATE TABLE IF NOT EXISTS loads(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ts TEXT, screen TEXT, source TEXT,
-          total INTEGER, valid INTEGER, invalid INTEGER, warnings INTEGER,
-          via TEXT, run_id TEXT, has_rejected INTEGER, user TEXT
-        );
-        CREATE TABLE IF NOT EXISTS load_files(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          load_id INTEGER, name TEXT, label TEXT, kind TEXT, content BLOB,
-          FOREIGN KEY(load_id) REFERENCES loads(id) ON DELETE CASCADE
-        );
-        CREATE INDEX IF NOT EXISTS idx_loads_id ON loads(id DESC);
-        CREATE INDEX IF NOT EXISTS idx_files_load ON load_files(load_id);
-        """)
-        empty = c.execute("SELECT COUNT(*) AS n FROM loads").fetchone()["n"] == 0
+    """יוצר את הטבלאות (idempotent) ומייבא היסטוריה ישנה מ-history.jsonl פעם אחת."""
+    with _conn() as conn:
+        cur = _cursor(conn)
+        cur.execute(
+            "CREATE TABLE IF NOT EXISTS loads("
+            f"  id {_ID_COL},"
+            "  ts TEXT, screen TEXT, source TEXT,"
+            "  total INTEGER, valid INTEGER, invalid INTEGER, warnings INTEGER,"
+            "  via TEXT, run_id TEXT, has_rejected INTEGER, \"user\" TEXT)")
+        cur.execute(
+            "CREATE TABLE IF NOT EXISTS load_files("
+            f"  id {_ID_COL},"
+            "  load_id INTEGER, name TEXT, label TEXT, kind TEXT,"
+            f"  content {_BLOB_COL})")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_files_load ON load_files(load_id)")
+        cur.execute("SELECT COUNT(*) AS n FROM loads")
+        empty = cur.fetchone()["n"] == 0
     if empty:
         _import_jsonl()
 
@@ -75,7 +127,7 @@ def _import_jsonl():
                 if line:
                     try:
                         add_load(json.loads(line))
-                    except (ValueError, sqlite3.Error):
+                    except Exception:  # noqa: BLE001
                         continue
     except OSError:
         pass
@@ -85,18 +137,24 @@ def add_load(entry):
     """מוסיף רשומת טעינה ומחזיר את המזהה (id). שקט בכל שגיאה (מחזיר None)."""
     entry = dict(entry)
     entry.setdefault("ts", _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    cols = ("ts", "screen", "source", "total", "valid", "invalid", "warnings",
+            "via", "run_id", "has_rejected", "user")
+    vals = (entry.get("ts"), entry.get("screen"), entry.get("source"),
+            int(entry.get("total") or 0), int(entry.get("valid") or 0),
+            int(entry.get("invalid") or 0), int(entry.get("warnings") or 0),
+            entry.get("via"), entry.get("run_id"),
+            1 if entry.get("has_rejected") else 0, entry.get("user") or "")
+    names = ",".join(f'"{c}"' if c == "user" else c for c in cols)
+    marks = ",".join([PH] * len(cols))
     try:
-        with _connect() as c:
-            cur = c.execute(
-                "INSERT INTO loads(ts,screen,source,total,valid,invalid,warnings,"
-                "via,run_id,has_rejected,user) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                (entry.get("ts"), entry.get("screen"), entry.get("source"),
-                 int(entry.get("total") or 0), int(entry.get("valid") or 0),
-                 int(entry.get("invalid") or 0), int(entry.get("warnings") or 0),
-                 entry.get("via"), entry.get("run_id"),
-                 1 if entry.get("has_rejected") else 0, entry.get("user") or ""))
+        with _conn() as conn:
+            cur = _cursor(conn)
+            if IS_PG:
+                cur.execute(f"INSERT INTO loads({names}) VALUES({marks}) RETURNING id", vals)
+                return cur.fetchone()["id"]
+            cur.execute(f"INSERT INTO loads({names}) VALUES({marks})", vals)
             return cur.lastrowid
-    except sqlite3.Error:
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -105,62 +163,68 @@ def add_file(load_id, name, label, kind, content):
     if load_id is None or content is None or len(content) > _MAX_BLOB:
         return
     try:
-        with _connect() as c:
-            c.execute(
-                "INSERT INTO load_files(load_id,name,label,kind,content) VALUES(?,?,?,?,?)",
-                (load_id, name, label, kind, sqlite3.Binary(content)))
-    except sqlite3.Error:
+        with _conn() as conn:
+            _cursor(conn).execute(
+                f"INSERT INTO load_files(load_id,name,label,kind,content) "
+                f"VALUES({PH},{PH},{PH},{PH},{PH})",
+                (load_id, name, label, kind, _binary(content)))
+    except Exception:  # noqa: BLE001
         pass
 
 
 def list_loads(limit=200, screen=None):
     """רשומות הטעינה (חדשות ראשונות), כל אחת עם רשימת הקבצים המצורפים (מטא בלבד)."""
     try:
-        with _connect() as c:
+        with _conn() as conn:
+            cur = _cursor(conn)
             q, args = "SELECT * FROM loads", []
             if screen:
-                q += " WHERE screen=?"
+                q += f" WHERE screen={PH}"
                 args.append(screen)
-            q += " ORDER BY id DESC LIMIT ?"
+            q += f" ORDER BY id DESC LIMIT {PH}"
             args.append(int(limit))
-            loads = [dict(r) for r in c.execute(q, args).fetchall()]
+            cur.execute(q, args)
+            loads = [dict(r) for r in cur.fetchall()]
             if loads:
                 ids = [l["id"] for l in loads]
+                marks = ",".join([PH] * len(ids))
+                cur.execute(
+                    f"SELECT id,load_id,name,label,kind FROM load_files "
+                    f"WHERE load_id IN ({marks})", ids)
                 files = {}
-                rows = c.execute(
-                    "SELECT id,load_id,name,label,kind FROM load_files WHERE load_id IN (%s)"
-                    % ",".join("?" * len(ids)), ids).fetchall()
-                for r in rows:
+                for r in cur.fetchall():
                     files.setdefault(r["load_id"], []).append(dict(r))
                 for l in loads:
                     l["files"] = files.get(l["id"], [])
             return loads
-    except sqlite3.Error:
+    except Exception:  # noqa: BLE001
         return []
 
 
 def get_file(file_id):
     """מחזיר (שם, bytes) של קובץ שמור, או (None, None)."""
     try:
-        with _connect() as c:
-            r = c.execute("SELECT name,content FROM load_files WHERE id=?",
-                          (int(file_id),)).fetchone()
+        with _conn() as conn:
+            cur = _cursor(conn)
+            cur.execute(f"SELECT name,content FROM load_files WHERE id={PH}", (int(file_id),))
+            r = cur.fetchone()
             return (r["name"], bytes(r["content"])) if r else (None, None)
-    except (sqlite3.Error, ValueError):
+    except Exception:  # noqa: BLE001
         return (None, None)
 
 
 def distinct_screens():
     try:
-        with _connect() as c:
-            return [r["screen"] for r in c.execute(
-                "SELECT DISTINCT screen FROM loads WHERE screen IS NOT NULL ORDER BY screen"
-            ).fetchall()]
-    except sqlite3.Error:
+        with _conn() as conn:
+            cur = _cursor(conn)
+            cur.execute("SELECT DISTINCT screen FROM loads "
+                        "WHERE screen IS NOT NULL ORDER BY screen")
+            return [r["screen"] for r in cur.fetchall()]
+    except Exception:  # noqa: BLE001
         return []
 
 
 try:
     init_db()
-except sqlite3.Error:
+except Exception:  # noqa: BLE001
     pass

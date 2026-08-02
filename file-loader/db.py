@@ -213,6 +213,21 @@ def get_file(file_id):
         return (None, None)
 
 
+def status():
+    """מצב המסד לתצוגה/אבחון: איזה מנוע, האם נגיש, ומספר רשומות."""
+    info = {"backend": "postgres" if IS_PG else "sqlite",
+            "vercel": bool(os.environ.get("VERCEL")), "ok": False, "error": "", "count": 0}
+    try:
+        with _conn() as conn:
+            cur = _cursor(conn)
+            cur.execute("SELECT COUNT(*) AS n FROM loads")
+            info["count"] = cur.fetchone()["n"]
+        info["ok"] = True
+    except Exception as e:  # noqa: BLE001
+        info["error"] = str(e)[:200]
+    return info
+
+
 def distinct_screens():
     try:
         with _conn() as conn:

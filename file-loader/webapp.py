@@ -1281,6 +1281,22 @@ HISTORY = """
  .tag{font-size:12px;color:var(--muted)}
 </style></head><body><div class="wrap">
  <div class="head"><h1>📜 היסטוריית טעינות</h1><a class="back" href="/">→ חזרה</a></div>
+ {% if dbinfo %}
+ <div style="margin-bottom:14px;font-size:13px;padding:11px 15px;border-radius:12px;
+   border:1px solid var(--border);
+   background:{{ 'rgba(5,150,105,.09)' if (dbinfo.ok and (dbinfo.backend=='postgres' or not dbinfo.vercel)) else 'rgba(220,38,38,.08)' }}">
+  {% if dbinfo.backend=='postgres' and dbinfo.ok %}
+   ✅ מסד נתונים: <b>Postgres</b> — מחובר ושומר לצמיתות ({{ dbinfo.count }} רשומות).
+  {% elif dbinfo.backend=='postgres' and not dbinfo.ok %}
+   ⛔ מסד נתונים: <b>Postgres</b> מוגדר אך אין חיבור — {{ dbinfo.error }}
+  {% elif dbinfo.vercel %}
+   ⚠️ מסד נתונים: <b>SQLite זמני</b> (‎/tmp‎) — <b>ההיסטוריה לא תישמר ב-Vercel</b>.
+   חבר מסד Postgres (Storage → Create Database) ועשה Redeploy. ראה VERCEL.md.
+  {% else %}
+   ✅ מסד נתונים: <b>SQLite</b> ({{ dbinfo.count }} רשומות).
+  {% endif %}
+ </div>
+ {% endif %}
  <div class="card">
  <form method="get" style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
   <label style="margin:0;font-weight:600">סינון לפי מסך:</label>
@@ -1316,7 +1332,7 @@ def history():
     screen = (request.args.get("screen") or "").strip() or None
     return render_template_string(
         HISTORY, rows=core.read_history(300, screen=screen),
-        screens=db.distinct_screens(), sel_screen=screen or "")
+        screens=db.distinct_screens(), sel_screen=screen or "", dbinfo=db.status())
 
 
 @app.route("/history/file/<int:file_id>")

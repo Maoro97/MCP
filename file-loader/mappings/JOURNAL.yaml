@@ -26,6 +26,11 @@ journal:
   amount_secondary: SUM2    # סכום במטבע בסיס/משני ({FC.F}, למשל USD)
   amount_fx: SUM5           # סכום במטבע העסקה (מט"ח עסקה)
   currency_fx: CODE5        # קוד מטבע העסקה
+  date_balance: BALDATE     # בדיקה: תאריך מאזן אחד לכל התנועה
+  date_ref: CURDATE         # בדיקה: תאריך אסמכתא אחד לכל התנועה
+
+# שורה שכל שלושת הסכומים בה 0/ריק — לא תיטען לקובץ (מסומנת בבדיקת התנועות)
+exclude_if_all_zero: [SUM1, SUM2, SUM5]
 
 columns:
   - {source: ["מס. תנועת היומן", "מס תנועת היומן", "מספר תנועת יומן"], target: FNCNUM, transform: [strip]}

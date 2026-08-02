@@ -394,6 +394,17 @@ def rows_from_dataframe(df, mapping, resolved):
     return rows
 
 
+def _is_zero_amount(value):
+    """True אם הערך ריק או שווה מספרית ל-0 (למשל '', '0', '0.00')."""
+    s = str(value or "").strip()
+    if s == "":
+        return True
+    try:
+        return float(s.replace(",", "")) == 0
+    except ValueError:
+        return False
+
+
 def evaluate_grid(mapping, input_rows, reserved_keys=None, excel_rows=None):
     """
     ליבת "טבלת הטעינה" — מקבלת שורות של {target: ערך} (גולמי מהאקסל או
@@ -440,6 +451,17 @@ def evaluate_grid(mapping, input_rows, reserved_keys=None, excel_rows=None):
                 row_valid = False
             cells.append({"target": col["target"], "value": value,
                           "error": err, "warning": warning})
+        # כלל: אם כל עמודות-הסכום המוגדרות הן 0/ריק — השורה לא תיטען לקובץ
+        zcols = mapping.get("exclude_if_all_zero")
+        if zcols:
+            cmap = {c["target"]: c["value"] for c in cells}
+            if all(_is_zero_amount(cmap.get(t, "")) for t in zcols):
+                row_valid = False
+                for c in cells:
+                    if c["target"] in zcols and not c["error"]:
+                        c["error"] = "כל הסכומים 0 — השורה לא תיטען לקובץ"
+                        break
+
         excel_row = excel_rows[i] if excel_rows else i + 2
         rows_out.append({"excel_row": excel_row, "cells": cells, "valid": row_valid})
 

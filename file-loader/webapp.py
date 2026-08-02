@@ -380,7 +380,11 @@ GRID = """
  .spacer{flex:1}a.back{color:var(--brand);text-decoration:none;font-weight:700;font-size:14px}
  .chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer}.chk input{width:16px;height:16px;accent-color:var(--brand)}
  .banner{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);color:var(--brand);border-radius:12px;padding:11px 15px;margin:8px 0;font-size:14px}
- .tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}
+ .tablewrap{overflow:auto;max-height:calc(100vh - 230px);border:1px solid var(--border);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}
+ /* פס-גלילה אופקי עליון — לזוז בין העמודות בלי לרדת לתחתית הטבלה */
+ .topscroll{overflow-x:auto;overflow-y:hidden;height:15px;margin-bottom:4px;border:1px solid var(--border);
+  border-radius:8px;background:var(--surface-2)}
+ .topscroll>div{height:1px}
  table{border-collapse:separate;border-spacing:0;width:100%;font-size:14px}
  th,td{border-bottom:1px solid var(--border);border-left:1px solid var(--border);padding:0;text-align:right;white-space:nowrap}
  th{background:var(--surface-2);padding:10px 12px;position:sticky;top:0;z-index:2}
@@ -487,6 +491,7 @@ GRID = """
   <span><i class="sw-ign"></i>מיוצא למרות בעיה</span>
   <span><i class="sw-const"></i>ערך קבוע</span>
  </div>
+ <div class="topscroll" id="topscroll"><div id="topscroll-inner"></div></div>
  <div class="tablewrap"><table id="grid"></table></div>
  <div class="pager" id="pager"></div>
  <p class="hint" id="dlarea"></p>
@@ -605,6 +610,24 @@ function render(){
   h+='</tbody>'; $('grid').innerHTML=h;
   renderPager(disp.length,pages);
   updateCounts();
+  try{ syncScroll(); }catch(e){}
+}
+// גלילה אופקית נגישה: פס עליון מסונכרן + גלילה עם Shift+גלגלת (בנוסף לפס התחתון של הקופסה)
+function syncScroll(){
+  const wrap=document.querySelector('.tablewrap'), top=$('topscroll'), inner=$('topscroll-inner'), grid=$('grid');
+  if(!wrap||!top||!inner||!grid) return;
+  requestAnimationFrame(()=>{
+    inner.style.width=grid.scrollWidth+'px';
+    top.style.display = grid.scrollWidth>wrap.clientWidth ? 'block' : 'none';
+  });
+  if(wrap.__sync) return;
+  wrap.__sync=true; let lock=false;
+  top.addEventListener('scroll',()=>{if(lock)return;lock=true;wrap.scrollLeft=top.scrollLeft;lock=false;});
+  wrap.addEventListener('scroll',()=>{if(lock)return;lock=true;top.scrollLeft=wrap.scrollLeft;lock=false;});
+  wrap.addEventListener('wheel',e=>{
+    if(e.shiftKey && wrap.scrollWidth>wrap.clientWidth){ wrap.scrollLeft+=(e.deltaY||e.deltaX); e.preventDefault(); }
+  },{passive:false});
+  window.addEventListener('resize',()=>{ if(grid) inner.style.width=grid.scrollWidth+'px'; });
 }
 function renderPager(n,pages){
   if(pages<=1){ $('pager').innerHTML=''; return; }
@@ -707,11 +730,15 @@ async function journalRun(url,label){
   const res=await post(url,body); if(!res)return;
   GRID.rows=res.rows; render();
   const s=res.summary||{};
-  flash(s.unbalanced? 'err':'ok',
+  const bad = s.unbalanced||s.date_issues||s.zero_rows;
+  flash(bad? 'err':'ok',
     label+': '+ (s.balanced||0)+'/'+(s.transactions||0)+' תנועות מאוזנות'+
     (s.fx_changed? (' · מט"ח: '+s.fx_changed+' שורות'):'')+
     (s.fixed? (' · אוזנו '+s.fixed):'')+
-    (s.unbalanced? (' · '+s.unbalanced+' לא מאוזנות (ראה הערות)'):''));
+    (s.unbalanced? (' · '+s.unbalanced+' לא מאוזנות'):'')+
+    (s.date_issues? (' · '+s.date_issues+' תנועות עם תאריך לא אחיד'):'')+
+    (s.zero_rows? (' · '+s.zero_rows+' שורות עם סכום 0 (לא ייטענו)'):'')+
+    (bad?' — ראה הערות':''));
 }
 
 function renderBanner(){
@@ -1047,6 +1074,9 @@ def _journal_process(mapping, rows_dicts, excel_rows, opts, do_balance, do_fx=Fa
     if do_fx:
         fx_changed = _journal_fx(mapping, rows_dicts, opts.get("primary"), opts.get("secondary"))
 
+    db_t, dr_t = jc.get("date_balance"), jc.get("date_ref")
+    zcols = mapping.get("exclude_if_all_zero") or []
+
     groups = jrn.group_by_txn(rows_dicts, txn) if txn else {}
     fixed = 0
     if do_balance:
@@ -1059,10 +1089,16 @@ def _journal_process(mapping, rows_dicts, excel_rows, opts, do_balance, do_fx=Fa
             if use_sec:
                 jrn.auto_balance(rows_dicts, idxs, asec, dc, max_s, tol_s)
 
-    flagged, unbalanced = set(), 0
+    notes_by_row = {}        # i -> [הערות אוטומטיות]
+
+    def _note(i, txt):
+        notes_by_row.setdefault(i, []).append(txt)
+
+    flagged, unbalanced, date_issues = set(), 0, 0
     for key, idxs in groups.items():
         if not key:
             continue
+        # (א) איזון התנועה
         parts = []
         bp = jrn.transaction_balance(rows_dicts, idxs, ap, dc, tol_p)
         if not bp["balanced"]:
@@ -1071,25 +1107,47 @@ def _journal_process(mapping, rows_dicts, excel_rows, opts, do_balance, do_fx=Fa
             bs = jrn.transaction_balance(rows_dicts, idxs, asec, dc, tol_s)
             if not bs["balanced"]:
                 parts.append(f"מטבע משני חסר {jrn._fmt(abs(bs['diff']))}")
-        msg = " · ".join(parts)
-        for i in idxs:
-            if notes_t is not None:
-                base = _strip_auto_note(rows_dicts[i].get(notes_t, ""))
-                auto = f"⚠ תנועה לא מאוזנת ({msg})" if msg else ""
-                rows_dicts[i][notes_t] = (base + " " if base and auto else base) + auto
-            if msg:
-                flagged.add(i)
-        if msg:
+        if parts:
+            for i in idxs:
+                _note(i, "תנועה לא מאוזנת (" + " · ".join(parts) + ")")
+            flagged.update(idxs)
             unbalanced += 1
+        # (ב) תאריך מאזן אחד ותאריך אסמכתא אחד לכל התנועה
+        for tcol, lbl in ((db_t, "מאזן"), (dr_t, "אסמכתא")):
+            if not tcol:
+                continue
+            vals = {str(rows_dicts[i].get(tcol, "") or "").strip() for i in idxs}
+            if len(vals) > 1:
+                for i in idxs:
+                    _note(i, f"תאריך {lbl} אינו אחיד בתנועה")
+                flagged.update(idxs)
+                date_issues += 1
+
+    # (ג) שורה שכל הסכומים בה 0 — הערה + לא תיטען (הפסילה מתבצעת ב-evaluate_grid)
+    zero_rows = 0
+    if zcols:
+        for i, rd in enumerate(rows_dicts):
+            if all(core._is_zero_amount(rd.get(t)) for t in zcols):
+                _note(i, "כל הסכומים 0 — השורה לא תיטען")
+                zero_rows += 1
+
+    # כתיבת ההערות: בסיס ידני + הערות אוטומטיות מרועננות (מנקה הערות ישנות)
+    if notes_t is not None:
+        for i, rd in enumerate(rows_dicts):
+            base = _strip_auto_note(rd.get(notes_t, ""))
+            auto = notes_by_row.get(i)
+            rd[notes_t] = (base + " " if base and auto else base) + \
+                          ("⚠ " + " · ".join(auto) if auto else "")
 
     rows_out = core.evaluate_grid(mapping, rows_dicts, excel_rows=excel_rows)
-    for i in flagged:  # צביעה בכתום על תא הסכום הראשי בשורות לא-מאוזנות
+    for i in flagged:  # צביעה בכתום (שורות עם בעיה שאינה פוסלת, כמו חוסר איזון)
         for c in rows_out[i]["cells"]:
             if c["target"] == ap and not c["error"] and not c["warning"]:
-                c["warning"] = "תנועה לא מאוזנת"
+                c["warning"] = "שורה לבדיקה"
     total_txn = sum(1 for k in groups if k)
     return rows_out, {"unbalanced": unbalanced, "balanced": total_txn - unbalanced,
-                      "transactions": total_txn, "fixed": fixed, "fx_changed": fx_changed}
+                      "transactions": total_txn, "fixed": fixed, "fx_changed": fx_changed,
+                      "date_issues": date_issues, "zero_rows": zero_rows}
 
 
 def _journal_endpoint(do_balance=False, do_fx=False):

@@ -375,6 +375,8 @@ GRID = """
  .b-check{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}.b-check:hover{background:var(--border)}
  .b-gen{background:linear-gradient(140deg,#10b981,#059669);color:#fff;box-shadow:0 6px 16px rgba(5,150,105,.32)}
  .b-gen:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(5,150,105,.42)}
+ .b-save{background:linear-gradient(140deg,var(--brand-2),var(--brand));color:#fff;box-shadow:0 6px 16px rgba(79,70,229,.32)}
+ .b-save:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(79,70,229,.42)}
  .spacer{flex:1}a.back{color:var(--brand);text-decoration:none;font-weight:700;font-size:14px}
  .chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer}.chk input{width:16px;height:16px;accent-color:var(--brand)}
  .banner{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);color:var(--brand);border-radius:12px;padding:11px 15px;margin:8px 0;font-size:14px}
@@ -466,6 +468,7 @@ GRID = """
   <button class="b-check" onclick="ignoreAllWarnings()" title="סמן את כל שורות האזהרה כמיוצאות">🚫 התעלם מאזהרות</button>
   <button class="b-check" onclick="revalidate()">🔄 בדוק מחדש</button>
   <button class="b-gen" onclick="generate()">⬇ צור קובץ טעינה</button>
+  <button class="b-save" onclick="saveLoad()" title="שמור את הטעינה בהיסטוריה לאחזור עתידי">💾 שמירה בהיסטוריה</button>
   <a class="back" href="/history">📜 היסטוריה</a>
   <a class="back" href="/">＋ קובץ חדש</a>
  </div>
@@ -754,8 +757,7 @@ async function revalidate(){
   flash(o.invalid===0?'ok':'err', o.invalid===0?'✓ כל השורות תקינות — אפשר לייצר קובץ טעינה.':
         'נותרו '+o.invalid+' שורות עם שגיאות לתיקון.');
 }
-async function generate(){
-  const res=await post('/grid/generate',collect()); if(!res)return;
+function showDownloads(res, saved){
   if(res.rows){ GRID.rows=keepIgnore(res.rows); GRID.server_valid=res.server_valid; GRID.overflow=res.overflow; render(); }
   let html='';
   if(res.files && res.files.length){   // מסמך: קובץ אב + מסכי-משנה
@@ -765,10 +767,23 @@ async function generate(){
     html+='<a class="dl" href="/download/'+res.run_id+'/load">⬇ הורדת קובץ הטעינה ('+esc(res.load_name)+')</a>';
     html+='<a class="dl rep" href="/download/'+res.run_id+'/report">⬇ דוח</a>'; }
   if(res.invalid>0) html+='<a class="dl rej" href="/download/'+res.run_id+'/rejected">⬇ שורות פסולות ('+res.invalid+')</a>';
+  if(saved) html+='<a class="dl" href="/history">📜 צפה בהיסטוריה</a>';
   $('dlarea').innerHTML=html;
+}
+async function generate(){
+  const res=await post('/grid/generate',collect()); if(!res)return;
+  showDownloads(res,false);
   flash(res.invalid>0?'err':'ok',
     res.invalid>0?('נוצר קובץ טעינה עם '+res.valid+' שורות תקינות. '+res.invalid+' שורות שגויות לא נכללו.'):
                   ('✓ נוצר קובץ טעינה מלא עם '+res.valid+' שורות. לחץ להורדה.'));
+}
+async function saveLoad(){
+  const res=await post('/grid/save',collect()); if(!res)return;
+  showDownloads(res,true);
+  if(res.load_id)
+    flash('ok','✓ הטעינה נשמרה בהיסטוריה ('+res.valid+' שורות). ראה מסך היסטוריה.');
+  else
+    flash('err','הטעינה הופקה אך שמירת ההיסטוריה נכשלה — בדוק את חיבור מסד הנתונים במסך ההיסטוריה.');
 }
 async function post(url,body){
   try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -1130,8 +1145,12 @@ def grid_validate():
     return jsonify(rows=rows_out)
 
 
-@app.route("/grid/generate", methods=["POST"])
-def grid_generate():
+def _produce_load(save):
+    """
+    מפיק את קובץ/י הטעינה מטבלת הטעינה. save=False — הפקה להורדה בלבד;
+    save=True — בנוסף רושם את הטעינה בהיסטוריה (מסד הנתונים) ושומר את הקבצים
+    לאחזור עתידי.
+    """
     data = request.get_json(silent=True) or {}
     screen = (data.get("screen") or "").strip()
     try:
@@ -1211,21 +1230,34 @@ def grid_generate():
     with open(os.path.join(run_dir, f"{screen}_report.txt"), "w", encoding="utf-8") as f:
         f.write(report)
 
-    load_id = core.append_history({
-        "screen": screen, "source": run.get("source_name", ""),
-        "total": len(valid_records) + len(rejected_items),
-        "valid": len(valid_records), "invalid": len(rejected_items),
-        "warnings": warn_count, "via": "web", "run_id": run_id,
-        "has_rejected": bool(rejected_items),
-        "user": (session.get("user") if _auth_on() else "") or "",
-    })
-    _store_run_files(load_id, run_dir, files, screen, bool(rejected_items))
+    load_id = None
+    if save:   # רישום בהיסטוריה + שמירת הקבצים לאחזור עתידי
+        load_id = core.append_history({
+            "screen": screen, "source": run.get("source_name", ""),
+            "total": len(valid_records) + len(rejected_items),
+            "valid": len(valid_records), "invalid": len(rejected_items),
+            "warnings": warn_count, "via": "web", "run_id": run_id,
+            "has_rejected": bool(rejected_items),
+            "user": (session.get("user") if _auth_on() else "") or "",
+        })
+        _store_run_files(load_id, run_dir, files, screen, bool(rejected_items))
 
     return jsonify(
         run_id=run_id, load_name=load_name, files=files,
         valid=len(valid_records), invalid=len(rejected_items),
         rows=rows_out, server_valid=len(run["valid"]), overflow=len(run["overflow"]),
+        saved=bool(save), load_id=load_id,
     )
+
+
+@app.route("/grid/generate", methods=["POST"])
+def grid_generate():
+    return _produce_load(save=False)
+
+
+@app.route("/grid/save", methods=["POST"])
+def grid_save():
+    return _produce_load(save=True)
 
 
 @app.route("/download/<run_id>/f/<path:name>")

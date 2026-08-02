@@ -109,42 +109,24 @@ def lookup_pairs(name):
 
 
 def append_history(entry):
-    """מוסיף רשומת היסטוריה (שורת JSON) על ריצת טעינה. שקט בכל שגיאה."""
-    import json
+    """מוסיף רשומת היסטוריה למסד הנתונים (SQLite) ומחזיר את מזהה הרשומה (id)."""
     import datetime as _dt
     import getpass
+    import db as _db
     entry = dict(entry)
     entry.setdefault("ts", _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    try:
-        entry.setdefault("user", getpass.getuser())
-    except Exception:  # noqa: BLE001
-        entry.setdefault("user", "")
-    try:
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        with open(HISTORY_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    except OSError:
-        pass
+    if not entry.get("user"):
+        try:
+            entry["user"] = getpass.getuser()
+        except Exception:  # noqa: BLE001
+            entry["user"] = ""
+    return _db.add_load(entry)
 
 
-def read_history(limit=200):
-    """קורא את רשומות ההיסטוריה (החדשות ראשונות)."""
-    import json
-    if not os.path.exists(HISTORY_FILE):
-        return []
-    rows = []
-    try:
-        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    try:
-                        rows.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        continue
-    except OSError:
-        return []
-    return rows[::-1][:limit]
+def read_history(limit=200, screen=None):
+    """קורא את רשומות ההיסטוריה ממסד הנתונים (החדשות ראשונות)."""
+    import db as _db
+    return _db.list_loads(limit=limit, screen=screen)
 
 # פורמט התאריך בפלט — תמיד dd/mm/yy (למשל 23/07/26).
 # זהו מקור האמת היחיד: אם קובץ מיפוי לא מציין date_format, זה מה שיחול.

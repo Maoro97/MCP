@@ -27,6 +27,7 @@ from flask import (
 import main as core
 import journal as jrn
 import boi_rates as boi
+import db
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 80 * 1024 * 1024  # מגבלת העלאה: 80MB
@@ -156,6 +157,23 @@ def _write_records(run_dir, fname, records, mp):
     content = core.build_load_content(records, mp)
     with open(os.path.join(run_dir, fname), "wb") as f:
         f.write(core.load_content_bytes(content, mp))
+
+
+def _store_run_files(load_id, run_dir, files, screen, has_rejected):
+    """שומר את קובצי הפלט שנוצרו (טעינה/פסולות/דוח) במסד הנתונים, לאחזור עתידי."""
+    if not load_id:
+        return
+    items = [(f["name"], f.get("label", "קובץ טעינה"), "load") for f in files]
+    if has_rejected:
+        items.append((f"{screen}_rejected.xlsx", "שורות פסולות", "rejected"))
+    items.append((f"{screen}_report.txt", "דוח", "report"))
+    for name, label, kind in items:
+        path = os.path.join(run_dir, name)
+        try:
+            with open(path, "rb") as fh:
+                db.add_file(load_id, name, label, kind, fh.read())
+        except OSError:
+            continue
 
 
 def _rejected_df(mapping, items):
@@ -1193,13 +1211,15 @@ def grid_generate():
     with open(os.path.join(run_dir, f"{screen}_report.txt"), "w", encoding="utf-8") as f:
         f.write(report)
 
-    core.append_history({
+    load_id = core.append_history({
         "screen": screen, "source": run.get("source_name", ""),
         "total": len(valid_records) + len(rejected_items),
         "valid": len(valid_records), "invalid": len(rejected_items),
         "warnings": warn_count, "via": "web", "run_id": run_id,
         "has_rejected": bool(rejected_items),
+        "user": (session.get("user") if _auth_on() else "") or "",
     })
+    _store_run_files(load_id, run_dir, files, screen, bool(rejected_items))
 
     return jsonify(
         run_id=run_id, load_name=load_name, files=files,
@@ -1262,6 +1282,15 @@ HISTORY = """
 </style></head><body><div class="wrap">
  <div class="head"><h1>📜 היסטוריית טעינות</h1><a class="back" href="/">→ חזרה</a></div>
  <div class="card">
+ <form method="get" style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+  <label style="margin:0;font-weight:600">סינון לפי מסך:</label>
+  <select name="screen" onchange="this.form.submit()"
+   style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);font:inherit">
+   <option value="">— כל המסכים —</option>
+   {% for s in screens %}<option value="{{ s }}" {% if s==sel_screen %}selected{% endif %}>{{ s }}</option>{% endfor %}
+  </select>
+  <span class="tag">{{ rows|length }} רשומות</span>
+ </form>
  {% if not rows %}<div class="empty">עדיין לא בוצעו טעינות.</div>
  {% else %}
  <table><thead><tr><th>זמן</th><th>מסך</th><th>קובץ מקור</th><th>נקראו</th><th>תקינות</th><th>נפסלו</th><th>אזהרות</th><th>משתמש</th><th>קבצים</th></tr></thead><tbody>
@@ -1271,9 +1300,8 @@ HISTORY = """
   <td>{{ r.total }}</td><td class="ok">{{ r.valid }}</td>
   <td class="{{ 'bad' if r.invalid else '' }}">{{ r.invalid }}</td><td>{{ r.warnings }}</td>
   <td class="tag">{{ r.user or '' }}{% if r.via=='cli' %} · CLI{% endif %}</td>
-  <td>{% if r.run_id %}<a class="dl" href="/download/{{ r.run_id }}/load">קובץ</a>
-      {% if r.has_rejected %}<a class="dl" href="/download/{{ r.run_id }}/rejected">פסולות</a>{% endif %}
-      <a class="dl" href="/download/{{ r.run_id }}/report">דוח</a>{% else %}<span class="tag">output/</span>{% endif %}</td>
+  <td>{% for f in r.files %}<a class="dl" href="/history/file/{{ f.id }}">{{ f.label }}</a>{% endfor %}
+      {% if not r.files %}<span class="tag">—</span>{% endif %}</td>
  </tr>
  {% endfor %}
  </tbody></table>
@@ -1285,7 +1313,21 @@ HISTORY = """
 
 @app.route("/history")
 def history():
-    return render_template_string(HISTORY, rows=core.read_history(200))
+    screen = (request.args.get("screen") or "").strip() or None
+    return render_template_string(
+        HISTORY, rows=core.read_history(300, screen=screen),
+        screens=db.distinct_screens(), sel_screen=screen or "")
+
+
+@app.route("/history/file/<int:file_id>")
+def history_file(file_id):
+    name, content = db.get_file(file_id)
+    if content is None:
+        abort(404)
+    from flask import Response
+    resp = Response(content, mimetype="application/octet-stream")
+    resp.headers["Content-Disposition"] = f"attachment; filename={name or 'file'}"
+    return resp
 
 
 # ---------------------------------------------------------------------------
@@ -1542,6 +1584,7 @@ def login():
         pass_ok = hmac.compare_digest(request.form.get("password", ""), AUTH_PASS)
         if user_ok and pass_ok:
             session["auth"] = True
+            session["user"] = AUTH_USER
             return redirect(nxt)
         error = "שם משתמש או סיסמה שגויים."
     return render_template_string(LOGIN, brand=brand_html(), error=error, next=nxt)

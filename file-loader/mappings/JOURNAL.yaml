@@ -28,30 +28,48 @@ journal:
   currency_fx: CODE5        # קוד מטבע העסקה
   date_balance: BALDATE     # בדיקה: תאריך מאזן אחד לכל התנועה
   date_ref: CURDATE         # בדיקה: תאריך אסמכתא אחד לכל התנועה
+  # איחוד חובה/זכות: אם הסכום מגיע בשתי עמודות נפרדות -> עמודת סכום אחת + C/D
+  debit_source:  ['חובה/זכות(שקל) חובה', "סכום חובה", "חובה", "debit"]
+  credit_source: ['חובה/זכות(שקל) זכות', "סכום זכות", "זכות", "credit"]
+  fx_debit_source:  ['חובה/זכות(מט"ח) חובה']
+  fx_credit_source: ['חובה/זכות(מט"ח) זכות']
+  # אם הסכום מגיע בעמודה אחת עם סימן: שלילי=C, חיובי=D, והסכום בערך מוחלט
+  signed_source: ["סכום עם סימן", "סכום מסומן"]
+  # סוג תנועה לפי הסכום הראשי: 0 -> הש, אחרת -> מ
+  transtype: FNCPATNAME
+  transtype_zero: "הש"
+  transtype_nonzero: "מ"
+
+# שורות לא-רלוונטיות (כותרות חשבון/יתרות בכרטסת) חסרות מספר תנועה — יסוננו
+require_source: [FNCNUM]
 
 # שורה שכל שלושת הסכומים בה 0/ריק — לא תיטען לקובץ (מסומנת בבדיקת התנועות)
 exclude_if_all_zero: [SUM1, SUM2, SUM5]
 
 columns:
-  - {source: ["מס. תנועת היומן", "מס תנועת היומן", "מספר תנועת יומן"], target: FNCNUM, transform: [strip]}
+  - {source: ["מס. תנועת היומן", "מס תנועת היומן", "מספר תנועת יומן", "תנועה"], target: FNCNUM, transform: [strip]}
   - {target: LINE, generate: rownum}                                   # מספור שורות רץ אוטומטי
+  # סוג תנועה — נגזר אוטומטית מהסכום (הש/מ), אך אם קיים במקור נטען ממנו
   - {source: ["סוג תנועה"], target: FNCPATNAME, transform: [strip]}
-  - {source: ["אסמכתא"], target: IVNUM, transform: [strip, blank_if_zero], format: ref}
-  - {source: ["אסמכתא 2"], target: FNCREF2, transform: [strip, blank_if_zero]}
+  - {source: ["אסמכתא", "אסמ'", "אסמ"], target: IVNUM, transform: [strip, blank_if_zero], format: ref}
+  - {source: ["אסמכתא 2", "אסמ'2", "אסמ2"], target: FNCREF2, transform: [strip, blank_if_zero]}
   - {source: ["ת. למאזן", "תאריך מאזן"], target: BALDATE, type: date}
-  - {source: ["ת. אסמכתא", "תאריך אסמכתא"], target: CURDATE, type: date}
-  - {source: ["ת. ערך", "תאריך ערך"], target: FNCDATE, type: date}
-  - {source: ["חשבון", "מפתח חשבון"], target: ACCNAME, transform: [strip]}
+  - {source: ["ת. אסמכתא", "תאריך אסמכתא", "ת.אסמ", "ת.אסמכתא"], target: CURDATE, type: date}
+  - {source: ["ת. ערך", "תאריך ערך", "ת.ערך"], target: FNCDATE, type: date}
+  - {source: ["חשבון", "מפתח חשבון", "ח-ן נגדי", "חשבון נגדי"], target: ACCNAME, transform: [strip]}
   - {source: ["קוד מרכז רווח", "מרכז רווח"], target: COSTCNAME, transform: [strip]}
-  - {source: ["חובה/זכות", "חובה זכות", "C/D"], target: DEBIT, transform: [strip]}
-  - {source: ["סכום במטבע לוקאלי", "סכום במטבע לוקאל", "סכום מטבע ראשי"], target: SUM1, transform: [strip]}
+  # C/D — נגזר מעמודות חובה/זכות (__DC__), או ממקור ישיר אם קיים
+  - {source: ["__DC__", "חובה/זכות", "חובה זכות", "C/D"], target: DEBIT, transform: [strip]}
+  # סכום ראשי — עמודת האיחוד (__AMOUNT_PRIMARY__) אם הגיע מחובה/זכות, אחרת ממקור ישיר
+  - {source: ["__AMOUNT_PRIMARY__", "סכום במטבע לוקאלי", "סכום במטבע לוקאל", "סכום מטבע ראשי"], target: SUM1, transform: [strip]}
   - {source: ["סכום במטבע משני USD", "סכום במטבע משני", "סכום דולרי"], target: SUM2, transform: [strip]}
   - {source: ["תוכנת מקור"], target: DNAME, default: "", transform: [strip]}
   - {source: ['אסמכתא 1 שורת ת"י', "אסמכתא 1 שורת תי"], target: FNCIREF1, transform: [strip]}
   - {source: ['אסמכתא 2 שורת ת"י', "אסמכתא 2 שורת תי"], target: FNCIREF2, transform: [strip]}
   - {source: ['פרטים שורת ת"י', "פרטים שורת תי", "פרטים"], target: DETAILS, transform: [strip]}
-  - {source: ["סכום במטבע העסקה", "סכום מטח עסקה"], target: SUM5, transform: [strip]}
-  - {source: ["מטבע העסקה", "מטח עסקה"], target: CODE5, transform: [strip], lookup: currencies}
+  - {source: ["__AMOUNT_FX__", "סכום במטבע העסקה", "סכום מטח עסקה"], target: SUM5, transform: [strip]}
+  - {source: ["מטבע העסקה", "מטח עסקה", "מט"], target: CODE5, transform: [strip],
+     value_map: {"$": "USD", "€": "EUR", "£": "GBP", "₪": "ILS"}, lookup: currencies}
   - {source: ["משתמש", "שם משתמש"], target: USERLOGIN, transform: [strip]}
   # עמודת הערות למיישם — מוצגת בטבלה אך אינה נכתבת לקובץ הסופי
   - {target: NOTES, manual: true, exclude: true}

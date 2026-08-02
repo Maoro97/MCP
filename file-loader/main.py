@@ -405,6 +405,116 @@ def _is_zero_amount(value):
         return False
 
 
+def _to_float(value):
+    """מנסה להמיר ערך למספר (מסיר פסיקים/מטבע). מחזיר None אם לא ניתן."""
+    try:
+        s = str(value).replace(",", "").replace("₪", "").replace("$", "").strip()
+        return float(s) if s not in ("", "-") else None
+    except (ValueError, TypeError):
+        return None
+
+
+# שמות עמודות "נגזרות" שנוצרות בעיבוד המקדים (מקבלות עדיפות בזיהוי המיפוי)
+DERIVED_AMOUNT_PRIMARY = "__AMOUNT_PRIMARY__"
+DERIVED_DC = "__DC__"
+DERIVED_AMOUNT_FX = "__AMOUNT_FX__"
+
+
+def preprocess_journal_df(df, mapping):
+    """
+    עיבוד מקדים ל-DataFrame לפני בניית הטבלה (מסכי יומן):
+      • סינון שורות לא-רלוונטיות (min_row_values) — כותרות/יתרות עם מעט ערכים.
+      • איחוד עמודות חובה/זכות נפרדות לעמודת סכום אחת + עמודת C/D.
+      • עמודת סכום יחידה עם סימן -> C/D + ערך מוחלט (שלילי=C, חיובי=D).
+    מחזיר DataFrame (חדש) עם עמודות נגזרות. אם אין הגדרות רלוונטיות — מחזיר כפי שהוא.
+    """
+    jc = mapping.get("journal") or {}
+    min_vals = mapping.get("min_row_values")
+    require = mapping.get("require_source") or []
+    if not (jc.get("debit_source") or jc.get("credit_source") or jc.get("signed_source")
+            or jc.get("fx_debit_source") or jc.get("fx_credit_source") or min_vals or require):
+        return df
+
+    df = df.copy()
+
+    def _cell_empty(v):
+        return v is None or str(v).strip() == "" or str(v).strip().lower() == "nan"
+
+    # (1a) סינון שורות לא-רלוונטיות: חייבות ערך בעמודות-העוגן (למשל מס' תנועה).
+    # שורות כותרת/יתרה בכרטסת חסרות מספר תנועה ולכן יסוננו.
+    if require:
+        by_target = {c["target"]: c for c in all_columns(mapping)}
+        anchors = []
+        for tgt in require:
+            col = by_target.get(tgt)
+            names = _source_aliases(col.get("source")) if col else []
+            present = [n for n in names if n in df.columns]
+            if present:
+                anchors.append(present)
+        if anchors:
+            def _row_ok(r):
+                return all(any(not _cell_empty(r[n]) for n in group) for group in anchors)
+            df = df[df.apply(_row_ok, axis=1)].reset_index(drop=True)
+
+    # (1b) סינון נוסף אופציונלי לפי כמות הערכים בשורה
+    if min_vals:
+        df = df[df.apply(lambda r: r.notna().sum() >= int(min_vals), axis=1)].reset_index(drop=True)
+
+    def _present(names):
+        return any(n in df.columns for n in (names or []))
+
+    def _pick(row, names):
+        for n in (names or []):
+            if n in df.columns:
+                v = row[n]
+                if v is not None and str(v).strip() != "" and str(v).strip().lower() != "nan":
+                    return v
+        return None
+
+    # (2) איחוד חובה/זכות (מטבע ראשי) -> סכום + C/D
+    dsrc, csrc = jc.get("debit_source"), jc.get("credit_source")
+    if _present(dsrc) or _present(csrc):
+        amt, dc = [], []
+        for _, row in df.iterrows():
+            dv, cv = _pick(row, dsrc), _pick(row, csrc)
+            if dv is not None:
+                amt.append(abs(_to_float(dv)) if _to_float(dv) is not None else dv); dc.append("D")
+            elif cv is not None:
+                amt.append(abs(_to_float(cv)) if _to_float(cv) is not None else cv); dc.append("C")
+            else:
+                amt.append(""); dc.append("")
+        df[DERIVED_AMOUNT_PRIMARY], df[DERIVED_DC] = amt, dc
+
+    # (3) איחוד חובה/זכות מט"ח -> סכום מט"ח העסקה
+    fdsrc, fcsrc = jc.get("fx_debit_source"), jc.get("fx_credit_source")
+    if _present(fdsrc) or _present(fcsrc):
+        famt = []
+        for _, row in df.iterrows():
+            v = _pick(row, fdsrc)
+            if v is None:
+                v = _pick(row, fcsrc)
+            fv = _to_float(v)
+            famt.append(abs(fv) if fv is not None else (v if v is not None else ""))
+        df[DERIVED_AMOUNT_FX] = famt
+
+    # (4) עמודת סכום יחידה עם סימן -> ערך מוחלט + C/D (שלילי=C, חיובי=D)
+    ssrc = jc.get("signed_source")
+    if _present(ssrc):
+        amt, dc = [], []
+        for _, row in df.iterrows():
+            v = _pick(row, ssrc)
+            n = _to_float(v)
+            if n is None:
+                amt.append(""); dc.append("")
+            elif n == 0:
+                amt.append("0"); dc.append("")          # 0 -> יטופל בכלל הש/מ
+            else:
+                amt.append(abs(n)); dc.append("C" if n < 0 else "D")
+        df[DERIVED_AMOUNT_PRIMARY], df[DERIVED_DC] = amt, dc
+
+    return df
+
+
 def evaluate_grid(mapping, input_rows, reserved_keys=None, excel_rows=None):
     """
     ליבת "טבלת הטעינה" — מקבלת שורות של {target: ערך} (גולמי מהאקסל או

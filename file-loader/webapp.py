@@ -849,6 +849,7 @@ def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None):
     פותר את המיפוי (עם overrides ידניים), מריץ ולידציה, מפצל קטן/גדול, שומר את
     הריצה (כולל ה-DataFrame הגולמי כדי לאפשר מיפוי מחדש), ומחזיר payload מלא.
     """
+    df = core.preprocess_journal_df(df, mapping)   # סינון שורות + איחוד חובה/זכות/סימן (יומן)
     resolved, req_missing, opt_missing = core.resolve_columns(df, core.all_columns(mapping), overrides)
     rows_out = core.evaluate_grid(mapping, core.rows_from_dataframe(df, mapping, resolved))
     key_fields = mapping.get("key_fields") or []
@@ -1073,6 +1074,12 @@ def _journal_process(mapping, rows_dicts, excel_rows, opts, do_balance, do_fx=Fa
     fx_changed = 0
     if do_fx:
         fx_changed = _journal_fx(mapping, rows_dicts, opts.get("primary"), opts.get("secondary"))
+
+    # סוג תנועה לפי הסכום הראשי: 0 -> הש, אחרת -> מ
+    tt_t, tt_zero, tt_non = jc.get("transtype"), jc.get("transtype_zero"), jc.get("transtype_nonzero")
+    if tt_t and ap and (tt_zero or tt_non):
+        for rd in rows_dicts:
+            rd[tt_t] = tt_zero if core._is_zero_amount(rd.get(ap)) else tt_non
 
     db_t, dr_t = jc.get("date_balance"), jc.get("date_ref")
     zcols = mapping.get("exclude_if_all_zero") or []

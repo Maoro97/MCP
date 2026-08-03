@@ -449,6 +449,14 @@ GRID = """
   border:1px solid var(--border);border-left:3px solid var(--muted);border-radius:12px;padding:12px 20px;font-weight:600;font-size:14px;
   box-shadow:0 16px 40px rgba(16,24,40,.18);opacity:0;pointer-events:none;transition:opacity .25s ease,transform .25s ease;z-index:60;max-width:90vw}
  .toast.show{opacity:1;transform:translate(-50%,0)}
+ .modal-bg{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:80;align-items:center;justify-content:center}
+ .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);
+  padding:24px;width:min(440px,92vw)}
+ .modal h3{margin:0 0 8px;font-size:19px}.modal p{margin:0 0 16px;color:var(--muted);font-size:14px}
+ .modal input{width:100%;padding:12px 13px;border:1.5px solid var(--border);border-radius:12px;font:inherit;font-size:15px;
+  background:var(--surface-2);color:var(--text)}
+ .modal input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 4px rgba(99,102,241,.15);background:var(--surface)}
+ .modal-btns{display:flex;gap:10px;margin-top:18px}.modal-btns button{width:auto}
  .toast.ok{border-left-color:#16a34a}.toast.err{border-left-color:var(--red)}
  .pager{display:flex;gap:10px;align-items:center;justify-content:center;margin:16px 0;font-size:14px;color:var(--muted)}
  .pager button{background:var(--surface);color:var(--text);border:1px solid var(--border)}.pager button:disabled{opacity:.4;cursor:default}
@@ -521,6 +529,17 @@ GRID = """
  <div class="tablewrap"><table id="grid"></table></div>
  <div class="pager" id="pager"></div>
  <p class="hint" id="dlarea"></p>
+ <div id="savemodal" class="modal-bg" onclick="if(event.target===this)closeSaveModal()">
+  <div class="modal">
+   <h3>💾 שמירה בהיסטוריה</h3>
+   <p>תן מזהה/שם לטעינה — כך תזהה אותה במסך ההיסטוריה. שמירה חוזרת עם אותו שם תעדכן את אותה רשומה.</p>
+   <input id="savename" placeholder="שם/מזהה לטעינה" onkeydown="if(event.key==='Enter')doSave();if(event.key==='Escape')closeSaveModal()">
+   <div class="modal-btns">
+    <button class="b-save" onclick="doSave()">💾 שמור</button>
+    <button class="b-check" onclick="closeSaveModal()">ביטול</button>
+   </div>
+  </div>
+ </div>
 <script>
 const GRID = {{ grid|tojson }};
 const PAGE_SIZE = 100;
@@ -866,11 +885,23 @@ async function generate(){
     res.invalid>0?('נוצר קובץ טעינה עם '+res.valid+' שורות תקינות. '+res.invalid+' שורות שגויות לא נכללו.'):
                   ('✓ נוצר קובץ טעינה מלא עם '+res.valid+' שורות. לחץ להורדה.'));
 }
-async function saveLoad(){
-  const res=await post('/grid/save',collect()); if(!res)return;
+// פתיחת חלון שמירה — המשתמש מזין מזהה/שם לטעינה
+function saveLoad(){
+  const inp=$('savename');
+  if(!inp.value) inp.value=(GRID.source_name||'').replace(/\\.[^.]+$/,'');  // ברירת מחדל: שם הקובץ
+  $('savemodal').style.display='flex';
+  setTimeout(()=>{inp.focus();inp.select();},40);
+}
+function closeSaveModal(){ $('savemodal').style.display='none'; }
+async function doSave(){
+  const name=($('savename').value||'').trim();
+  if(!name){ $('savename').focus(); flash('err','יש להזין מזהה/שם לטעינה.'); return; }
+  closeSaveModal();
+  const body=collect(); body.name=name;
+  const res=await post('/grid/save',body); if(!res)return;
   showDownloads(res,true);
   if(res.load_id)
-    flash('ok','✓ הטעינה נשמרה בהיסטוריה ('+res.valid+' שורות). ראה מסך היסטוריה.');
+    flash('ok','✓ נשמר בהיסטוריה בשם «'+esc(name)+'» ('+res.valid+' שורות).');
   else
     flash('err','הטעינה הופקה אך שמירת ההיסטוריה נכשלה — בדוק את חיבור מסד הנתונים במסך ההיסטוריה.');
 }
@@ -966,6 +997,7 @@ def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None):
         "excel_columns": list(df.columns), "assignment": assignment,
         "unmatched_required": req_missing, "unmatched_optional": opt_missing,
         "journal": mapping.get("journal"),  # תפקידי עמודות להסבת תנועות יומן
+        "source_name": RUNS[run_id].get("source_name", ""),
     }
 
 
@@ -1361,6 +1393,7 @@ def _produce_load(save):
     if save:   # רישום בהיסטוריה (רשומה אחת לכל קובץ — עדכון אם כבר קיים) + שמירת קבצים
         load_id = db.upsert_load({
             "screen": screen, "source": run.get("source_name", ""),
+            "name": (data.get("name") or "").strip(),   # מזהה שהמשתמש הקליד בשמירה
             "total": len(valid_records) + len(rejected_items),
             "valid": len(valid_records), "invalid": len(rejected_items),
             "warnings": warn_count, "via": "web", "run_id": run_id,
@@ -1472,9 +1505,10 @@ HISTORY = """
  </form>
  {% if not rows %}<div class="empty">עדיין לא בוצעו טעינות.</div>
  {% else %}
- <table><thead><tr><th>זמן</th><th>מסך</th><th>קובץ מקור</th><th>נקראו</th><th>תקינות</th><th>נפסלו</th><th>אזהרות</th><th>משתמש</th><th>קבצים</th><th></th></tr></thead><tbody>
+ <table><thead><tr><th>מזהה/שם</th><th>זמן</th><th>מסך</th><th>קובץ מקור</th><th>נקראו</th><th>תקינות</th><th>נפסלו</th><th>אזהרות</th><th>משתמש</th><th>קבצים</th><th></th></tr></thead><tbody>
  {% for r in rows %}
  <tr>
+  <td>{% if r.name %}<b>🏷️ {{ r.name }}</b>{% else %}<span class="tag">—</span>{% endif %}</td>
   <td class="tag">{{ r.ts }}</td><td>{{ r.screen }}</td><td>{{ r.source or '—' }}</td>
   <td>{{ r.total }}</td><td class="ok">{{ r.valid }}</td>
   <td class="{{ 'bad' if r.invalid else '' }}">{{ r.invalid }}</td><td>{{ r.warnings }}</td>
@@ -1483,7 +1517,7 @@ HISTORY = """
       {% for f in r.files %}<a class="dl" href="/history/file/{{ f.id }}">{{ f.label }}</a>{% endfor %}
       {% if not r.files and not r.has_snapshot %}<span class="tag">—</span>{% endif %}</td>
   <td><form method="post" action="/history/delete/{{ r.id }}" style="margin:0"
-        onsubmit="return confirm('למחוק את רשומת הטעינה של {{ (r.source or r.screen)|e }}?')">
+        onsubmit="return confirm('למחוק את רשומת הטעינה של {{ (r.name or r.source or r.screen)|e }}?')">
         <button type="submit" class="delbtn" title="מחק מההיסטוריה">🗑</button></form></td>
  </tr>
  {% endfor %}

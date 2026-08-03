@@ -99,9 +99,13 @@ def init_db():
         cur.execute(
             "CREATE TABLE IF NOT EXISTS loads("
             f"  id {_ID_COL},"
-            "  ts TEXT, screen TEXT, source TEXT,"
+            "  ts TEXT, screen TEXT, source TEXT, name TEXT,"
             "  total INTEGER, valid INTEGER, invalid INTEGER, warnings INTEGER,"
             "  via TEXT, run_id TEXT, has_rejected INTEGER, \"user\" TEXT)")
+        try:  # מיגרציה למסדים ותיקים: הוספת עמודת השם/מזהה
+            cur.execute("ALTER TABLE loads ADD COLUMN name TEXT")
+        except Exception:  # noqa: BLE001 — כבר קיימת
+            pass
         cur.execute(
             "CREATE TABLE IF NOT EXISTS load_files("
             f"  id {_ID_COL},"
@@ -137,9 +141,9 @@ def add_load(entry):
     """מוסיף רשומת טעינה ומחזיר את המזהה (id). שקט בכל שגיאה (מחזיר None)."""
     entry = dict(entry)
     entry.setdefault("ts", _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    cols = ("ts", "screen", "source", "total", "valid", "invalid", "warnings",
+    cols = ("ts", "screen", "source", "name", "total", "valid", "invalid", "warnings",
             "via", "run_id", "has_rejected", "user")
-    vals = (entry.get("ts"), entry.get("screen"), entry.get("source"),
+    vals = (entry.get("ts"), entry.get("screen"), entry.get("source"), entry.get("name") or "",
             int(entry.get("total") or 0), int(entry.get("valid") or 0),
             int(entry.get("invalid") or 0), int(entry.get("warnings") or 0),
             entry.get("via"), entry.get("run_id"),
@@ -159,25 +163,29 @@ def add_load(entry):
 
 
 def upsert_load(entry):
-    """כמו add_load, אך אם כבר קיימת רשומה לאותו (מסך + קובץ מקור) — מעדכן אותה
-    (ומוחק את הקבצים הישנים שלה) במקום ליצור חדשה. מחזיר את מזהה הרשומה."""
+    """כמו add_load, אך אם כבר קיימת רשומה לאותו מזהה — מעדכן אותה (ומוחק את
+    הקבצים הישנים שלה) במקום ליצור חדשה. הזיהוי: לפי (מסך + שם/מזהה) אם ניתן שם,
+    אחרת לפי (מסך + קובץ מקור). מחזיר את מזהה הרשומה."""
     entry = dict(entry)
     entry.setdefault("ts", _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    name = (entry.get("name") or "").strip()
     source = entry.get("source")
-    if source:
+    key_col, key_val = ("name", name) if name else ("source", source)
+    if key_val:
         try:
             with _conn() as conn:
                 cur = _cursor(conn)
-                cur.execute(f"SELECT id FROM loads WHERE screen={PH} AND source={PH} "
-                            f"ORDER BY id DESC LIMIT 1", (entry.get("screen"), source))
+                cur.execute(f"SELECT id FROM loads WHERE screen={PH} AND {key_col}={PH} "
+                            f"ORDER BY id DESC LIMIT 1", (entry.get("screen"), key_val))
                 r = cur.fetchone()
                 if r:
                     lid = r["id"]
                     cur.execute(
-                        f"UPDATE loads SET ts={PH},total={PH},valid={PH},invalid={PH},"
-                        f"warnings={PH},via={PH},run_id={PH},has_rejected={PH},\"user\"={PH} "
-                        f"WHERE id={PH}",
-                        (entry.get("ts"), int(entry.get("total") or 0), int(entry.get("valid") or 0),
+                        f"UPDATE loads SET ts={PH},source={PH},name={PH},total={PH},valid={PH},"
+                        f"invalid={PH},warnings={PH},via={PH},run_id={PH},has_rejected={PH},"
+                        f"\"user\"={PH} WHERE id={PH}",
+                        (entry.get("ts"), entry.get("source"), name,
+                         int(entry.get("total") or 0), int(entry.get("valid") or 0),
                          int(entry.get("invalid") or 0), int(entry.get("warnings") or 0),
                          entry.get("via"), entry.get("run_id"),
                          1 if entry.get("has_rejected") else 0, entry.get("user") or "", lid))

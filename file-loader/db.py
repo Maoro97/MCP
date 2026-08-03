@@ -158,6 +158,48 @@ def add_load(entry):
         return None
 
 
+def upsert_load(entry):
+    """כמו add_load, אך אם כבר קיימת רשומה לאותו (מסך + קובץ מקור) — מעדכן אותה
+    (ומוחק את הקבצים הישנים שלה) במקום ליצור חדשה. מחזיר את מזהה הרשומה."""
+    entry = dict(entry)
+    entry.setdefault("ts", _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    source = entry.get("source")
+    if source:
+        try:
+            with _conn() as conn:
+                cur = _cursor(conn)
+                cur.execute(f"SELECT id FROM loads WHERE screen={PH} AND source={PH} "
+                            f"ORDER BY id DESC LIMIT 1", (entry.get("screen"), source))
+                r = cur.fetchone()
+                if r:
+                    lid = r["id"]
+                    cur.execute(
+                        f"UPDATE loads SET ts={PH},total={PH},valid={PH},invalid={PH},"
+                        f"warnings={PH},via={PH},run_id={PH},has_rejected={PH},\"user\"={PH} "
+                        f"WHERE id={PH}",
+                        (entry.get("ts"), int(entry.get("total") or 0), int(entry.get("valid") or 0),
+                         int(entry.get("invalid") or 0), int(entry.get("warnings") or 0),
+                         entry.get("via"), entry.get("run_id"),
+                         1 if entry.get("has_rejected") else 0, entry.get("user") or "", lid))
+                    cur.execute(f"DELETE FROM load_files WHERE load_id={PH}", (lid,))
+                    return lid
+        except Exception:  # noqa: BLE001
+            pass
+    return add_load(entry)
+
+
+def delete_load(load_id):
+    """מוחק רשומת טעינה מההיסטוריה ואת הקבצים שלה. מחזיר True בהצלחה."""
+    try:
+        with _conn() as conn:
+            cur = _cursor(conn)
+            cur.execute(f"DELETE FROM load_files WHERE load_id={PH}", (int(load_id),))
+            cur.execute(f"DELETE FROM loads WHERE id={PH}", (int(load_id),))
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def add_file(load_id, name, label, kind, content):
     """שומר קובץ פלט (bytes) עבור טעינה. מדלג על קבצים גדולים מהתקרה."""
     if load_id is None or content is None or len(content) > _MAX_BLOB:

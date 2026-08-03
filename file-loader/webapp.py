@@ -1358,8 +1358,8 @@ def _produce_load(save):
         f.write(report)
 
     load_id = None
-    if save:   # רישום בהיסטוריה + שמירת הקבצים לאחזור עתידי
-        load_id = core.append_history({
+    if save:   # רישום בהיסטוריה (רשומה אחת לכל קובץ — עדכון אם כבר קיים) + שמירת קבצים
+        load_id = db.upsert_load({
             "screen": screen, "source": run.get("source_name", ""),
             "total": len(valid_records) + len(rejected_items),
             "valid": len(valid_records), "invalid": len(rejected_items),
@@ -1438,6 +1438,8 @@ HISTORY = """
  .ok{color:var(--ok-fg);font-weight:700}.bad{color:var(--bad-fg);font-weight:700}
  .dl{color:var(--brand);text-decoration:none;font-weight:600;margin-left:10px}
  .dl.open{color:#fff;background:var(--brand);padding:5px 11px;border-radius:8px}
+ .delbtn{background:none;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:14px;padding:4px 8px;color:var(--bad-fg);width:auto}
+ .delbtn:hover{background:rgba(220,38,38,.1);border-color:var(--bad-fg)}
  .empty{padding:40px;text-align:center;color:var(--muted)}
  .tag{font-size:12px;color:var(--muted)}
 </style></head><body><div class="wrap">
@@ -1470,7 +1472,7 @@ HISTORY = """
  </form>
  {% if not rows %}<div class="empty">עדיין לא בוצעו טעינות.</div>
  {% else %}
- <table><thead><tr><th>זמן</th><th>מסך</th><th>קובץ מקור</th><th>נקראו</th><th>תקינות</th><th>נפסלו</th><th>אזהרות</th><th>משתמש</th><th>קבצים</th></tr></thead><tbody>
+ <table><thead><tr><th>זמן</th><th>מסך</th><th>קובץ מקור</th><th>נקראו</th><th>תקינות</th><th>נפסלו</th><th>אזהרות</th><th>משתמש</th><th>קבצים</th><th></th></tr></thead><tbody>
  {% for r in rows %}
  <tr>
   <td class="tag">{{ r.ts }}</td><td>{{ r.screen }}</td><td>{{ r.source or '—' }}</td>
@@ -1480,6 +1482,9 @@ HISTORY = """
   <td>{% if r.has_snapshot %}<a class="dl open" href="/history/open/{{ r.id }}">↗ פתח טבלה</a>{% endif %}
       {% for f in r.files %}<a class="dl" href="/history/file/{{ f.id }}">{{ f.label }}</a>{% endfor %}
       {% if not r.files and not r.has_snapshot %}<span class="tag">—</span>{% endif %}</td>
+  <td><form method="post" action="/history/delete/{{ r.id }}" style="margin:0"
+        onsubmit="return confirm('למחוק את רשומת הטעינה של {{ (r.source or r.screen)|e }}?')">
+        <button type="submit" class="delbtn" title="מחק מההיסטוריה">🗑</button></form></td>
  </tr>
  {% endfor %}
  </tbody></table>
@@ -1519,6 +1524,12 @@ def history_open(load_id):
     except Exception as e:  # noqa: BLE001
         return _upload_error(f"שגיאה בפתיחת הטבלה מההיסטוריה:\n{e}")
     return render_template_string(GRID, screen=screen, grid=payload, brand=brand_html())
+
+
+@app.route("/history/delete/<int:load_id>", methods=["POST"])
+def history_delete(load_id):
+    db.delete_load(load_id)
+    return redirect("/history")
 
 
 @app.route("/history/file/<int:file_id>")

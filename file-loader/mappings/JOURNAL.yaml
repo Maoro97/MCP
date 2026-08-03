@@ -39,6 +39,9 @@ journal:
   transtype: FNCPATNAME
   transtype_zero: "הש"
   transtype_nonzero: "מ"
+  # מס' החשבון בכרטסת מופיע בעמודה B בשורת כותרת-המקטע בלבד — יועבר לכל שורות
+  # התנועה שמתחתיו (רלוונטי רק כשמזוהה מבנה כרטסת; אחרת לא משפיע).
+  account_ffill: "B"
 
 # שורות לא-רלוונטיות (כותרות חשבון/יתרות בכרטסת) חסרות מספר תנועה — יסוננו
 require_source: [FNCNUM]
@@ -58,7 +61,7 @@ columns:
   - {source: ["ת. למאזן", "תאריך מאזן"], target: BALDATE, type: date}
   - {source: ["ת. אסמכתא", "תאריך אסמכתא", "ת.אסמ", "ת.אסמכתא"], target: CURDATE, type: date}
   - {source: ["ת. ערך", "תאריך ערך", "ת.ערך"], target: FNCDATE, type: date}
-  - {source: ["חשבון", "מפתח חשבון", "ח-ן נגדי", "חשבון נגדי"], target: ACCNAME, transform: [strip]}
+  - {source: ["__ACCOUNT__", "חשבון", "מפתח חשבון", "ח-ן נגדי", "חשבון נגדי"], target: ACCNAME, transform: [strip]}
   - {source: ["קוד מרכז רווח", "מרכז רווח"], target: COSTCNAME, transform: [strip]}
   # C/D — נגזר מעמודות חובה/זכות (__DC__), או ממקור ישיר אם קיים
   - {source: ["__DC__", "חובה/זכות", "חובה זכות", "C/D"], target: DEBIT, transform: [strip]}

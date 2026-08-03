@@ -423,6 +423,38 @@ def _to_float(value):
 DERIVED_AMOUNT_PRIMARY = "__AMOUNT_PRIMARY__"
 DERIVED_DC = "__DC__"
 DERIVED_AMOUNT_FX = "__AMOUNT_FX__"
+DERIVED_ACCOUNT = "__ACCOUNT__"
+
+
+def _excel_col_to_idx(ref):
+    """ממיר אות עמודת אקסל (A,B,...,AA) לאינדקס 0-מבוסס, או None אם אינו אות."""
+    s = str(ref).strip().upper()
+    if not s.isalpha():
+        return None
+    idx = 0
+    for ch in s:
+        idx = idx * 26 + (ord(ch) - 64)
+    return idx - 1
+
+
+def _resolve_col_ref(df, ref):
+    """מזהה עמודה לפי אות אקסל (B) או לפי שם עמודה. מחזיר את שם העמודה או None."""
+    idx = _excel_col_to_idx(ref)
+    if idx is not None and 0 <= idx < len(df.columns):
+        return df.columns[idx]
+    if ref in df.columns:
+        return ref
+    return None
+
+
+def _fmt_account(v):
+    """מעצב מספר חשבון: 10001.0 -> '10001'; אחרת מחרוזת מנוקה."""
+    if v is None:
+        return ""
+    if isinstance(v, float) and v == int(v):
+        return str(int(v))
+    s = str(v).strip()
+    return "" if s.lower() == "nan" else s
 
 
 def preprocess_journal_df(df, mapping):
@@ -437,13 +469,34 @@ def preprocess_journal_df(df, mapping):
     min_vals = mapping.get("min_row_values")
     require = mapping.get("require_source") or []
     if not (jc.get("debit_source") or jc.get("credit_source") or jc.get("signed_source")
-            or jc.get("fx_debit_source") or jc.get("fx_credit_source") or min_vals or require):
+            or jc.get("fx_debit_source") or jc.get("fx_credit_source") or min_vals or require
+            or jc.get("account_ffill")):
         return df
 
     df = df.copy()
 
     def _cell_empty(v):
         return v is None or str(v).strip() == "" or str(v).strip().lower() == "nan"
+
+    # (1) העברת מס' חשבון מכותרת-המקטע לכל שורות התנועה שמתחתיה (ffill).
+    # בכרטסת: מס' החשבון מופיע בעמודה B בשורת כותרת החשבון בלבד — נעביר אותו למטה.
+    acc_ref = jc.get("account_ffill")
+    if acc_ref is not None:
+        acc_col = _resolve_col_ref(df, acc_ref)
+        if acc_col is not None:
+            accn = df[acc_col]
+            acc_mask = accn.map(lambda v: not _cell_empty(v))
+            ok = bool(acc_mask.any())
+            by_t = {c["target"]: c for c in all_columns(mapping)}
+            fcol = by_t.get("FNCNUM")
+            if ok and fcol:
+                fnames = [n for n in _source_aliases(fcol.get("source")) if n in df.columns]
+                if fnames:
+                    anc = df.apply(lambda r: any(not _cell_empty(r[n]) for n in fnames), axis=1)
+                    # מבנה כרטסת: החשבון מופיע רק בשורות שאינן תנועה
+                    ok = int((acc_mask & anc).sum()) == 0 and int((anc & ~acc_mask).sum()) > 0
+            if ok:
+                df[DERIVED_ACCOUNT] = accn.where(acc_mask).ffill().map(_fmt_account)
 
     # (1a) סינון שורות לא-רלוונטיות: חייבות ערך בעמודות-העוגן (למשל מס' תנועה).
     # שורות כותרת/יתרה בכרטסת חסרות מספר תנועה ולכן יסוננו.

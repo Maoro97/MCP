@@ -484,7 +484,9 @@ GRID = """
  tr.filterrow input{width:100%;min-width:90px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font:inherit;font-size:13px}
 </style></head><body><div class="wrap">
  <div class="apphead">
-  <div class="ttl"><h1>טבלת טעינה — {{ screen }}</h1></div>
+  <div class="ttl" style="display:flex;align-items:center;gap:14px">
+   <a class="themebtn" style="text-decoration:none" href="/" title="חזרה לדף הבית">🏠 דף הבית</a>
+   <h1>טבלת טעינה — {{ screen }}</h1></div>
   <div style="display:flex;align-items:center;gap:14px">{{ brand|safe }}
    <button id="themebtn" class="themebtn" onclick="toggleTheme()">🌙 מצב כהה</button></div>
  </div>
@@ -495,14 +497,12 @@ GRID = """
   <span class="pill warn" id="p-warn">אזהרות 0</span>
   <span class="pill ign" id="p-ign">מיוצאות למרות בעיה 0</span>
   <span class="spacer"></span>
-  <button class="b-check" id="showallbtn" onclick="showAll()" style="display:none">📋 הצג את כל השורות</button>
-  <label class="chk" id="filterwrap"><input type="checkbox" id="onlyerr" onchange="render()"> הצג רק שורות לטיפול</label>
+  <button class="b-check" id="toggleview" onclick="toggleView()">🎯 הצג רק שורות בעייתיות</button>
   <button class="b-check" onclick="ignoreAllWarnings()" title="סמן את כל שורות האזהרה כמיוצאות">🚫 התעלם מאזהרות</button>
   <button class="b-check" onclick="revalidate()">🔄 בדוק מחדש</button>
   <button class="b-gen" onclick="generate()">⬇ צור קובץ טעינה</button>
   <button class="b-save" onclick="saveLoad()" title="שמור את הטעינה בהיסטוריה לאחזור עתידי">💾 שמירה בהיסטוריה</button>
   <a class="back" href="/history">📜 היסטוריה</a>
-  <a class="back" href="/">＋ קובץ חדש</a>
  </div>
  <div class="bar bar2">
   <span class="tool-lbl">🔧 עדכון גורף</span>
@@ -530,6 +530,7 @@ let page = 0;
 let colOrder = GRID.columns.map((_, i) => i);   // סדר תצוגה/ייצוא של העמודות
 let colWidths = {};                             // רוחב מותאם לעמודה (ci -> px)
 let colFilter = {};                             // סינון לכל עמודה (ci -> טקסט)
+let onlyProblems = false;                        // הצגת שורות בעייתיות בלבד (toggle)
 const $ = id => document.getElementById(id);
 
 // עדכון גורף — קובע ערך זהה לכל השורות בעמודה נבחרת
@@ -581,14 +582,21 @@ function overall(){
           valid:GRID.server_valid+good, invalid:bad+GRID.overflow};
 }
 function displayed(){
-  const onlyErr = $('onlyerr').checked;
   const out=[];
   GRID.rows.forEach((r,gi)=>{
-    // "לטיפול" = יש בעיה ולא סומן להתעלמות
     const attention = !r.ignore && (!r.valid || r.cells.some(c=>c.warning));
-    if((!onlyErr || attention) && matchesFilters(r)) out.push([gi,r]);
+    if((!onlyProblems || attention) && matchesFilters(r)) out.push([gi,r]);
   });
   return out;
+}
+// כפתור-toggle: מציג הכל / רק שורות בעייתיות. בקובץ גדול (errors) — טוען קודם את הכל מהשרת.
+function toggleView(){
+  if(GRID.mode==='errors'){ showAll(); return; }
+  onlyProblems=!onlyProblems; page=0; render(); updateToggleBtn();
+}
+function updateToggleBtn(){
+  const b=$('toggleview'); if(!b) return;
+  b.textContent = (GRID.mode==='errors' || onlyProblems) ? '📋 הצג את כל השורות' : '🎯 הצג רק שורות בעייתיות';
 }
 function render(){
   const cols=GRID.columns, disp=displayed();
@@ -683,7 +691,7 @@ async function fillDown(gi,ci){
   const visible=new Set(displayed().map(x=>x[0]));   // אינדקסים של השורות המוצגות
   GRID.rows.forEach((r,idx)=>{ if(visible.has(idx) && r.cells[ci] && r.cells[ci].value!==val){ r.cells[ci].value=val; n++; } });
   const nm=GRID.columns[ci].title||GRID.columns[ci].target;
-  const filtered = Object.keys(colFilter).length>0 || ($('onlyerr')&&$('onlyerr').checked);
+  const filtered = Object.keys(colFilter).length>0 || onlyProblems;
   await revalidate();
   flash('ok','מולא "'+esc(val)+'" ל-'+n+(filtered?' שורות מסוננות':' שורות')+' בעמודה «'+esc(nm)+'».');
 }
@@ -816,8 +824,7 @@ async function showAll(){
   const res=await post('/grid/all',collect()); if(!res)return;
   GRID.rows=res.rows; GRID.server_valid=0; GRID.overflow=0; GRID.total=res.total;
   GRID.total_warn=res.total_warn; GRID.warnings=res.warnings; GRID.warn_count=res.warn_count;
-  GRID.mode='all'; page=0; $('onlyerr').checked=false;
-  const b=$('showallbtn'); if(b) b.style.display='none';
+  GRID.mode='all'; page=0; onlyProblems=false; updateToggleBtn();
   renderBanner(); render();
   flash('ok','נטענו כל '+res.total+' השורות.');
 }
@@ -872,7 +879,7 @@ function updateThemeBtn(){var b=$('themebtn');if(!b)return;
   var cur=document.documentElement.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
   b.textContent=cur==='dark'?'☀️ מצב בהיר':'🌙 מצב כהה';}
 
-if(GRID.mode==='errors'){ $('onlyerr').checked=true; const b=$('showallbtn'); if(b) b.style.display=''; }
+updateToggleBtn();
 updateThemeBtn(); fillBulkSelect(); renderBanner(); renderMapping(); renderJournal(); render();
 </script></body></html>
 """

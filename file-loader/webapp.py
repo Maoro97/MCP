@@ -674,15 +674,18 @@ function updateCounts(){
   $('p-ign').textContent='מיוצאות למרות בעיה '+ign; $('p-ign').style.display = ign? '' : 'none';
 }
 function upd(gi,ci,val){ GRID.rows[gi].cells[ci].value=val; }
-// מילוי ערך תא לכל שאר השורות של אותה עמודה (כמו גרירה באקסל)
+// מילוי ערך תא לכל שאר השורות של אותה עמודה (כמו גרירה באקסל).
+// כשיש סינון פעיל — ממלא רק את השורות המסוננות/המוצגות.
 async function fillDown(gi,ci){
   const src=GRID.rows[gi] && GRID.rows[gi].cells[ci];
   if(!src) return;
   const val=src.value; let n=0;
-  GRID.rows.forEach(r=>{ if(r.cells[ci] && r.cells[ci].value!==val){ r.cells[ci].value=val; n++; } });
+  const visible=new Set(displayed().map(x=>x[0]));   // אינדקסים של השורות המוצגות
+  GRID.rows.forEach((r,idx)=>{ if(visible.has(idx) && r.cells[ci] && r.cells[ci].value!==val){ r.cells[ci].value=val; n++; } });
   const nm=GRID.columns[ci].title||GRID.columns[ci].target;
+  const filtered = Object.keys(colFilter).length>0 || ($('onlyerr')&&$('onlyerr').checked);
   await revalidate();
-  flash('ok','מולא "'+esc(val)+'" ל-'+n+' שורות בעמודה «'+esc(nm)+'».');
+  flash('ok','מולא "'+esc(val)+'" ל-'+n+(filtered?' שורות מסוננות':' שורות')+' בעמודה «'+esc(nm)+'».');
 }
 function delRow(gi){ GRID.rows.splice(gi,1); render(); }
 function toggleIgnore(gi){ GRID.rows[gi].ignore=!GRID.rows[gi].ignore; render(); }

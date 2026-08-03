@@ -1,45 +1,61 @@
 # ============================================================================
 # מיפוי — מחירוני ספקים (מסך אב) + מחירי מוצרים (מסך בן) → קובץ טעינה רב-רמתי
 # ----------------------------------------------------------------------------
-# קלט: אקסל שטוח שבו כל שורה = שורת מחיר למוצר, ועמודות המחירון (אב) חוזרות
-# בכל שורה. הקיבוץ לאב הוא לפי SUPPLNAME (מזהה המחירון).
+# קלט: אקסל שטוח שבו כל שורה = שורת מחיר למוצר, ועמודות המחירון (אב) חוזרות בכל
+# שורה. הקיבוץ לאב הוא לפי (קוד מחירון ספק + מס' ספק).
 #
-# פלט (leveled: true): קובץ טקסט אחד שבו העמודה הראשונה היא מזהה הרמה —
-#   1  = שורת אב  (מחירון):  1 <TAB> SUPNAME <TAB> SUPPLDES
-#   2  = שורת בן  (מוצר):    2 <TAB> PARTNAME <TAB> PARTDES <TAB> QUANT <TAB> PRICE <TAB> PERCENT <TAB> CODE <TAB> SUPPARTNAME
-# כל שורות הבן של מחירון מסוים מקובצות מתחת לשורת האב שלו.
+# פלט (leveled): קובץ טקסט אחד שבו העמודה הראשונה היא מזהה הרמה — 1 = אב, 2 = בן.
 #
-# רוחבי השדות (max_length) נלקחו מקטלוג השדות של הלקוח (גיליון 1).
+# הגדרות השדות (שם עברי, אורך, טיפוס, חובה) נלקחו מקטלוג השדות של הלקוח.
+# שדות חובה (M): אב — SUPNAME (מס' ספק), CODE (מטבע) · בן — PARTNAME (מק"ט), CODE.
 # ============================================================================
 
 screen: SUPPLPRICE
-document: true          # המפתח (SUPPLNAME) חוזר בכל שורה — כפילות מפתח אינה שגיאה
-leveled: true           # פלט רב-רמתי בקובץ אחד עם מזהה רמה בעמודה הראשונה
+document: true
+leveled: true
 interface_name: XXXX_LOADSUPPRICE
 delimiter: tab
 encoding: windows-1255
 date_format: "%d/%m/%y"
 include_header: false
-key_fields: [SUPNAME]
+key_fields: [SUPPLNAME, SUPNAME]
 
-# --- עמודות האב (מחירוני ספקים) — רמה 1 ---
-# ניתן לסדר את העמודות מחדש בטבלה; הסידור מיושם על שורת האב בפלט.
+# --- עמודות האב (מחירון ספק) — רמה 1 ---
 columns:
-  - source: ["מספר מחירון", "קוד מחירון", "מחירון", "מס מחירון", "מס' מחירון", "מזהה מחירון", "מספר ספק", "קוד ספק", "ספק"]
+  - source: ["קוד מחירון ספק", "קוד מחירון", "מספר מחירון", "מחירון", "מזהה מחירון"]
+    target: SUPPLNAME
+    title: "קוד מחירון ספק"
+    max_length: 8
+    transform: [strip]
+  - source: ["מס' ספק", "מספר ספק", "קוד ספק", "ספק", "מס ספק"]
     target: SUPNAME
+    title: "מס' ספק"
     required: true
     max_length: 16
     transform: [strip]
-  # תאריך המחירון — שדה חובה מסוג תאריך בפורמט פריוריטי (dd/mm/yy)
-  - source: ["תאריך מחירון", "תאריך", "ת. מחירון", "תאריך תוקף", "מתאריך", "תאריך התחלה"]
+  - source: ["תאור מחירון ספק", "תיאור מחירון", "תאור מחירון", "שם מחירון"]
+    target: SUPPLDES
+    title: "תאור מחירון ספק"
+    max_length: 16
+    transform: [strip]
+  - source: ["ת. כניסה לתוקף", "תאריך כניסה לתוקף", "תאריך מחירון", "תאריך תוקף", "מתאריך"]
     target: SUPPLDATE
-    required: true
+    title: "ת. כניסה לתוקף"
     type: date
     transform: [strip]
-  - source: ["תיאור מחירון", "תאור מחירון", "שם מחירון", "שם המחירון"]
-    target: SUPPLDES
-    max_length: 16
+  - source: ["ת. סיום תוקף", "תאריך סיום תוקף", "תקף עד", "עד תאריך", "תאריך סיום"]
+    target: EXPIRYDATE
+    title: "ת. סיום תוקף"
+    type: date
     transform: [strip]
+  - source: ["מטבע", "קוד מטבע"]
+    target: CODE
+    title: "מטבע"
+    required: true
+    max_length: 3
+    value_map: {"שקל": "ILS", 'ש"ח': "ILS", "שח": "ILS", "דולר": "USD", "אירו": "EUR", "יורו": "EUR"}
+    default: "ILS"
+    lookup: currencies
 
 # --- מסך-משנה: מחירי מוצרים — רמה 2 ---
 subforms:
@@ -48,35 +64,37 @@ subforms:
     columns:
       - source: ["מקט", 'מק"ט', "קוד פריט", "מספר פריט", "פריט"]
         target: PARTNAME
+        title: 'מק"ט'
         required: true
         max_length: 22
         transform: [strip, remove_spaces]
-      - source: ["תיאור פריט", "תאור פריט", "שם פריט", "תיאור מוצר", "תאור מוצר"]
-        target: PARTDES
-        max_length: 59
+      - source: ['מק"ט ספק', "מקט ספק", "מספר פריט ספק", "מקט הספק", "פריט ספק"]
+        target: SUPPARTNAME
+        title: 'מק"ט ספק'
+        max_length: 30
         transform: [strip]
-      - source: ["כמות", "כמות מדרגה", "כמות מינימלית", "כמות מינימום", "מכמות"]
+      - source: ["כמות", "כמות מדרגה", "כמות מינימלית", "מכמות"]
         target: QUANT
+        title: "כמות"
         type: number
-        max_length: 17
         transform: [strip]
       - source: ["מחיר", "מחיר יחידה", "מחיר ליחידה"]
         target: PRICE
+        title: "מחיר"
         type: number
         decimals: 2
         transform: [strip]
-      - source: ["אחוז", "אחוז הנחה", "הנחה", "אחוז מרווח", "% הנחה"]
+      - source: ["הנחה (%)", "אחוז הנחה", "הנחה", "% הנחה", "אחוז מרווח"]
         target: PERCENT
+        title: "הנחה (%)"
         type: number
         decimals: 2
         transform: [strip]
       - source: ["מטבע", "קוד מטבע"]
         target: CODE
+        title: "מטבע"
+        required: true
         max_length: 3
         value_map: {"שקל": "ILS", 'ש"ח': "ILS", "שח": "ILS", "דולר": "USD", "אירו": "EUR", "יורו": "EUR"}
+        default: "ILS"
         lookup: currencies
-        transform: [strip]
-      - source: ['מק"ט ספק', "מקט ספק", "מספר פריט ספק", "מקט הספק", "פריט ספק", "מקט של הספק"]
-        target: SUPPARTNAME
-        max_length: 30
-        transform: [strip]

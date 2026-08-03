@@ -428,6 +428,10 @@ GRID = """
  td.warn::after{content:"⚠";position:absolute;top:1px;left:3px;font-size:10px}
  td input:focus{background:var(--surface);box-shadow:inset 0 0 0 2px var(--brand)}
  td.const input{background:var(--surface-2);color:var(--muted)}
+ tbody td{position:relative}
+ .filldown{position:absolute;left:3px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:12px;font-weight:800;
+  background:var(--brand);color:#fff;border-radius:5px;padding:1px 6px;line-height:16px;opacity:0;transition:.1s;z-index:3;user-select:none}
+ tbody td:hover .filldown{opacity:.85}.filldown:hover{opacity:1}
  tr.rowbad td.rownum{background:var(--bad-bg);color:var(--bad-fg);font-weight:700}
  .del,.ign{border-radius:8px;padding:5px 8px;font-size:13px;cursor:pointer;font-weight:700;transition:.12s;line-height:1;display:inline-block}
  .del{background:var(--bad-bg);color:var(--bad-fg)}.del:hover{filter:brightness(.95)}
@@ -625,8 +629,9 @@ function render(){
       const title=cell.error?' title="'+esc(cell.error)+'"':(cell.warning?' title="'+esc(cell.warning)+'"':'');
       const ro=c.constant?' readonly':'';
       const wst=colWidths[ci]?' style="min-width:'+colWidths[ci]+'px"':'';
+      const fd=c.constant?'':'<span class="filldown" title="מלא ערך זה לכל השורות בעמודה" onclick="fillDown('+gi+','+ci+')">⤓</span>';
       h+='<td class="'+cls+'"'+title+'><input data-ci="'+ci+'" value="'+esc(cell.value)+'"'+ro+wst+
-         ' oninput="upd('+gi+','+ci+',this.value)"></td>';
+         ' oninput="upd('+gi+','+ci+',this.value)">'+fd+'</td>';
     }
     h+='</tr>';
   }
@@ -669,6 +674,16 @@ function updateCounts(){
   $('p-ign').textContent='מיוצאות למרות בעיה '+ign; $('p-ign').style.display = ign? '' : 'none';
 }
 function upd(gi,ci,val){ GRID.rows[gi].cells[ci].value=val; }
+// מילוי ערך תא לכל שאר השורות של אותה עמודה (כמו גרירה באקסל)
+async function fillDown(gi,ci){
+  const src=GRID.rows[gi] && GRID.rows[gi].cells[ci];
+  if(!src) return;
+  const val=src.value; let n=0;
+  GRID.rows.forEach(r=>{ if(r.cells[ci] && r.cells[ci].value!==val){ r.cells[ci].value=val; n++; } });
+  const nm=GRID.columns[ci].title||GRID.columns[ci].target;
+  await revalidate();
+  flash('ok','מולא "'+esc(val)+'" ל-'+n+' שורות בעמודה «'+esc(nm)+'».');
+}
 function delRow(gi){ GRID.rows.splice(gi,1); render(); }
 function toggleIgnore(gi){ GRID.rows[gi].ignore=!GRID.rows[gi].ignore; render(); }
 function ignoreAllWarnings(){

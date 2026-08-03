@@ -801,6 +801,62 @@ def _read_delimited_raw(source, name):
                        engine="python", keep_default_na=True)
 
 
+def _source_bytes(source):
+    """מחזיר את בייטי המקור (נתיב או file-like), עם החזרת המצביע להתחלה."""
+    if isinstance(source, str):
+        with open(source, "rb") as f:
+            return f.read()
+    try:
+        source.seek(0)
+    except (AttributeError, OSError):
+        pass
+    return source.read()
+
+
+_MIN_XLSX_STYLES = (
+    b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    b'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    b'<fonts count="1"><font/></fonts>'
+    b'<fills count="1"><fill><patternFill patternType="none"/></fill></fills>'
+    b'<borders count="1"><border/></borders>'
+    b'<cellStyleXfs count="1"><xf/></cellStyleXfs>'
+    b'<cellXfs count="1"><xf/></cellXfs></styleSheet>'
+)
+
+
+def _strip_xlsx_styles(data):
+    """מחליף styles.xml פגום ב-xlsx בסגנון מינימלי תקין — כדי לאפשר קריאה."""
+    import io as _io
+    import zipfile
+    out = _io.BytesIO()
+    with zipfile.ZipFile(_io.BytesIO(data)) as zin, \
+            zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.namelist():
+            b = zin.read(item)
+            if item.endswith("styles.xml"):
+                b = _MIN_XLSX_STYLES
+            zout.writestr(item, b)
+    out.seek(0)
+    return out
+
+
+def _read_xlsx(source, sheet):
+    """קורא xlsx; אם קובץ הסגנונות פגום (שגיאת openpyxl) — קורא שוב ללא הסגנונות."""
+    import io as _io
+    import warnings
+    sn = sheet if sheet is not None else 0
+    try:
+        return pd.read_excel(source, sheet_name=sn, header=None, dtype=object, engine="openpyxl")
+    except ValueError:
+        raise
+    except Exception:  # noqa: BLE001 — כנראה stylesheet פגום; ננסה לתקן ולקרוא שוב
+        data = _source_bytes(source)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return pd.read_excel(_strip_xlsx_styles(data), sheet_name=sn,
+                                 header=None, dtype=object, engine="openpyxl")
+
+
 def read_input(source, sheet=None, header_row=None, expected_sources=None, filename=None):
     """
     קורא קובץ קלט לפי הסוג: xlsx / txt / dat / csv / tsv.
@@ -814,8 +870,7 @@ def read_input(source, sheet=None, header_row=None, expected_sources=None, filen
 
     if ext in ("xlsx", "xlsm", "xls", ""):
         try:
-            raw = pd.read_excel(source, sheet_name=sheet if sheet is not None else 0,
-                                header=None, dtype=object, engine="openpyxl")
+            raw = _read_xlsx(source, sheet)
         except ValueError as e:
             raise UserError(f"לא ניתן לקרוא את הגיליון '{sheet}' מ{name}.\n{e}")
         except Exception as e:  # noqa: BLE001

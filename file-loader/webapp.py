@@ -509,8 +509,6 @@ GRID = """
   <select id="bulkcol" class="mini"></select>
   <input id="bulkval" class="mini" placeholder="ערך חדש לכל השורות">
   <button class="b-check" onclick="bulkUpdate()">החל על הכל</button>
-  <span class="spacer"></span>
-  <label class="chk"><input type="checkbox" id="showfilters" onchange="render()"> 🔎 סינון עמודות</label>
  </div>
  <div id="banner"></div><div id="mapping"></div><div id="journalbar"></div><div id="toast" class="toast"></div>
  <div class="legend">
@@ -546,7 +544,7 @@ function bulkUpdate(){
   GRID.rows.forEach(r=>{ if(r.cells[ci]) r.cells[ci].value=val; });
   render(); flash('ok','עודכנו '+GRID.rows.length+' שורות בעמודה '+GRID.columns[ci].target+'.');
 }
-function setFilter(ci,v){ if(v) colFilter[ci]=v; else delete colFilter[ci]; page=0; render(); }
+function setFilter(ci,v){ if(v) colFilter[ci]=v; else delete colFilter[ci]; page=0; renderBody(); }
 function matchesFilters(r){
   for(const ci in colFilter){
     const cell=r.cells[ci];
@@ -598,29 +596,14 @@ function updateToggleBtn(){
   const b=$('toggleview'); if(!b) return;
   b.textContent = (GRID.mode==='errors' || onlyProblems) ? '📋 הצג את כל השורות' : '🎯 הצג רק שורות בעייתיות';
 }
-function render(){
-  const cols=GRID.columns, disp=displayed();
+function computeSlice(){
+  const disp=displayed();
   const pages=Math.max(1,Math.ceil(disp.length/PAGE_SIZE));
   if(page>=pages) page=pages-1; if(page<0) page=0;
-  const slice=disp.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE);
-  let h='<thead><tr><th class="act"></th><th class="rownum">#</th>';
-  for(const ci of colOrder){ const c=cols[ci];
-    const w=colWidths[ci]?' style="min-width:'+colWidths[ci]+'px"':'';
-    h+='<th class="col" draggable="true" data-ci="'+ci+'"'+w+' ondragstart="dragStart(event,'+ci+
-       ')" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropCol(event,'+ci+
-       ')" ondragend="dragEnd(event)"><span class="rez" title="גרור לשינוי רוחב" onmousedown="startResize(event,'+ci+
-       ')"></span><span class="grip">⋮⋮</span><span class="tgt">'+esc(c.title||c.target)+
-       (c.required?' <span class="reqdot" title="שדה חובה">•</span>':'')+
-       '</span><span class="src">'+(c.title?esc(c.target):(c.constant?'ערך קבוע':esc(c.source||'')))+'</span></th>';
-  }
-  h+='</tr>';
-  if($('showfilters') && $('showfilters').checked){   // שורת סינון לכל עמודה
-    h+='<tr class="filterrow"><th class="act"></th><th class="rownum">🔎</th>';
-    for(const ci of colOrder)
-      h+='<th><input value="'+esc(colFilter[ci]||'')+'" placeholder="סנן" oninput="setFilter('+ci+',this.value)"></th>';
-    h+='</tr>';
-  }
-  h+='</thead><tbody>';
+  return {disp,pages,slice:disp.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE)};
+}
+function buildRows(slice,cols){
+  let h='';
   for(const [gi,r] of slice){
     const problem = !r.valid || r.cells.some(c=>c.warning);
     const rowcls = r.ignore ? 'rowign' : (r.valid ? '' : 'rowbad');
@@ -645,10 +628,38 @@ function render(){
   }
   if(!slice.length) h+='<tr><td class="act"></td><td class="rownum">–</td><td colspan="'+cols.length+
      '" style="padding:16px;color:#16a34a;font-weight:600">אין שורות להצגה 🎉</td></tr>';
-  h+='</tbody>'; $('grid').innerHTML=h;
+  return h;
+}
+function render(){
+  const cols=GRID.columns;
+  const {disp,pages,slice}=computeSlice();
+  let h='<thead><tr><th class="act"></th><th class="rownum">#</th>';
+  for(const ci of colOrder){ const c=cols[ci];
+    const w=colWidths[ci]?' style="min-width:'+colWidths[ci]+'px"':'';
+    h+='<th class="col" draggable="true" data-ci="'+ci+'"'+w+' ondragstart="dragStart(event,'+ci+
+       ')" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropCol(event,'+ci+
+       ')" ondragend="dragEnd(event)"><span class="rez" title="גרור לשינוי רוחב" onmousedown="startResize(event,'+ci+
+       ')"></span><span class="grip">⋮⋮</span><span class="tgt">'+esc(c.title||c.target)+
+       (c.required?' <span class="reqdot" title="שדה חובה">•</span>':'')+
+       '</span><span class="src">'+(c.title?esc(c.target):(c.constant?'ערך קבוע':esc(c.source||'')))+'</span></th>';
+  }
+  h+='</tr>';
+  h+='<tr class="filterrow"><th class="act"></th><th class="rownum">🔎</th>';   // סינון קבוע לכל עמודה
+  for(const ci of colOrder)
+    h+='<th><input value="'+esc(colFilter[ci]||'')+'" placeholder="סנן" oninput="setFilter('+ci+',this.value)"></th>';
+  h+='</tr></thead><tbody id="gridbody">'+buildRows(slice,cols)+'</tbody>';
+  $('grid').innerHTML=h;
   renderPager(disp.length,pages);
   updateCounts();
   try{ syncScroll(); }catch(e){}
+}
+// עדכון רק גוף הטבלה (בלי לבנות מחדש את שורת הסינון) — כדי לשמור פוקוס בכתיבה
+function renderBody(){
+  const b=$('gridbody'); if(!b){ render(); return; }
+  const {disp,pages,slice}=computeSlice();
+  b.innerHTML=buildRows(slice,GRID.columns);
+  renderPager(disp.length,pages);
+  updateCounts();
 }
 // גלילה אופקית נגישה: פס עליון מסונכרן + גלילה עם Shift+גלגלת (בנוסף לפס התחתון של הקופסה)
 function syncScroll(){

@@ -219,6 +219,8 @@ def enrich_columns(mapping, screen):
             col["boolean"] = True
         if fs.get("readonly"):
             col["_readonly"] = True
+        if "title" not in col and fs.get("title"):
+            col["title"] = fs["title"]      # שם השדה בעברית — לתצוגה למשתמש
 
 
 def mapping_field_warnings(mapping, screen=None):
@@ -344,7 +346,10 @@ def build_leveled_content(valid_records, mapping, order=None) -> str:
         levels.append((str(i + 2), [(start + j, cols[j]) for j in range(len(cols))]))
         start += len(cols)
 
-    if order:                                   # סידור בתוך כל רמה לפי בקשת המשתמש
+    # סידור בתוך כל רמה לפי בקשת המשתמש — רק אם אין שמות target כפולים בין הרמות
+    # (target כפול, למשל CODE באב ובבן, היה מתנגש בסידור לפי שם ומשבש את הפלט).
+    all_targets = [c["target"] for _, entries in levels for _, c in entries]
+    if order and len(set(all_targets)) == len(all_targets):
         pos = {t: k for k, t in enumerate(order)}
         for _, entries in levels:
             entries.sort(key=lambda e: pos.get(e[1]["target"], 10 ** 6))

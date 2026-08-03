@@ -1,0 +1,130 @@
+# ============================================================================
+# מיפוי — מחירונים (PRICELIST) + מחירי מוצרים בתוקף (PARTPRICE2) → קובץ רב-רמתי
+# ----------------------------------------------------------------------------
+# שני מסכים (דומה למחירוני ספק): מסך אב = מחירונים, מסך בן = מחירי מוצרים.
+# קלט: אקסל שטוח שבו עמודות המחירון (אב) חוזרות בכל שורת מוצר; קיבוץ לפי PLNAME.
+# פלט (leveled): קובץ טקסט אחד עם מזהה רמה בעמודה הראשונה — 1 = אב, 2 = בן.
+#
+# הגדרות השדות (שם עברי, אורך, טיפוס, דיוק, חובה) נלקחו מקטלוג השדות של הלקוח.
+# שדות חובה (M): אב — PLNAME, CODE, STATDES, DOERNAME · בן — PARTNAME, CODE.
+# (שדות "קריאה בלבד"/מחושבים כמו תאור מטבע, מחיר אחרי הנחה — אינם נטענים.)
+# ============================================================================
+
+screen: PRICELIST
+document: true
+leveled: true
+interface_name: XXXX_LOADPRICELIST
+delimiter: tab
+encoding: windows-1255
+date_format: "%d/%m/%y"
+include_header: false
+key_fields: [PLNAME]
+
+# --- עמודות האב (מחירונים) — רמה 1 ---
+columns:
+  - source: ["קוד מחירון", "מספר מחירון", "מחירון", "קוד"]
+    target: PLNAME
+    title: "קוד מחירון"
+    required: true
+    max_length: 6
+    transform: [strip]
+  - source: ["תאור מחירון", "תיאור מחירון", "שם מחירון"]
+    target: PLDES
+    title: "תאור מחירון"
+    max_length: 16
+    transform: [strip]
+  - source: ["מטבע", "קוד מטבע"]
+    target: CODE
+    title: "מטבע"
+    required: true
+    max_length: 3
+    value_map: {"שקל": "ILS", 'ש"ח': "ILS", "שח": "ILS", "דולר": "USD", "אירו": "EUR", "יורו": "EUR"}
+    default: "ILS"
+    lookup: currencies
+  - source: ["תאריך מחירון תקף", "תאריך מחירון", "תאריך תוקף", "מתאריך"]
+    target: PLDATE
+    title: "תאריך מחירון תקף"
+    type: date
+    transform: [strip]
+  - source: ["מחירון תקף עד תאריך", "תקף עד", "עד תאריך", "תאריך סיום"]
+    target: EXPIRYDATE
+    title: "מחירון תקף עד תאריך"
+    type: date
+    transform: [strip]
+  - source: ["סטטוס", "סטטוס מחירון"]
+    target: STATDES
+    title: "סטטוס"
+    required: true
+    max_length: 12
+    default: "פעיל"
+    transform: [strip]
+  - source: ["לטיפול", "אחראי", "משתמש מטפל"]
+    target: DOERNAME
+    title: "לטיפול"
+    required: true
+    max_length: 20
+    transform: [strip]
+  - source: ["קוד קבוצה", "קבוצה"]
+    target: GROUPNAME
+    title: "קוד קבוצה"
+    max_length: 10
+    transform: [strip]
+  - source: ["מחירון מיוחד?", "מחירון מיוחד", "מיוחד"]
+    target: SPECIAL
+    title: "מחירון מיוחד?"
+    max_length: 1
+    transform: [strip]
+
+# --- מסך-משנה: מחירי מוצרים בתוקף (PARTPRICE2) — רמה 2 ---
+subforms:
+  - name: PARTPRICE2
+    interface_name: XXXX_LOADPRICELIST_LINES
+    columns:
+      - source: ["מקט", 'מק"ט', "קוד פריט", "מספר פריט", "פריט"]
+        target: PARTNAME
+        title: 'מק"ט'
+        required: true
+        max_length: 22
+        transform: [strip, remove_spaces]
+      - source: ["כמות", "כמות מדרגה", "כמות מינימלית", "מכמות"]
+        target: QUANT
+        title: "כמות"
+        type: number
+        decimals: 3
+        transform: [strip]
+      - source: ["יחידה", "יח'", "יחידת מידה"]
+        target: UNITNAME
+        title: "יח'"
+        max_length: 3
+        transform: [strip]
+      - source: ["מחיר", "מחיר יחידה"]
+        target: PRICE
+        title: "מחיר"
+        type: number
+        decimals: 2
+        transform: [strip]
+      - source: ["הנחה (%)", "הנחה", "אחוז הנחה", "% הנחה"]
+        target: PERCENT
+        title: "הנחה (%)"
+        type: number
+        decimals: 2
+        transform: [strip]
+      - source: ['מחיר כולל מע"מ', "מחיר כולל מעמ", "מחיר עם מעמ"]
+        target: VATPRICE
+        title: 'מחיר כולל מע"מ'
+        type: number
+        decimals: 2
+        transform: [strip]
+      - source: ["מטבע", "קוד מטבע"]
+        target: CODE
+        title: "מטבע"
+        required: true
+        max_length: 3
+        value_map: {"שקל": "ILS", 'ש"ח': "ILS", "שח": "ILS", "דולר": "USD", "אירו": "EUR", "יורו": "EUR"}
+        default: "ILS"
+        lookup: currencies
+      - source: ["ת. מחירון", "תאריך מחירון פריט", "תאריך מחיר"]
+        target: PLDATE
+        title: "ת. מחירון"
+        type: date
+        transform: [strip]

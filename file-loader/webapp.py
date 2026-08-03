@@ -136,6 +136,8 @@ def _prune_runs():
 def _columns_meta(mapping):
     return [{
         "target": c["target"], "source": c.get("source"),
+        "title": c.get("title") or "",     # שם השדה בעברית (אם הוגדר) — לתצוגה
+        "required": bool(c.get("required")),
         # ערך קבוע/אוטומטי = לא לעריכה; עמודה ידנית (manual) כן ניתנת לעריכה
         "constant": c.get("source") is None and not c.get("manual"),
         "type": c.get("type", "text"),
@@ -408,7 +410,8 @@ GRID = """
  table{border-collapse:separate;border-spacing:0;width:100%;font-size:14px}
  th,td{border-bottom:1px solid var(--border);border-left:1px solid var(--border);padding:0;text-align:right;white-space:nowrap}
  th{background:var(--surface-2);padding:10px 12px;position:sticky;top:0;z-index:2}
- th .tgt{font-weight:700}th .src{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
+ th .tgt{font-weight:700}th .src{display:block;font-weight:400;color:var(--muted);font-size:11.5px;direction:ltr}
+ th .reqdot{color:var(--bad-fg);font-weight:800}
  th.col{cursor:grab;user-select:none;transition:.15s}th.col:active{cursor:grabbing}
  th.col .grip{color:var(--muted);opacity:.5;font-size:12px;margin-left:5px}
  .rez{position:absolute;left:0;top:0;height:100%;width:9px;cursor:col-resize;z-index:4}
@@ -458,6 +461,7 @@ GRID = """
  .mapgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;padding:6px 0 16px}
  .mapitem{display:flex;flex-direction:column;gap:4px;font-size:13px}
  .mapitem .mapt{font-weight:600;color:var(--muted)}.mapitem.mapreq .mapt{color:var(--bad-fg)}
+ .mapitem .mapen{font-weight:400;font-size:11px;color:var(--muted);opacity:.7;direction:ltr}
  .mapitem select{padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);font-family:inherit;font-size:13.5px}
  .mapitem.mapreq select{border-color:var(--bad-fg)}
  .mapitem select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(99,102,241,.15)}
@@ -593,8 +597,9 @@ function render(){
     h+='<th class="col" draggable="true" data-ci="'+ci+'"'+w+' ondragstart="dragStart(event,'+ci+
        ')" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropCol(event,'+ci+
        ')" ondragend="dragEnd(event)"><span class="rez" title="גרור לשינוי רוחב" onmousedown="startResize(event,'+ci+
-       ')"></span><span class="grip">⋮⋮</span><span class="tgt">'+esc(c.target)+
-       '</span><span class="src">'+(c.constant?'ערך קבוע':esc(c.source||''))+'</span></th>';
+       ')"></span><span class="grip">⋮⋮</span><span class="tgt">'+esc(c.title||c.target)+
+       (c.required?' <span class="reqdot" title="שדה חובה">•</span>':'')+
+       '</span><span class="src">'+(c.title?esc(c.target):(c.constant?'ערך קבוע':esc(c.source||'')))+'</span></th>';
   }
   h+='</tr>';
   if($('showfilters') && $('showfilters').checked){   // שורת סינון לכל עמודה
@@ -701,8 +706,9 @@ function renderMapping(){
   for(const c of mapped){
     const cur=GRID.assignment[c.target]||'', bad=req.has(c.target);
     const hint=c.source?(Array.isArray(c.source)?c.source[0]:c.source):'';
-    h+='<label class="mapitem'+(bad?' mapreq':'')+'"><span class="mapt">'+esc(c.target)+
-       (bad?' • חובה':'')+'</span><select data-t="'+esc(c.target)+'" onchange="remap()">'+
+    h+='<label class="mapitem'+(bad?' mapreq':'')+'"><span class="mapt">'+esc(c.title||c.target)+
+       (c.title?' <span class="mapen">'+esc(c.target)+'</span>':'')+
+       ((c.required||bad)?' • חובה':'')+'</span><select data-t="'+esc(c.target)+'" onchange="remap()">'+
        '<option value="">— לא ממופה —</option>';
     for(const ex of cols) h+='<option value="'+esc(ex)+'"'+(ex===cur?' selected':'')+'>'+esc(ex)+'</option>';
     h+='</select></label>';

@@ -455,6 +455,8 @@ GRID = """
  .modal h3{margin:0 0 8px;font-size:19px}.modal p{margin:0 0 16px;color:var(--muted);font-size:14px}
  .modal input{width:100%;padding:12px 13px;border:1.5px solid var(--border);border-radius:12px;font:inherit;font-size:15px;
   background:var(--surface-2);color:var(--text)}
+ .modal input+.ml{margin-top:12px}
+ .modal .ml{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:0 0 6px 2px}
  .modal input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 4px rgba(99,102,241,.15);background:var(--surface)}
  .modal-btns{display:flex;gap:10px;margin-top:18px}.modal-btns button{width:auto}
  .toast.ok{border-left-color:#16a34a}.toast.err{border-left-color:var(--red)}
@@ -532,8 +534,11 @@ GRID = """
  <div id="savemodal" class="modal-bg" onclick="if(event.target===this)closeSaveModal()">
   <div class="modal">
    <h3>💾 שמירה בהיסטוריה</h3>
-   <p>תן מזהה/שם לטעינה — כך תזהה אותה במסך ההיסטוריה. שמירה חוזרת עם אותו שם תעדכן את אותה רשומה.</p>
-   <input id="savename" placeholder="שם/מזהה לטעינה" onkeydown="if(event.key==='Enter')doSave();if(event.key==='Escape')closeSaveModal()">
+   <p>תן מזהה/שם ולקוח לטעינה — כך תזהה אותה במסך ההיסטוריה. שמירה חוזרת של אותו מזהה+לקוח תישמר כ<b>גרסה חדשה</b> באותו קובץ (לוג שינויים).</p>
+   <label class="ml">מזהה/שם הטעינה</label>
+   <input id="savename" placeholder="למשל: יומן ינואר 2026" onkeydown="if(event.key==='Enter'){focusClient()}if(event.key==='Escape')closeSaveModal()">
+   <label class="ml">לקוח</label>
+   <input id="saveclient" placeholder="שם/מזהה לקוח" onkeydown="if(event.key==='Enter')doSave();if(event.key==='Escape')closeSaveModal()">
    <div class="modal-btns">
     <button class="b-save" onclick="doSave()">💾 שמור</button>
     <button class="b-check" onclick="closeSaveModal()">ביטול</button>
@@ -889,19 +894,22 @@ async function generate(){
 function saveLoad(){
   const inp=$('savename');
   if(!inp.value) inp.value=(GRID.source_name||'').replace(/\\.[^.]+$/,'');  // ברירת מחדל: שם הקובץ
+  if(GRID.source_client && !$('saveclient').value) $('saveclient').value=GRID.source_client;
   $('savemodal').style.display='flex';
   setTimeout(()=>{inp.focus();inp.select();},40);
 }
+function focusClient(){ $('saveclient').focus(); $('saveclient').select(); }
 function closeSaveModal(){ $('savemodal').style.display='none'; }
 async function doSave(){
   const name=($('savename').value||'').trim();
+  const client=($('saveclient').value||'').trim();
   if(!name){ $('savename').focus(); flash('err','יש להזין מזהה/שם לטעינה.'); return; }
   closeSaveModal();
-  const body=collect(); body.name=name;
+  const body=collect(); body.name=name; body.client=client;
   const res=await post('/grid/save',body); if(!res)return;
   showDownloads(res,true);
   if(res.load_id)
-    flash('ok','✓ נשמר בהיסטוריה בשם «'+esc(name)+'» ('+res.valid+' שורות).');
+    flash('ok','✓ נשמר בהיסטוריה: «'+esc(name)+'»'+(client?(' · '+esc(client)):'')+' ('+res.valid+' שורות).');
   else
     flash('err','הטעינה הופקה אך שמירת ההיסטוריה נכשלה — בדוק את חיבור מסד הנתונים במסך ההיסטוריה.');
 }
@@ -1391,9 +1399,10 @@ def _produce_load(save):
 
     load_id = None
     if save:   # רישום בהיסטוריה (רשומה אחת לכל קובץ — עדכון אם כבר קיים) + שמירת קבצים
-        load_id = db.upsert_load({
+        load_id = db.add_version({
             "screen": screen, "source": run.get("source_name", ""),
             "name": (data.get("name") or "").strip(),   # מזהה שהמשתמש הקליד בשמירה
+            "client": (data.get("client") or "").strip(),   # לקוח שהמשתמש הקליד בשמירה
             "total": len(valid_records) + len(rejected_items),
             "valid": len(valid_records), "invalid": len(rejected_items),
             "warnings": warn_count, "via": "web", "run_id": run_id,
@@ -1460,21 +1469,50 @@ HISTORY = """
  @media (prefers-color-scheme:dark){:root:not([data-theme]){--bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;--text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--ok-fg:#34d399;--bad-fg:#f87171;}}
  :root[data-theme="dark"]{--bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;--text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--ok-fg:#34d399;--bad-fg:#f87171;}
  *{box-sizing:border-box}body{margin:0;font-family:"Assistant",-apple-system,"Segoe UI",system-ui,Arial,sans-serif;background:var(--bg);color:var(--text)}
- .wrap{max-width:1100px;margin:0 auto;padding:26px 18px 70px}
+ .wrap{max-width:1180px;margin:0 auto;padding:26px 18px 70px}
  .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
  h1{font-size:22px;font-weight:800;margin:0}
  a.back{color:var(--brand);text-decoration:none;font-weight:700}
  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+ .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+ .kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:14px 16px}
+ .kpi .n{font-size:26px;font-weight:800;line-height:1.1}.kpi .l{font-size:12.5px;color:var(--muted);margin-top:3px}
+ @media(max-width:720px){.kpis{grid-template-columns:repeat(2,1fr)}}
+ .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+ .toolbar input[type=search],.toolbar select{padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);font:inherit}
+ .toolbar input[type=search]{min-width:230px}
+ .tablewrap{overflow-x:auto}
  table{border-collapse:collapse;width:100%;font-size:14px}
  th,td{text-align:right;padding:11px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
- th{background:var(--surface-2);font-weight:700}
+ th{background:var(--surface-2);font-weight:700;position:relative}
+ th.sortable{cursor:pointer;user-select:none}th.sortable:hover{color:var(--brand)}
+ th .ar{font-size:10px;opacity:.7;margin-right:3px}
  .ok{color:var(--ok-fg);font-weight:700}.bad{color:var(--bad-fg);font-weight:700}
- .dl{color:var(--brand);text-decoration:none;font-weight:600;margin-left:10px}
- .dl.open{color:#fff;background:var(--brand);padding:5px 11px;border-radius:8px}
- .delbtn{background:none;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:14px;padding:4px 8px;color:var(--bad-fg);width:auto}
- .delbtn:hover{background:rgba(220,38,38,.1);border-color:var(--bad-fg)}
+ tr.grp{cursor:pointer}tr.grp:hover{background:var(--surface-2)}
+ tr.grp.open{background:var(--surface-2)}
+ tr.ver{background:color-mix(in srgb,var(--surface-2) 55%,transparent);font-size:13px}
+ tr.ver td:first-child{padding-right:34px}
+ .chev{display:inline-block;width:16px;color:var(--muted);transition:transform .15s}
+ tr.grp.open .chev{transform:rotate(90deg)}
+ .name{font-weight:700}.vcount{font-size:11px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1px 8px;margin-right:6px}
+ .client{color:var(--brand);font-weight:600}
+ .dl{color:var(--brand);text-decoration:none;font-weight:600;margin-left:10px;white-space:nowrap}
+ .dl.open{color:#fff;background:var(--brand);padding:4px 10px;border-radius:8px;font-size:12.5px}
+ .btn{background:var(--surface);border:1px solid var(--border);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;padding:5px 9px;color:var(--text)}
+ .btn:hover{border-color:var(--brand);color:var(--brand)}
+ .btn.dng{color:var(--bad-fg)}.btn.dng:hover{background:rgba(220,38,38,.1);border-color:var(--bad-fg);color:var(--bad-fg)}
+ .btn.pri{background:var(--brand);color:#fff;border-color:var(--brand)}
+ .stsel{border-radius:20px;border:1.5px solid var(--border);padding:4px 9px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;background:var(--surface)}
+ .st-draft{color:var(--muted)}.st-ready{color:var(--brand);border-color:var(--brand)}
+ .st-loaded{color:var(--ok-fg);border-color:var(--ok-fg);background:rgba(5,150,105,.08)}
+ .delta{font-size:12px}.dg{color:var(--ok-fg);font-weight:700}.dr{color:var(--bad-fg);font-weight:700}
  .empty{padding:40px;text-align:center;color:var(--muted)}
  .tag{font-size:12px;color:var(--muted)}
+ .acts{display:flex;gap:6px;justify-content:flex-start}
+ input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--brand)}
+ #bulkbar{display:none;align-items:center;gap:10px;background:var(--brand);color:#fff;border-radius:12px;padding:9px 15px;margin-bottom:12px;font-weight:600}
+ #bulkbar .btn{background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.35)}
+ #bulkbar .btn:hover{background:rgba(255,255,255,.28);color:#fff}
 </style></head><body><div class="wrap">
  <div class="head"><h1>📜 היסטוריית טעינות</h1><a class="back" href="/">→ חזרה</a></div>
  {% if dbinfo %}
@@ -1493,46 +1531,219 @@ HISTORY = """
   {% endif %}
  </div>
  {% endif %}
- <div class="card">
- <form method="get" style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
-  <label style="margin:0;font-weight:600">סינון לפי מסך:</label>
-  <select name="screen" onchange="this.form.submit()"
-   style="padding:8px 12px;border:1.5px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);font:inherit">
-   <option value="">— כל המסכים —</option>
-   {% for s in screens %}<option value="{{ s }}" {% if s==sel_screen %}selected{% endif %}>{{ s }}</option>{% endfor %}
-  </select>
-  <span class="tag">{{ rows|length }} רשומות</span>
- </form>
- {% if not rows %}<div class="empty">עדיין לא בוצעו טעינות.</div>
- {% else %}
- <table><thead><tr><th>מזהה/שם</th><th>זמן</th><th>מסך</th><th>קובץ מקור</th><th>נקראו</th><th>תקינות</th><th>נפסלו</th><th>אזהרות</th><th>משתמש</th><th>קבצים</th><th></th></tr></thead><tbody>
- {% for r in rows %}
- <tr>
-  <td>{% if r.name %}<b>🏷️ {{ r.name }}</b>{% else %}<span class="tag">—</span>{% endif %}</td>
-  <td class="tag">{{ r.ts }}</td><td>{{ r.screen }}</td><td>{{ r.source or '—' }}</td>
-  <td>{{ r.total }}</td><td class="ok">{{ r.valid }}</td>
-  <td class="{{ 'bad' if r.invalid else '' }}">{{ r.invalid }}</td><td>{{ r.warnings }}</td>
-  <td class="tag">{{ r.user or '' }}{% if r.via=='cli' %} · CLI{% endif %}</td>
-  <td>{% if r.has_snapshot %}<a class="dl open" href="/history/open/{{ r.id }}">↗ פתח טבלה</a>{% endif %}
-      {% for f in r.files %}<a class="dl" href="/history/file/{{ f.id }}">{{ f.label }}</a>{% endfor %}
-      {% if not r.files and not r.has_snapshot %}<span class="tag">—</span>{% endif %}</td>
-  <td><form method="post" action="/history/delete/{{ r.id }}" style="margin:0"
-        onsubmit="return confirm('למחוק את רשומת הטעינה של {{ (r.name or r.source or r.screen)|e }}?')">
-        <button type="submit" class="delbtn" title="מחק מההיסטוריה">🗑</button></form></td>
- </tr>
- {% endfor %}
- </tbody></table>
- {% endif %}
+
+ <div class="kpis">
+  <div class="kpi"><div class="n">{{ stats.files }}</div><div class="l">📁 קבצים בהיסטוריה</div></div>
+  <div class="kpi"><div class="n">{{ stats.versions }}</div><div class="l">🗂️ סה״כ גרסאות/טעינות</div></div>
+  <div class="kpi"><div class="n">{{ '{:,}'.format(stats.valid_rows) }}</div><div class="l">✓ שורות תקינות (גרסה אחרונה)</div></div>
+  <div class="kpi"><div class="n">{{ stats.success }}%</div><div class="l">📈 אחוז הצלחה ממוצע</div></div>
  </div>
-</div></body></html>
+
+ <div id="bulkbar">
+  <span>נבחרו <b id="bulkn">0</b> קבצים</span>
+  <button class="btn" onclick="bulkDelete()">🗑 מחק נבחרים</button>
+  <button class="btn" onclick="clearSel()">בטל בחירה</button>
+ </div>
+
+ <div class="card">
+  <div style="padding:14px 16px 0">
+   <div class="toolbar">
+    <input type="search" id="q" placeholder="🔎 חיפוש לפי שם / לקוח / קובץ / מסך…" oninput="render()">
+    <select id="fscreen" onchange="reloadScreen()">
+     <option value="">— כל המסכים —</option>
+     {% for s in screens %}<option value="{{ s }}" {% if s==sel_screen %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+    <select id="fstatus" onchange="render()">
+     <option value="">— כל הסטטוסים —</option>
+     <option value="draft">טיוטה</option>
+     <option value="ready">מוכן</option>
+     <option value="loaded">נטען לפריוריטי</option>
+    </select>
+    <span class="tag" id="cnt"></span>
+   </div>
+  </div>
+  <div class="tablewrap">
+   <table>
+    <thead><tr>
+     <th style="width:34px"><input type="checkbox" id="chkall" onclick="toggleAll(this)" title="בחר הכל"></th>
+     <th class="sortable" data-k="name" onclick="setSort('name')">מזהה/שם <span class="ar"></span></th>
+     <th class="sortable" data-k="client" onclick="setSort('client')">לקוח <span class="ar"></span></th>
+     <th>מסך</th>
+     <th class="sortable" data-k="ts" onclick="setSort('ts')">עודכן <span class="ar"></span></th>
+     <th class="sortable" data-k="valid" onclick="setSort('valid')">תקינות <span class="ar"></span></th>
+     <th>נפסלו</th>
+     <th class="sortable" data-k="versions" onclick="setSort('versions')">גרסאות <span class="ar"></span></th>
+     <th>סטטוס</th>
+     <th>פעולות</th>
+    </tr></thead>
+    <tbody id="tb"></tbody>
+   </table>
+  </div>
+ </div>
+</div>
+
+<script>const GROUPS={{ groups|tojson }};</script>
+<script>
+const $=id=>document.getElementById(id);
+const ST={draft:{l:'טיוטה',c:'st-draft'},ready:{l:'מוכן',c:'st-ready'},loaded:{l:'✅ נטען',c:'st-loaded'}};
+const norm=s=>String(s==null?'':s);
+let sortK='ts',sortDir=-1;                 // ברירת מחדל: עודכן לאחרונה, יורד
+const expanded=new Set(),selected=new Set();
+function esc(s){return norm(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function stKey(g){return g.status||'draft';}
+
+function reloadScreen(){const s=$('fscreen').value;location.href='/history'+(s?('?screen='+encodeURIComponent(s)):'');}
+function setSort(k){if(sortK===k)sortDir*=-1;else{sortK=k;sortDir=(k==='ts'||k==='valid'||k==='versions')?-1:1;}render();}
+function toggleExp(k){if(expanded.has(k))expanded.delete(k);else expanded.add(k);render();}
+
+function filtered(){
+  const q=norm($('q').value).trim().toLowerCase(), fs=$('fstatus').value;
+  let a=GROUPS.filter(g=>{
+    if(fs && stKey(g)!==fs)return false;
+    if(!q)return true;
+    return [g.name,g.client,g.screen,(g.versions[0]||{}).__src].concat(
+      g.versions.map(v=>v.__src)).some(x=>norm(x).toLowerCase().includes(q));
+  });
+  const val=g=>{const h=g.versions[0]||{};
+    if(sortK==='name')return norm(g.name).toLowerCase();
+    if(sortK==='client')return norm(g.client).toLowerCase();
+    if(sortK==='ts')return norm(h.ts);
+    if(sortK==='valid')return h.valid||0;
+    if(sortK==='versions')return g.version_count||0;
+    return '';};
+  a.sort((x,y)=>{const vx=val(x),vy=val(y);return (vx<vy?-1:vx>vy?1:0)*sortDir;});
+  return a;
+}
+function fmtDelta(d){
+  if(!d)return '<span class="tag">— גרסה ראשונה —</span>';
+  const p=[];
+  if(d.valid)p.push('<span class="'+(d.valid>0?'dg':'dr')+'">'+(d.valid>0?'▲':'▼')+Math.abs(d.valid)+' תקינות</span>');
+  if(d.invalid)p.push('<span class="'+(d.invalid>0?'dr':'dg')+'">'+(d.invalid>0?'▲':'▼')+Math.abs(d.invalid)+' נפסלות</span>');
+  if(d.warnings)p.push('<span class="'+(d.warnings>0?'dr':'dg')+'">'+(d.warnings>0?'▲':'▼')+Math.abs(d.warnings)+' אזהרות</span>');
+  return p.length?('<span class="delta">'+p.join(' · ')+'</span>'):'<span class="tag">אין שינוי בכמויות</span>';
+}
+function verFiles(v){
+  let h='';
+  if(v.has_snapshot)h+='<a class="dl open" href="/history/open/'+v.id+'">↗ פתח טבלה</a>';
+  (v.files||[]).forEach(f=>{h+='<a class="dl" href="/history/file/'+f.id+'">⬇ '+esc(f.label)+'</a>';});
+  return h||'<span class="tag">—</span>';
+}
+function stSelect(g){
+  const k=stKey(g);let o='';
+  for(const key in ST)o+='<option value="'+key+'"'+(key===k?' selected':'')+'>'+ST[key].l+'</option>';
+  return '<select class="stsel '+ST[k].c+'" onchange="setStatus(this,\\''+g.key+'\\')" onclick="event.stopPropagation()">'+o+'</select>';
+}
+
+function render(){
+  const list=filtered();
+  $('cnt').textContent=list.length+' קבצים · '+list.reduce((s,g)=>s+g.version_count,0)+' גרסאות';
+  if(!list.length){$('tb').innerHTML='<tr><td colspan="10"><div class="empty">לא נמצאו טעינות תואמות.</div></td></tr>';syncBulk();return;}
+  let html='';
+  for(const g of list){
+    const h=g.versions[0]||{},op=expanded.has(g.key),sel=selected.has(g.key);
+    html+='<tr class="grp'+(op?' open':'')+'" onclick="toggleExp(\\''+g.key+'\\')">'+
+      '<td onclick="event.stopPropagation()"><input type="checkbox" '+(sel?'checked':'')+' onclick="toggleSel(\\''+g.key+'\\',this)"></td>'+
+      '<td class="name"><span class="chev">▸</span>🏷️ '+esc(g.name||'ללא שם')+
+        (g.version_count>1?'<span class="vcount">v'+g.version_count+'</span>':'')+'</td>'+
+      '<td>'+(g.client?'<span class="client">👤 '+esc(g.client)+'</span>':'<span class="tag">—</span>')+'</td>'+
+      '<td>'+esc(g.screen)+'</td>'+
+      '<td class="tag">'+esc(h.ts)+'</td>'+
+      '<td class="ok">'+(h.valid||0)+'</td>'+
+      '<td class="'+(h.invalid?'bad':'')+'">'+(h.invalid||0)+'</td>'+
+      '<td>'+g.version_count+'</td>'+
+      '<td onclick="event.stopPropagation()">'+stSelect(g)+'</td>'+
+      '<td onclick="event.stopPropagation()"><div class="acts">'+
+        '<button class="btn" title="שנה שם/לקוח" onclick="renameGrp(\\''+g.key+'\\')">✏️</button>'+
+        '<button class="btn dng" title="מחק קובץ (כל הגרסאות)" onclick="delGroup(\\''+g.key+'\\')">🗑</button>'+
+      '</div></td></tr>';
+    if(op){
+      g.versions.forEach((v,i)=>{
+        const num=g.version_count-i;
+        html+='<tr class="ver">'+
+          '<td></td>'+
+          '<td><b>גרסה '+num+'</b>'+(i===0?' <span class="tag">(אחרונה)</span>':'')+'</td>'+
+          '<td class="tag" colspan="2">'+esc(v.ts)+(v.user?(' · '+esc(v.user)):'')+(v.via==='cli'?' · CLI':'')+
+             (v.__src?('<br>📄 '+esc(v.__src)):'')+'</td>'+
+          '<td class="tag">'+esc(v.ts.split(' ')[1]||'')+'</td>'+
+          '<td class="ok">'+(v.valid||0)+'</td>'+
+          '<td class="'+(v.invalid?'bad':'')+'">'+(v.invalid||0)+'</td>'+
+          '<td colspan="1">'+fmtDelta(v.delta)+'</td>'+
+          '<td>'+verFiles(v)+'</td>'+
+          '<td><button class="btn dng" title="מחק גרסה זו בלבד" onclick="delVer('+v.id+')">🗑 גרסה</button></td>'+
+          '</tr>';
+      });
+    }
+  }
+  $('tb').innerHTML=html;
+  syncBulk();
+}
+
+// --- בחירה מרובה ---
+function toggleSel(k,el){if(el.checked)selected.add(k);else selected.delete(k);syncBulk();}
+function toggleAll(el){selected.clear();if(el.checked)filtered().forEach(g=>selected.add(g.key));render();}
+function clearSel(){selected.clear();$('chkall').checked=false;render();}
+function syncBulk(){$('bulkn').textContent=selected.size;$('bulkbar').style.display=selected.size?'flex':'none';}
+
+// --- פעולות (POST + רענון) ---
+async function api(url,body){
+  try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+    const j=await r.json().catch(()=>({}));if(!r.ok||j.error){alert('שגיאה: '+(j.error||r.status));return false;}return true;
+  }catch(e){alert('תקלה בתקשורת: '+e);return false;}
+}
+function grpById(k){return GROUPS.find(g=>g.key===k);}
+async function setStatus(el,k){const g=grpById(k);if(!g)return;g.status=el.value;
+  el.className='stsel '+ST[el.value].c;
+  await api('/history/status',{screen:g.screen,name:g.name,client:g.client,status:el.value});}
+async function renameGrp(k){const g=grpById(k);if(!g)return;
+  const nm=prompt('מזהה/שם הטעינה:',g.name||'');if(nm===null)return;
+  const cl=prompt('לקוח:',g.client||'');if(cl===null)return;
+  if(await api('/history/rename',{screen:g.screen,name:g.name,client:g.client,new_name:nm.trim(),new_client:cl.trim()}))location.reload();}
+async function delGroup(k){const g=grpById(k);if(!g)return;
+  if(!confirm('למחוק את הקובץ «'+(g.name||g.screen)+'»'+(g.client?(' ('+g.client+')'):'')+' על כל '+g.version_count+' גרסאותיו?'))return;
+  if(await api('/history/delete_group',{screen:g.screen,name:g.name,client:g.client}))location.reload();}
+async function delVer(id){if(!confirm('למחוק גרסה זו בלבד?'))return;
+  if(await api('/history/delete/'+id,{}))location.reload();}
+async function bulkDelete(){if(!selected.size)return;
+  if(!confirm('למחוק '+selected.size+' קבצים (כל גרסאותיהם)?'))return;
+  for(const k of selected){const g=grpById(k);if(g)await api('/history/delete_group',{screen:g.screen,name:g.name,client:g.client});}
+  location.reload();}
+
+function updateArrows(){document.querySelectorAll('th.sortable').forEach(th=>{
+  const a=th.querySelector('.ar');a.textContent=(th.dataset.k===sortK)?(sortDir<0?'▼':'▲'):'';});}
+const _r=render;render=function(){_r();updateArrows();};
+render();
+</script>
+</body></html>
 """
+
+
+def _slim_groups(groups):
+    """מכין את קבוצות הגרסאות ל-JSON קליל לצד-הלקוח (בלי תוכן קבצים)."""
+    def slim_ver(v):
+        return {
+            "id": v["id"], "ts": v.get("ts") or "", "user": v.get("user") or "",
+            "via": v.get("via") or "", "__src": v.get("source") or "",
+            "total": v.get("total") or 0, "valid": v.get("valid") or 0,
+            "invalid": v.get("invalid") or 0, "warnings": v.get("warnings") or 0,
+            "has_snapshot": bool(v.get("has_snapshot")),
+            "has_rejected": bool(v.get("has_rejected")),
+            "files": [{"id": f["id"], "label": f.get("label") or f.get("name") or "קובץ"}
+                      for f in (v.get("files") or [])],
+            "delta": v.get("delta"),
+        }
+    return [{
+        "key": g["key"], "screen": g["screen"], "name": g["name"], "client": g["client"],
+        "status": g.get("status") or "", "version_count": g["version_count"],
+        "versions": [slim_ver(v) for v in g["versions"]],
+    } for g in groups]
 
 
 @app.route("/history")
 def history():
     screen = (request.args.get("screen") or "").strip() or None
     return render_template_string(
-        HISTORY, rows=core.read_history(300, screen=screen),
+        HISTORY, groups=_slim_groups(core.read_history(300, screen=screen)),
+        stats=core.history_stats(screen=screen),
         screens=db.distinct_screens(), sel_screen=screen or "", dbinfo=db.status())
 
 
@@ -1562,8 +1773,40 @@ def history_open(load_id):
 
 @app.route("/history/delete/<int:load_id>", methods=["POST"])
 def history_delete(load_id):
-    db.delete_load(load_id)
+    """מחיקת גרסה בודדת. עונה JSON ל-fetch, או מפנה חזרה בגלישה רגילה."""
+    ok = db.delete_load(load_id)
+    if request.is_json or request.headers.get("X-Requested-With"):
+        return jsonify(ok=ok)
     return redirect("/history")
+
+
+@app.route("/history/delete_group", methods=["POST"])
+def history_delete_group():
+    """מחיקת קובץ שלם — כל גרסאותיו — לפי (מסך + מזהה + לקוח)."""
+    d = request.get_json(silent=True) or {}
+    ok = db.delete_group(d.get("screen"), d.get("name"), d.get("client"))
+    return jsonify(ok=ok)
+
+
+@app.route("/history/status", methods=["POST"])
+def history_status():
+    """עדכון סטטוס העבודה (טיוטה/מוכן/נטען) לכל גרסאות הקובץ."""
+    d = request.get_json(silent=True) or {}
+    status = (d.get("status") or "").strip()
+    if status not in ("", "draft", "ready", "loaded"):
+        return jsonify(error="סטטוס לא חוקי"), 400
+    ok = db.set_status(d.get("screen"), d.get("name"), d.get("client"),
+                       "" if status == "draft" else status)
+    return jsonify(ok=ok)
+
+
+@app.route("/history/rename", methods=["POST"])
+def history_rename():
+    """שינוי המזהה/הלקוח של כל גרסאות הקובץ."""
+    d = request.get_json(silent=True) or {}
+    ok = db.rename_group(d.get("screen"), d.get("name"), d.get("client"),
+                         new_name=d.get("new_name"), new_client=d.get("new_client"))
+    return jsonify(ok=ok)
 
 
 @app.route("/history/file/<int:file_id>")

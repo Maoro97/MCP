@@ -124,9 +124,15 @@ def append_history(entry):
 
 
 def read_history(limit=200, screen=None):
-    """קורא את רשומות ההיסטוריה ממסד הנתונים (החדשות ראשונות)."""
+    """קורא את היסטוריית הטעינות מקובצת ל"קבצים" (אב→בן), עם לוג הגרסאות."""
     import db as _db
-    return _db.list_loads(limit=limit, screen=screen)
+    return _db.list_load_groups(limit=limit, screen=screen)
+
+
+def history_stats(screen=None):
+    """מדדי-על להיסטוריה (מספר קבצים/גרסאות, שורות תקינות, אחוז הצלחה)."""
+    import db as _db
+    return _db.stats(screen=screen)
 
 # פורמט התאריך בפלט — תמיד dd/mm/yy (למשל 23/07/26).
 # זהו מקור האמת היחיד: אם קובץ מיפוי לא מציין date_format, זה מה שיחול.

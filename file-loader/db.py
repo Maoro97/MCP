@@ -99,13 +99,21 @@ def init_db():
         cur.execute(
             "CREATE TABLE IF NOT EXISTS loads("
             f"  id {_ID_COL},"
-            "  ts TEXT, screen TEXT, source TEXT, name TEXT,"
+            "  ts TEXT, screen TEXT, source TEXT, name TEXT, client TEXT, status TEXT,"
             "  total INTEGER, valid INTEGER, invalid INTEGER, warnings INTEGER,"
             "  via TEXT, run_id TEXT, has_rejected INTEGER, \"user\" TEXT)")
-        try:  # מיגרציה למסדים ותיקים: הוספת עמודת השם/מזהה
-            cur.execute("ALTER TABLE loads ADD COLUMN name TEXT")
-        except Exception:  # noqa: BLE001 — כבר קיימת
-            pass
+        # מיגרציה למסדים ותיקים: הוספת עמודות שנוספו לאורך הדרך (idempotent)
+        for _col in ("name TEXT", "client TEXT", "status TEXT"):
+            try:
+                cur.execute(f"ALTER TABLE loads ADD COLUMN {_col}")
+            except Exception:  # noqa: BLE001 — כבר קיימת
+                pass
+        # נירמול ל-'' כדי שקיבוץ/השוואה יעבדו בלי טיפול ב-NULL
+        for _c in ("name", "client", "status"):
+            try:
+                cur.execute(f"UPDATE loads SET {_c}='' WHERE {_c} IS NULL")
+            except Exception:  # noqa: BLE001
+                pass
         cur.execute(
             "CREATE TABLE IF NOT EXISTS load_files("
             f"  id {_ID_COL},"
@@ -141,9 +149,12 @@ def add_load(entry):
     """מוסיף רשומת טעינה ומחזיר את המזהה (id). שקט בכל שגיאה (מחזיר None)."""
     entry = dict(entry)
     entry.setdefault("ts", _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    cols = ("ts", "screen", "source", "name", "total", "valid", "invalid", "warnings",
+    cols = ("ts", "screen", "source", "name", "client", "status",
+            "total", "valid", "invalid", "warnings",
             "via", "run_id", "has_rejected", "user")
-    vals = (entry.get("ts"), entry.get("screen"), entry.get("source"), entry.get("name") or "",
+    vals = (entry.get("ts"), entry.get("screen"), entry.get("source"),
+            (entry.get("name") or "").strip(), (entry.get("client") or "").strip(),
+            (entry.get("status") or "").strip(),
             int(entry.get("total") or 0), int(entry.get("valid") or 0),
             int(entry.get("invalid") or 0), int(entry.get("warnings") or 0),
             entry.get("via"), entry.get("run_id"),
@@ -162,47 +173,94 @@ def add_load(entry):
         return None
 
 
-def upsert_load(entry):
-    """כמו add_load, אך אם כבר קיימת רשומה לאותו מזהה — מעדכן אותה (ומוחק את
-    הקבצים הישנים שלה) במקום ליצור חדשה. הזיהוי: לפי (מסך + שם/מזהה) אם ניתן שם,
-    אחרת לפי (מסך + קובץ מקור). מחזיר את מזהה הרשומה."""
+def add_version(entry):
+    """שומר טעינה כ*גרסה חדשה* בלוג השינויים. כל שמירה מוסיפה גרסה (append-only) —
+    הזהות ("קובץ") נגזרת מהצירוף (מסך + מזהה/שם + לקוח), וכל הגרסאות של אותו צירוף
+    מקובצות יחד במסך ההיסטוריה. אם קיימת כבר גרסה עם סטטוס עבודה — הוא נשמר לגרסה
+    החדשה כדי לא לאבד אותו. מחזיר את מזהה הגרסה."""
     entry = dict(entry)
-    entry.setdefault("ts", _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     name = (entry.get("name") or "").strip()
-    source = entry.get("source")
-    key_col, key_val = ("name", name) if name else ("source", source)
-    if key_val:
+    client = (entry.get("client") or "").strip()
+    if not entry.get("status"):   # ירושת סטטוס העבודה מהגרסה האחרונה של אותו קובץ
         try:
             with _conn() as conn:
                 cur = _cursor(conn)
-                cur.execute(f"SELECT id FROM loads WHERE screen={PH} AND {key_col}={PH} "
-                            f"ORDER BY id DESC LIMIT 1", (entry.get("screen"), key_val))
+                cur.execute(
+                    f"SELECT status FROM loads WHERE screen={PH} AND name={PH} AND client={PH} "
+                    f"AND status<>'' ORDER BY id DESC LIMIT 1",
+                    (entry.get("screen"), name, client))
                 r = cur.fetchone()
-                if r:
-                    lid = r["id"]
-                    cur.execute(
-                        f"UPDATE loads SET ts={PH},source={PH},name={PH},total={PH},valid={PH},"
-                        f"invalid={PH},warnings={PH},via={PH},run_id={PH},has_rejected={PH},"
-                        f"\"user\"={PH} WHERE id={PH}",
-                        (entry.get("ts"), entry.get("source"), name,
-                         int(entry.get("total") or 0), int(entry.get("valid") or 0),
-                         int(entry.get("invalid") or 0), int(entry.get("warnings") or 0),
-                         entry.get("via"), entry.get("run_id"),
-                         1 if entry.get("has_rejected") else 0, entry.get("user") or "", lid))
-                    cur.execute(f"DELETE FROM load_files WHERE load_id={PH}", (lid,))
-                    return lid
+                if r and r["status"]:
+                    entry["status"] = r["status"]
         except Exception:  # noqa: BLE001
             pass
     return add_load(entry)
 
 
+# תאימות לאחור: הקוד הישן קרא ל-upsert_load; כעת כל שמירה = גרסה חדשה.
+upsert_load = add_version
+
+
 def delete_load(load_id):
-    """מוחק רשומת טעינה מההיסטוריה ואת הקבצים שלה. מחזיר True בהצלחה."""
+    """מוחק גרסה בודדת מלוג השינויים ואת הקבצים שלה. מחזיר True בהצלחה."""
     try:
         with _conn() as conn:
             cur = _cursor(conn)
             cur.execute(f"DELETE FROM load_files WHERE load_id={PH}", (int(load_id),))
             cur.execute(f"DELETE FROM loads WHERE id={PH}", (int(load_id),))
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _group_where(screen, name, client):
+    """תנאי WHERE + ערכים לזיהוי "קובץ" (קבוצת גרסאות)."""
+    return (f"screen={PH} AND name={PH} AND client={PH}",
+            (screen, (name or "").strip(), (client or "").strip()))
+
+
+def delete_group(screen, name, client):
+    """מוחק את כל הגרסאות של קובץ (צירוף מסך+מזהה+לקוח) ואת קבציהן. מחזיר True."""
+    try:
+        cond, args = _group_where(screen, name, client)
+        with _conn() as conn:
+            cur = _cursor(conn)
+            cur.execute(f"SELECT id FROM loads WHERE {cond}", args)
+            ids = [r["id"] for r in cur.fetchall()]
+            for lid in ids:
+                cur.execute(f"DELETE FROM load_files WHERE load_id={PH}", (lid,))
+            cur.execute(f"DELETE FROM loads WHERE {cond}", args)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def set_status(screen, name, client, status):
+    """מעדכן את סטטוס העבודה (טיוטה/מוכן/נטען) לכל גרסאות הקובץ. מחזיר True."""
+    try:
+        cond, args = _group_where(screen, name, client)
+        with _conn() as conn:
+            _cursor(conn).execute(
+                f"UPDATE loads SET status={PH} WHERE {cond}", ((status or "").strip(), *args))
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def rename_group(screen, name, client, new_name=None, new_client=None):
+    """משנה את המזהה/הלקוח של כל גרסאות הקובץ. מחזיר True."""
+    try:
+        cond, args = _group_where(screen, name, client)
+        sets, vals = [], []
+        if new_name is not None:
+            sets.append(f"name={PH}"); vals.append((new_name or "").strip())
+        if new_client is not None:
+            sets.append(f"client={PH}"); vals.append((new_client or "").strip())
+        if not sets:
+            return True
+        with _conn() as conn:
+            _cursor(conn).execute(
+                f"UPDATE loads SET {','.join(sets)} WHERE {cond}", (*vals, *args))
         return True
     except Exception:  # noqa: BLE001
         return False
@@ -253,6 +311,74 @@ def list_loads(limit=200, screen=None):
             return loads
     except Exception:  # noqa: BLE001
         return []
+
+
+def list_load_groups(limit=300, screen=None):
+    """מחזיר את היסטוריית הטעינות מקובצת ל"קבצים" (אב→בן): כל קובץ הוא צירוף
+    (מסך + מזהה/שם + לקוח), ותחתיו רשימת הגרסאות (חדשות→ישנות) עם דלתא מול
+    הגרסה הקודמת. שורת האב מציגה את הגרסה האחרונה (head)."""
+    rows = list_loads(limit=max(int(limit) * 6, 600), screen=screen)
+    groups, order = {}, []
+    for r in rows:                       # rows כבר ממוינות id יורד (חדש→ישן)
+        key = (r.get("screen") or "", (r.get("name") or ""), (r.get("client") or ""))
+        g = groups.get(key)
+        if g is None:
+            g = groups[key] = {
+                "key": "␟".join(key),
+                "screen": key[0], "name": key[1], "client": key[2],
+                "status": r.get("status") or "", "versions": [],
+            }
+            order.append(key)
+        g["versions"].append(r)          # יורד: [0]=החדשה ביותר
+        if r.get("status"):
+            g["status"] = g["status"] or r["status"]
+
+    out = []
+    for key in order:
+        g = groups[key]
+        vs = g["versions"]
+        head = vs[0]
+        # דלתא לכל גרסה מול הגרסה שאחריה (הישנה יותר)
+        for i, v in enumerate(vs):
+            prev = vs[i + 1] if i + 1 < len(vs) else None
+            if prev is None:
+                v["delta"] = None        # הגרסה הראשונה — אין מול מה להשוות
+            else:
+                v["delta"] = {
+                    "valid": (v.get("valid") or 0) - (prev.get("valid") or 0),
+                    "invalid": (v.get("invalid") or 0) - (prev.get("invalid") or 0),
+                    "warnings": (v.get("warnings") or 0) - (prev.get("warnings") or 0),
+                    "total": (v.get("total") or 0) - (prev.get("total") or 0),
+                }
+        g.update({
+            "version_count": len(vs),
+            "head": head,
+            "ts": head.get("ts"), "user": head.get("user"),
+            "source": head.get("source"), "total": head.get("total"),
+            "valid": head.get("valid"), "invalid": head.get("invalid"),
+            "warnings": head.get("warnings"),
+        })
+        out.append(g)
+    out.sort(key=lambda x: (x["head"]["id"]), reverse=True)   # קובץ אחרון-נגע ראשון
+    return out[:int(limit)]
+
+
+def stats(screen=None):
+    """מדדי-על להיסטוריה: כמה קבצים, כמה גרסאות/טעינות, סה"כ שורות תקינות שנטענו,
+    ואחוז הצלחה ממוצע (לפי הגרסה האחרונה של כל קובץ)."""
+    groups = list_load_groups(limit=100000, screen=screen)
+    files_n = len(groups)
+    versions_n = sum(g["version_count"] for g in groups)
+    valid_rows = sum((g["head"].get("valid") or 0) for g in groups)
+    rates = []
+    for g in groups:
+        h = g["head"]
+        tot = (h.get("valid") or 0) + (h.get("invalid") or 0)
+        if tot:
+            rates.append((h.get("valid") or 0) / tot)
+    success = round(100 * sum(rates) / len(rates)) if rates else 0
+    return {"files": files_n, "versions": versions_n,
+            "valid_rows": valid_rows, "success": success}
 
 
 def get_file(file_id):

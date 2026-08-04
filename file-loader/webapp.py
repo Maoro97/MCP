@@ -31,23 +31,52 @@ import db
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 80 * 1024 * 1024  # מגבלת העלאה: 80MB
-# מפתח לחתימת ה-cookie של ההתחברות (session). מומלץ להגדיר SECRET_KEY בסביבה
-# (ב-Vercel/Render). ה-session נשמר בצד הלקוח כ-cookie חתום — עובד גם ב-serverless.
-app.secret_key = os.environ.get("SECRET_KEY") or os.environ.get("APP_SECRET") \
-    or "priority-file-loader-dev-secret-change-in-production"
 
-# מסך התחברות: מופעל רק אם הוגדרה סיסמה במשתנה הסביבה APP_PASSWORD.
-# ללא APP_PASSWORD — האפליקציה פתוחה (מתאים להרצה מקומית). עם APP_PASSWORD —
-# כל העמודים דורשים התחברות. שם המשתמש: APP_USERNAME (ברירת מחדל admin).
+
+def _env_flag(name):
+    return (os.environ.get(name, "") or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+# מפתח לחתימת ה-cookie של ההתחברות (session). ה-session נשמר בצד הלקוח כ-cookie
+# חתום. חובה שהמפתח יהיה סודי — אחרת אפשר לזייף cookie ולעקוף התחברות. לכן אין
+# ברירת-מחדל קבועה: אם לא הוגדר SECRET_KEY, נגריל מפתח אקראי לכל תהליך (בטוח, אבל
+# ה-session לא ישרוד הפעלה-מחדש — לכן בענן חובה להגדיר SECRET_KEY לקביעוּת).
+app.secret_key = os.environ.get("SECRET_KEY") or os.environ.get("APP_SECRET")
+if not app.secret_key:
+    import secrets as _secrets
+    app.secret_key = _secrets.token_hex(32)
+    _SECRET_RANDOM = True
+else:
+    _SECRET_RANDOM = False
+
+# מסך התחברות: מופעל אם הוגדרה סיסמה ב-APP_PASSWORD. שם המשתמש: APP_USERNAME
+# (ברירת מחדל admin).
 AUTH_USER = os.environ.get("APP_USERNAME", "admin")
 AUTH_PASS = os.environ.get("APP_PASSWORD")
-# נתיבי JSON (נקראים ב-fetch) — עליהם נחזיר 401 במקום הפניה לעמוד התחברות
+
+# --- מדיניות אבטחה: fail-closed בענן ---
+# פריסה ציבורית (Vercel/Render) *ללא* סיסמה = חשיפה מלאה של המערכת. במקום לשרת
+# פתוח בשקט (fail-open), אנו חוסמים את הגישה ומציגים הודעת הגדרה — אלא אם המפעיל
+# אישר פתיחוּת במפורש ב-ALLOW_OPEN=1. בהרצה מקומית — נשאר פתוח לנוחות.
+_HOSTED = bool(os.environ.get("VERCEL") or os.environ.get("RENDER"))
+_REQUIRE_AUTH = (_HOSTED or _env_flag("REQUIRE_AUTH")) and not _env_flag("ALLOW_OPEN")
+AUTH_MISCONFIGURED = _REQUIRE_AUTH and not AUTH_PASS
+
+# נתיבי JSON (נקראים ב-fetch) — עליהם נחזיר 401/503 במקום הפניה לעמוד התחברות
 _AUTH_JSON_PREFIXES = ("/grid/", "/journal/", "/rates/fetch")
 _AUTH_OPEN_ENDPOINTS = {"login", "logout", "static"}
 
 
 @app.before_request
 def _require_login():
+    # פריסה בענן ללא סיסמה — חוסמים הכל (חוץ מקבצים סטטיים) עד להגדרת APP_PASSWORD.
+    if AUTH_MISCONFIGURED:
+        if request.endpoint == "static":
+            return None
+        if request.path.startswith(_AUTH_JSON_PREFIXES):
+            return jsonify(error="האפליקציה פרוסה בענן ללא סיסמה. הגדר APP_PASSWORD "
+                                 "(ו-SECRET_KEY) במשתני הסביבה ובצע Redeploy."), 503
+        return render_template_string(CONFIG_ERROR, brand=brand_html()), 503
     if not AUTH_PASS or session.get("auth"):
         return None
     if request.endpoint in _AUTH_OPEN_ENDPOINTS:
@@ -2004,6 +2033,36 @@ def rates_fetch():
         out.append({"currency": cur, "desc": descs.get(cur, ""),
                     "rate": rate, "effective": effective})
     return jsonify(requested=requested, rates=out)
+
+
+CONFIG_ERROR = """
+<!doctype html><html lang="he" dir="rtl"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>נדרשת הגדרת אבטחה</title>
+<style>
+ body{margin:0;font-family:-apple-system,"Segoe UI",system-ui,Arial,sans-serif;background:#0b1120;color:#e8edf6;
+  display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+ .box{max-width:560px;background:#111a2e;border:1px solid #233047;border-radius:18px;padding:32px 30px;
+  box-shadow:0 24px 60px rgba(0,0,0,.55);line-height:1.6}
+ h1{font-size:22px;margin:0 0 12px}.i{font-size:40px}
+ code{background:#0f1728;border:1px solid #233047;border-radius:7px;padding:2px 7px;font-size:13.5px;color:#a5b4fc}
+ ol{padding-right:20px;margin:14px 0}.muted{color:#93a1b8;font-size:13.5px;margin-top:14px}
+</style></head><body><div class="box">
+ <div class="i">🔒</div>
+ <h1>הגישה חסומה — נדרשת הגדרת אבטחה</h1>
+ <p>האפליקציה פרוסה בענן אך <b>לא הוגדרה סיסמה</b>, ולכן היא נחסמה כדי למנוע גישה
+    לא-מורשית. כדי להפעיל אותה בבטחה, הגדר במשתני-הסביבה של הפריסה:</p>
+ <ol>
+  <li><code>APP_PASSWORD</code> — הסיסמה להתחברות (חובה).</li>
+  <li><code>SECRET_KEY</code> — מחרוזת אקראית ארוכה לחתימת ה-session (מומלץ מאוד,
+      כדי שההתחברות תישמר בין הרצות).</li>
+  <li>אופציונלי: <code>APP_USERNAME</code> (ברירת מחדל <code>admin</code>).</li>
+ </ol>
+ <p>לאחר ההגדרה — בצע <b>Redeploy</b>.</p>
+ <p class="muted">להרצה פתוחה מכוונת (ללא סיסמה) אפשר להגדיר <code>ALLOW_OPEN=1</code>,
+    אך לא מומלץ בסביבה ציבורית.</p>
+</div></body></html>
+"""
 
 
 LOGIN = """

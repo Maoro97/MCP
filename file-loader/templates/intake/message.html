@@ -1,0 +1,16 @@
+{% extends "intake/base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block chrome %}{% endblock %}
+
+{% block body %}
+<main class="auth">
+  <div class="box">
+    <div class="logo">{{ '⛔' if kind == 'error' else 'ℹ️' }}</div>
+    <h1>{{ title }}</h1>
+    <p class="sub">{{ body }}</p>
+    <div class="card" style="text-align:center">
+      <a class="btn btn-ghost" href="{{ url_for('intake.home') }}">חזרה לממשק</a>
+    </div>
+  </div>
+</main>
+{% endblock %}

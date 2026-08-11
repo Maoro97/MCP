@@ -1,0 +1,167 @@
+{% extends "intake/base.html" %}
+{% set active = 'users' %}
+{% block title %}משתמשים — קליטת ספקים{% endblock %}
+
+{% block body %}
+<main class="page wide">
+  <div class="pagehead">
+    <h1>משתמשים</h1>
+    <p>מי רשאי לפתוח ספקים, ולאיזה טלפון נשלח קוד האימות שלו.</p>
+  </div>
+
+  {% if message %}<div class="note ok"><span>✓</span><span>{{ message }}</span></div>{% endif %}
+  {% if error %}<div class="note err"><span>⛔</span><span>{{ error }}</span></div>{% endif %}
+
+  <section class="card">
+    <div class="cardhead">
+      <span class="ico">➕</span>
+      <div><h2>משתמש חדש</h2></div>
+    </div>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <input type="hidden" name="action" value="create">
+      <div class="grid">
+        <div class="field">
+          <label for="username">שם משתמש <span class="req">*</span></label>
+          <input type="text" id="username" name="username" dir="ltr" required>
+        </div>
+        <div class="field">
+          <label for="password">סיסמה <span class="req">*</span></label>
+          <input type="password" id="password" name="password" autocomplete="new-password" required>
+          <span class="hint">לפחות 10 תווים, אותיות וספרות.</span>
+        </div>
+        <div class="field">
+          <label for="display_name">שם לתצוגה</label>
+          <input type="text" id="display_name" name="display_name">
+        </div>
+        <div class="field">
+          <label for="phone">טלפון נייד לקודי אימות</label>
+          <input type="tel" id="phone" name="phone" dir="ltr" placeholder="0501234567">
+        </div>
+        <div class="field">
+          <label for="role">הרשאה</label>
+          <select id="role" name="role">
+            <option value="user">קולט ספקים</option>
+            <option value="admin">מנהל מערכת</option>
+          </select>
+        </div>
+      </div>
+      <div class="wizfoot">
+        <div class="spacer"></div>
+        <button class="btn btn-primary" type="submit">יצירת משתמש</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="cardhead">
+      <span class="ico">👥</span>
+      <div><h2>משתמשים קיימים</h2></div>
+    </div>
+    <div class="tablewrap">
+      <table class="table">
+        <thead><tr>
+          <th>משתמש</th><th>שם</th><th>טלפון</th><th>הרשאה</th>
+          <th>כניסה אחרונה</th><th>מצב</th><th></th>
+        </tr></thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td class="mono">{{ row.username }}</td>
+              <td>{{ row.display_name or '—' }}</td>
+              <td class="mono muted">{{ row.phone or '—' }}</td>
+              <td>{{ 'מנהל' if row.role == 'admin' else 'קולט' }}</td>
+              <td class="muted nowrap">{{ row.last_login or '—' }}</td>
+              <td>
+                {% if row.active %}<span class="pill ok">פעיל</span>
+                {% else %}<span class="pill muted">חסום</span>{% endif %}
+              </td>
+              <td>
+                <button class="btn btn-ghost btn-sm" type="button"
+                        data-edit="{{ row.id }}">עריכה</button>
+              </td>
+            </tr>
+            <tr hidden id="edit_{{ row.id }}">
+              <td colspan="7">
+                <div class="grid">
+                  <form method="post" class="field f-full">
+                    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+                    <input type="hidden" name="action" value="update">
+                    <input type="hidden" name="user_id" value="{{ row.id }}">
+                    <div class="grid">
+                      <div class="field">
+                        <label>שם לתצוגה</label>
+                        <input type="text" name="display_name" value="{{ row.display_name }}">
+                      </div>
+                      <div class="field">
+                        <label>טלפון</label>
+                        <input type="tel" name="phone" dir="ltr" value="{{ row.phone }}">
+                      </div>
+                      <div class="field">
+                        <label>הרשאה</label>
+                        <select name="role">
+                          <option value="user" {{ 'selected' if row.role != 'admin' }}>קולט ספקים</option>
+                          <option value="admin" {{ 'selected' if row.role == 'admin' }}>מנהל מערכת</option>
+                        </select>
+                      </div>
+                      <div class="field" style="justify-content:flex-end">
+                        <button class="btn btn-primary btn-sm" type="submit">שמירה</button>
+                      </div>
+                    </div>
+                  </form>
+
+                  <form method="post" class="field f-full">
+                    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+                    <input type="hidden" name="action" value="password">
+                    <input type="hidden" name="user_id" value="{{ row.id }}">
+                    <div class="grid">
+                      <div class="field">
+                        <label>איפוס סיסמה</label>
+                        <input type="password" name="password" autocomplete="new-password"
+                               placeholder="סיסמה חדשה">
+                      </div>
+                      <div class="field" style="justify-content:flex-end">
+                        <button class="btn btn-ghost btn-sm" type="submit">עדכון סיסמה</button>
+                      </div>
+                    </div>
+                  </form>
+
+                  <div class="field f-full" style="flex-direction:row;gap:10px">
+                    <form method="post">
+                      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+                      <input type="hidden" name="action" value="toggle">
+                      <input type="hidden" name="user_id" value="{{ row.id }}">
+                      <button class="btn btn-ghost btn-sm" type="submit">
+                        {{ 'חסימה' if row.active else 'שחרור' }}
+                      </button>
+                    </form>
+                    <form method="post"
+                          onsubmit="return confirm('למחוק את המשתמש {{ row.username }}?')">
+                      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+                      <input type="hidden" name="action" value="delete">
+                      <input type="hidden" name="user_id" value="{{ row.id }}">
+                      <button class="btn btn-danger btn-sm" type="submit">מחיקה</button>
+                    </form>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+ document.querySelectorAll('[data-edit]').forEach(function (btn) {
+   btn.addEventListener('click', function () {
+     var row = document.getElementById('edit_' + btn.dataset.edit);
+     row.hidden = !row.hidden;
+     btn.textContent = row.hidden ? 'עריכה' : 'סגירה';
+   });
+ });
+</script>
+{% endblock %}

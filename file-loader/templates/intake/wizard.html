@@ -1,0 +1,169 @@
+{% extends "intake/base.html" %}
+{% set active = 'new' %}
+{% block title %}{{ form.title }} — Priority ERP{% endblock %}
+
+{% macro control(f) %}
+  {% if f.options %}
+    <select id="f_{{ f.name }}" name="{{ f.name }}" data-field="{{ f.name }}">
+      {% if not f.required %}<option value="">— ללא —</option>{% endif %}
+      {% for value, label in f.options %}
+        <option value="{{ value }}" {{ 'selected' if f.default and f.default|string == value|string }}>
+          {{ label }}{% if f.show_codes and label != value %} ({{ value }}){% endif %}
+        </option>
+      {% endfor %}
+    </select>
+  {% elif f.type == 'date' %}
+    <input type="date" id="f_{{ f.name }}" name="{{ f.name }}" data-field="{{ f.name }}"
+           value="{{ today if f.name == 'CREATEDDATE' else '' }}">
+  {% elif f.type in ('int', 'real') %}
+    <input type="text" id="f_{{ f.name }}" name="{{ f.name }}" data-field="{{ f.name }}"
+           inputmode="{{ 'numeric' if f.type == 'int' else 'decimal' }}" dir="ltr"
+           placeholder="{{ f.placeholder }}" value="{{ f.default }}">
+  {% else %}
+    <input type="text" id="f_{{ f.name }}" name="{{ f.name }}" data-field="{{ f.name }}"
+           {% if f.max_length %}maxlength="{{ f.max_length }}"{% endif %}
+           placeholder="{{ f.placeholder }}" value="{{ f.default }}"
+           {% if f.format == 'email' %}dir="ltr" autocomplete="off"{% endif %}
+           {% if f.format in ('phone', 'idnum', 'zip') %}dir="ltr" inputmode="tel"{% endif %}>
+  {% endif %}
+{% endmacro %}
+
+{% block body %}
+<main class="page">
+  <div class="pagehead">
+    <h1>{{ form.title }}</h1>
+    <p>{{ form.subtitle }}</p>
+  </div>
+
+  <nav class="rail" id="rail">
+    {% for step in form.steps %}
+      <button class="step" type="button" data-goto="{{ loop.index0 }}">
+        <span class="bar"></span>{{ loop.index }}. {{ step.title }}
+      </button>
+    {% endfor %}
+    <button class="step" type="button" data-goto="{{ form.steps|length }}">
+      <span class="bar"></span>{{ form.steps|length + 1 }}. אישור וטעינה
+    </button>
+  </nav>
+
+  <form id="wizard" autocomplete="off" onsubmit="return false">
+    {% for step in form.steps %}
+      <section class="card stepcard" data-step="{{ loop.index0 }}" hidden>
+        <div class="cardhead">
+          <span class="ico">{{ step.icon }}</span>
+          <div>
+            <h2>{{ step.title }}</h2>
+            <div class="hint">{{ step.hint }}</div>
+          </div>
+        </div>
+
+        <div class="grid">
+          {% for f in step.fields %}
+            <div class="field {{ 'f-full' if f.width == 'full' }}" id="w_{{ f.name }}">
+              <label for="f_{{ f.name }}">
+                {{ f.label }}{% if f.required %} <span class="req">*</span>{% endif %}
+                <span class="code">{{ f.name }}</span>
+              </label>
+              {{ control(f) }}
+              {% if f.help %}<span class="hint">{{ f.help }}</span>{% endif %}
+              <span class="msg err"></span>
+              <span class="msg warn"></span>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+
+    <!-- שלב אחרון: סיכום, אימות בסמס וטעינה -->
+    <section class="card stepcard" data-step="{{ form.steps|length }}" hidden>
+      <div class="cardhead">
+        <span class="ico">✅</span>
+        <div>
+          <h2>אישור וטעינה</h2>
+          <div class="hint">בדקו את הפרטים, אשרו בקוד שנשלח לטלפון, וטענו לפריוריטי.</div>
+        </div>
+      </div>
+
+      <div id="review_problems"></div>
+      <dl class="summary" id="summary"></dl>
+
+      <div class="otpbox" id="otpbox">
+        <h3><span>📱</span> <span id="otp_title">אימות בסמס</span></h3>
+        <p id="otp_hint">
+          {% if phone_mode == 'user' %}
+            קוד חד-פעמי יישלח למספר הרשום לכם{% if has_user_phone %} ({{ user_phone_masked }}){% endif %}.
+          {% else %}
+            הזינו את המספר שאליו יישלח הקוד החד-פעמי.
+          {% endif %}
+        </p>
+
+        <div class="otprow" id="otp_send_row">
+          {% if phone_mode != 'user' %}
+            <div class="field">
+              <label for="otp_phone">מספר טלפון</label>
+              <input type="tel" id="otp_phone" dir="ltr" placeholder="0501234567"
+                     inputmode="tel" autocomplete="tel">
+            </div>
+          {% endif %}
+          <button class="btn btn-primary" type="button" id="btn_send_otp">שליחת קוד</button>
+        </div>
+
+        <div class="otprow" id="otp_verify_row" hidden>
+          <div class="field">
+            <label for="otp_code">קוד האימות</label>
+            <input type="text" id="otp_code" inputmode="numeric" autocomplete="one-time-code"
+                   maxlength="6" placeholder="––––––">
+          </div>
+          <button class="btn btn-primary" type="button" id="btn_verify_otp">אימות</button>
+          <button class="btn btn-ghost" type="button" id="btn_resend_otp">שליחה חוזרת</button>
+        </div>
+      </div>
+
+      <div class="wizfoot">
+        <button class="btn btn-ghost" type="button" data-back>→ חזרה</button>
+        <div class="spacer"></div>
+        <button class="btn btn-go" type="button" id="btn_submit" disabled>טעינה לפריוריטי</button>
+      </div>
+    </section>
+
+    <!-- ניווט בין השלבים (מוסתר בשלב האחרון, שיש לו סרגל משלו) -->
+    <div class="wizfoot" id="nav">
+      <button class="btn btn-ghost" type="button" data-back>→ חזרה</button>
+      <div class="spacer"></div>
+      <span class="count" id="stepcount"></span>
+      <button class="btn btn-primary" type="button" data-next>המשך ←</button>
+    </div>
+  </form>
+
+  <!-- מסך הצלחה -->
+  <section class="card done" id="done" hidden>
+    <div class="check">✓</div>
+    <h2>הספק נקלט בפריוריטי</h2>
+    <p id="done_name"></p>
+    <div class="key" id="done_key"></div>
+    <div class="acts">
+      <a class="btn btn-primary" href="{{ url_for('intake.new_supplier') }}">קליטת ספק נוסף</a>
+      <a class="btn btn-ghost" href="{{ url_for('intake.history') }}">ליומן הקליטות</a>
+    </div>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+ window.WIZARD = {
+   steps: {{ form.steps | map(attribute='title') | list | tojson }},
+   groups: {{ form.steps | map(attribute='fields') | map('map', attribute='name') | map('list') | list | tojson }},
+   labels: {{ form.steps | map(attribute='fields') | sum(start=[]) | map(attribute='label') | list | tojson }},
+   names:  {{ form.steps | map(attribute='fields') | sum(start=[]) | map(attribute='name')  | list | tojson }},
+   phoneMode: {{ phone_mode | tojson }},
+   urls: {
+     validate: "{{ url_for('intake.api_validate') }}",
+     send: "{{ url_for('intake.api_otp_send') }}",
+     verify: "{{ url_for('intake.api_otp_verify') }}",
+     submit: "{{ url_for('intake.api_submit') }}"
+   }
+ };
+</script>
+<script src="{{ url_for('static', filename='intake/wizard.js') }}"></script>
+{% endblock %}

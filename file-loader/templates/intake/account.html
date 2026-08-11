@@ -1,0 +1,52 @@
+{% extends "intake/base.html" %}
+{% block title %}החשבון שלי — קליטת ספקים{% endblock %}
+
+{% block body %}
+<main class="page narrow">
+  <div class="pagehead">
+    <h1>החשבון שלי</h1>
+    <p>{{ user.display_name or user.username }} · {{ 'מנהל מערכת' if is_admin else 'קולט ספקים' }}</p>
+  </div>
+
+  {% if message %}<div class="note ok"><span>✓</span><span>{{ message }}</span></div>{% endif %}
+  {% if error %}<div class="note err"><span>⛔</span><span>{{ error }}</span></div>{% endif %}
+
+  <section class="card">
+    <div class="cardhead">
+      <span class="ico">📱</span>
+      <div>
+        <h2>טלפון לאימות</h2>
+        <div class="hint">קודי האימות נשלחים אל {{ phone_masked or 'מספר שלא הוגדר' }}.</div>
+      </div>
+    </div>
+    <p class="muted" style="margin:0;font-size:13.5px">
+      שינוי המספר נעשה על ידי מנהל מערכת — כדי שלא ניתן יהיה להסיט אישורים למכשיר אחר.
+    </p>
+  </section>
+
+  <section class="card">
+    <div class="cardhead">
+      <span class="ico">🔑</span>
+      <div><h2>החלפת סיסמה</h2></div>
+    </div>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <div class="field">
+        <label for="current_password">סיסמה נוכחית</label>
+        <input type="password" id="current_password" name="current_password"
+               autocomplete="current-password" required>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label for="new_password">סיסמה חדשה</label>
+        <input type="password" id="new_password" name="new_password"
+               autocomplete="new-password" required>
+        <span class="hint">לפחות 10 תווים, שילוב של אותיות וספרות.</span>
+      </div>
+      <div class="wizfoot">
+        <div class="spacer"></div>
+        <button class="btn btn-primary" type="submit">עדכון סיסמה</button>
+      </div>
+    </form>
+  </section>
+</main>
+{% endblock %}

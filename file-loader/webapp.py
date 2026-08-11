@@ -66,9 +66,16 @@ AUTH_MISCONFIGURED = _REQUIRE_AUTH and not AUTH_PASS
 _AUTH_JSON_PREFIXES = ("/grid/", "/journal/", "/rates/fetch")
 _AUTH_OPEN_ENDPOINTS = {"login", "logout", "static"}
 
+# ממשק קליטת הספקים (/intake) הוא מוצר נפרד עם משתמשים משלו, ולכן הוא *אינו*
+# עובר בשער ההתחברות של כלי הכנת הקבצים — יש לו שער משלו (intake/auth.py),
+# שסגור תמיד ואינו תלוי ב-APP_PASSWORD.
+_INTAKE_PREFIX = "/intake"
+
 
 @app.before_request
 def _require_login():
+    if request.path == _INTAKE_PREFIX or request.path.startswith(_INTAKE_PREFIX + "/"):
+        return None
     # פריסה בענן ללא סיסמה — חוסמים הכל (חוץ מקבצים סטטיים) עד להגדרת APP_PASSWORD.
     if AUTH_MISCONFIGURED:
         if request.endpoint == "static":
@@ -317,6 +324,7 @@ UPLOAD = """
 </style></head><body><div class="wrap">
  <div class="topbar">{{ brand|safe }}
   <div style="display:flex;gap:8px;align-items:center">
+   <a class="themebtn" style="text-decoration:none" href="/intake/">🤝 קליטת ספקים</a>
    <a class="themebtn" style="text-decoration:none" href="/rates">💱 שערי בנק ישראל</a>
    <a class="themebtn" style="text-decoration:none" href="/history">📜 היסטוריה</a>
    {% if auth_on %}<a class="themebtn" style="text-decoration:none" href="/logout">🚪 יציאה</a>{% endif %}
@@ -2148,6 +2156,22 @@ def logout():
 def _upload_error(msg):
     return render_template_string(UPLOAD, screens=core.available_screens(), error=msg,
                                   brand=brand_html(), auth_on=_auth_on())
+
+
+# ---------------------------------------------------------------------------
+# ממשק קליטת ספקים (/intake) — אפליקציה עצמאית בתוך אותו שרת
+# ---------------------------------------------------------------------------
+# הקשחת ה-cookie של ה-session: HttpOnly (ברירת מחדל), SameSite=Lax כדי לצמצם
+# CSRF, ו-Secure בפריסה ציבורית (שם התעבורה תמיד ב-https).
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=_HOSTED,
+)
+
+from intake.views import bp as intake_bp  # noqa: E402 (אחרי הגדרת app והקונפיג)
+
+app.register_blueprint(intake_bp)
 
 
 if __name__ == "__main__":

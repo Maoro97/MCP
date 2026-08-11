@@ -1,0 +1,40 @@
+{% extends "intake/base.html" %}
+{% block title %}הקמה ראשונית — קליטת ספקים{% endblock %}
+{% block chrome %}{% endblock %}
+
+{% block body %}
+<main class="auth">
+  <div class="box">
+    <div class="logo">🚀</div>
+    <h1>הקמה ראשונית</h1>
+    <p class="sub">צרו את משתמש המנהל הראשון. אחר כך אפשר יהיה להוסיף משתמשים נוספים.</p>
+
+    <form class="card" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      {% if error %}<div class="note err"><span>⛔</span><span>{{ error }}</span></div>{% endif %}
+
+      <div class="field">
+        <label for="username">שם משתמש <span class="req">*</span></label>
+        <input type="text" id="username" name="username" required dir="ltr" autofocus>
+      </div>
+      <div class="field">
+        <label for="password">סיסמה <span class="req">*</span></label>
+        <input type="password" id="password" name="password" required>
+        <span class="hint">לפחות 10 תווים, שילוב של אותיות וספרות.</span>
+      </div>
+      <div class="field">
+        <label for="display_name">שם לתצוגה</label>
+        <input type="text" id="display_name" name="display_name">
+      </div>
+      <div class="field">
+        <label for="phone">טלפון נייד לקבלת קודי אימות</label>
+        <input type="tel" id="phone" name="phone" dir="ltr" placeholder="0501234567">
+        <span class="hint">לכאן יישלח קוד האימות לפני כל טעינת ספק.</span>
+      </div>
+      <button class="btn btn-primary" type="submit">יצירת מנהל והמשך</button>
+    </form>
+
+    <p class="foot">מסך זה נפתח פעם אחת בלבד, כל עוד אין משתמשים במערכת.</p>
+  </div>
+</main>
+{% endblock %}

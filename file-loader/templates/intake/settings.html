@@ -1,0 +1,235 @@
+{% extends "intake/base.html" %}
+{% set active = 'settings' %}
+{% block title %}הגדרות — קליטת ספקים{% endblock %}
+
+{% block body %}
+<main class="page">
+  <div class="pagehead">
+    <h1>הגדרות</h1>
+    <p>החיבור לפריוריטי ואופן האימות לפני כל טעינה.</p>
+  </div>
+
+  {% if message %}<div class="note ok"><span>✓</span><span>{{ message }}</span></div>{% endif %}
+  {% if error %}<div class="note err"><span>⛔</span><span>{{ error }}</span></div>{% endif %}
+  {% if not secrets_encrypted %}
+    <div class="note warn">
+      <span>⚠️</span>
+      <span>הסודות נשמרים ללא הצפנה. הגדירו את משתנה הסביבה
+        <span class="mono">INTAKE_SECRET</span> (או <span class="mono">SECRET_KEY</span>)
+        והפעילו מחדש — הטוקן יוצפן במסד.</span>
+    </div>
+  {% endif %}
+
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+
+    <section class="card">
+      <div class="cardhead">
+        <span class="ico">🔌</span>
+        <div>
+          <h2>חיבור לפריוריטי</h2>
+          <div class="hint">כתובת שירות ה-OData ופרטי ההזדהות.</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="field f-full">
+          <label for="priority_url">כתובת שירות OData <span class="req">*</span></label>
+          <input type="text" id="priority_url" name="priority_url" dir="ltr"
+                 value="{{ config.priority_url }}"
+                 placeholder="https://host.example.co.il/odata/Priority/tabula.ini/demo">
+          <span class="hint">המבנה: <span class="mono">https://&lt;שרת&gt;/odata/Priority/&lt;tabula.ini&gt;/&lt;חברה&gt;</span></span>
+        </div>
+
+        <div class="field">
+          <label for="priority_auth">שיטת הזדהות</label>
+          <select id="priority_auth" name="priority_auth">
+            <option value="token" {{ 'selected' if config.priority_auth == 'token' }}>טוקן גישה (PAT)</option>
+            <option value="user" {{ 'selected' if config.priority_auth == 'user' }}>משתמש API וסיסמה</option>
+            <option value="bearer" {{ 'selected' if config.priority_auth == 'bearer' }}>Bearer token</option>
+          </select>
+          <span class="hint">טוקן נוצר בטופס "REST Interface Access Tokens" בפריוריטי.</span>
+        </div>
+
+        <div class="field" data-auth="token bearer">
+          <label for="priority_token_secret">טוקן</label>
+          <input type="password" id="priority_token_secret" name="priority_token_secret"
+                 dir="ltr" autocomplete="new-password"
+                 placeholder="{{ '•••••••• (שמור — השאירו ריק כדי לא לשנות)' if has_token else 'הדביקו את הטוקן' }}">
+        </div>
+
+        <div class="field" data-auth="user">
+          <label for="priority_username">שם משתמש API</label>
+          <input type="text" id="priority_username" name="priority_username" dir="ltr"
+                 value="{{ config.priority_username }}">
+        </div>
+        <div class="field" data-auth="user">
+          <label for="priority_password_secret">סיסמת משתמש API</label>
+          <input type="password" id="priority_password_secret" name="priority_password_secret"
+                 dir="ltr" autocomplete="new-password"
+                 placeholder="{{ '•••••••• (שמורה)' if has_password else '' }}">
+        </div>
+
+        <div class="field f-full">
+          <label class="switch">
+            <input type="checkbox" name="priority_verify_tls"
+                   {{ 'checked' if config.priority_verify_tls == '1' }}>
+            <span>אימות תעודת SSL
+              <small>בטלו רק אם שרת פריוריטי עובד עם תעודה עצמית (on-prem).</small>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;align-items:center;margin-top:18px;flex-wrap:wrap">
+        <button class="btn btn-ghost" type="button" id="btn_test">בדיקת חיבור</button>
+        <span id="test_result" class="muted" style="font-size:13.5px"></span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="cardhead">
+        <span class="ico">📱</span>
+        <div>
+          <h2>אימות בסמס (OTP)</h2>
+          <div class="hint">קוד חד-פעמי נדרש לפני כל טעינת ספק — זו לא אפשרות שניתן לכבות.</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="field">
+          <label for="otp_channel">ערוץ שליחה</label>
+          <select id="otp_channel" name="otp_channel">
+            {% for value, label in channels.items() %}
+              <option value="{{ value }}" {{ 'selected' if config.otp_channel == value }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="otp_phone_mode">לאיזה מספר נשלח הקוד</label>
+          <select id="otp_phone_mode" name="otp_phone_mode">
+            <option value="user" {{ 'selected' if config.otp_phone_mode == 'user' }}>רק המספר הרשום למשתמש</option>
+            <option value="free" {{ 'selected' if config.otp_phone_mode == 'free' }}>המשתמש בוחר מספר</option>
+          </select>
+          <span class="hint">"רק המספר הרשום" מונע העברת אישורים למכשיר אחר.</span>
+        </div>
+
+        <div class="field">
+          <label for="otp_ttl_minutes">תוקף הקוד (דקות)</label>
+          <input type="text" id="otp_ttl_minutes" name="otp_ttl_minutes" inputmode="numeric"
+                 dir="ltr" value="{{ config.otp_ttl_minutes }}">
+        </div>
+
+        <div class="field" data-channel="inforu twilio webhook">
+          <label for="otp_sender_name">שם / מספר שולח</label>
+          <input type="text" id="otp_sender_name" name="otp_sender_name" dir="ltr"
+                 value="{{ config.otp_sender_name }}">
+        </div>
+
+        <div class="field" data-channel="webhook inforu">
+          <label for="otp_endpoint">כתובת השירות</label>
+          <input type="text" id="otp_endpoint" name="otp_endpoint" dir="ltr"
+                 value="{{ config.otp_endpoint }}"
+                 placeholder="https://uapi.inforu.co.il/api/v2/SMS/SendSms">
+        </div>
+
+        <div class="field" data-channel="inforu twilio">
+          <label for="otp_user">שם משתמש / Account SID</label>
+          <input type="text" id="otp_user" name="otp_user" dir="ltr" value="{{ config.otp_user }}">
+        </div>
+
+        <div class="field" data-channel="webhook inforu twilio">
+          <label for="otp_secret">טוקן / סיסמה של שער הסמס</label>
+          <input type="password" id="otp_secret" name="otp_secret" dir="ltr"
+                 autocomplete="new-password"
+                 placeholder="{{ '•••••••• (שמור)' if has_otp_secret else '' }}">
+        </div>
+      </div>
+
+      <div class="note info" style="margin-top:16px">
+        <span>💡</span>
+        <span>בערוץ <b>Webhook</b> נשלח JSON עם השדות
+          <span class="mono">phone, code, message, sender</span> לכתובת שתגדירו —
+          כך אפשר לחבר כל שער סמס ישראלי.</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="cardhead">
+        <span class="ico">🎛</span>
+        <div><h2>התנהגות הטופס</h2></div>
+      </div>
+      <div class="grid">
+        <div class="field f-full">
+          <label class="switch">
+            <input type="checkbox" name="duplicate_check"
+                   {{ 'checked' if config.duplicate_check == '1' }}>
+            <span>בדיקת כפילות מול פריוריטי
+              <small>לפני הטעינה נבדק אם מספר הספק כבר קיים.</small>
+            </span>
+          </label>
+        </div>
+        <div class="field f-full">
+          <label class="switch">
+            <input type="checkbox" name="advanced_fields"
+                   {{ 'checked' if config.advanced_fields == '1' }}>
+            <span>הצגת שלב "שדות נוספים"
+              <small>עוד 30+ שדות רשות ממסך הספקים. כבוי כברירת מחדל, כדי לשמור על טופס קצר.</small>
+            </span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <div class="wizfoot">
+      <div class="spacer"></div>
+      <button class="btn btn-primary" type="submit">שמירת ההגדרות</button>
+    </div>
+  </form>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+ /* הצגת השדות הרלוונטיים בלבד לשיטת ההזדהות ולערוץ הסמס שנבחרו */
+ function syncVisibility(selectId, attribute) {
+   var value = document.getElementById(selectId).value;
+   document.querySelectorAll('[' + attribute + ']').forEach(function (el) {
+     el.hidden = el.getAttribute(attribute).split(' ').indexOf(value) === -1;
+   });
+ }
+ function syncAll() {
+   syncVisibility('priority_auth', 'data-auth');
+   syncVisibility('otp_channel', 'data-channel');
+ }
+ document.getElementById('priority_auth').addEventListener('change', syncAll);
+ document.getElementById('otp_channel').addEventListener('change', syncAll);
+ syncAll();
+
+ document.getElementById('btn_test').addEventListener('click', async function () {
+   var btn = this;
+   var out = document.getElementById('test_result');
+   btn.classList.add('busy'); btn.disabled = true;
+   out.textContent = '';
+   try {
+     var result = await api("{{ url_for('intake.api_test_connection') }}", {
+       priority_url: document.getElementById('priority_url').value,
+       priority_auth: document.getElementById('priority_auth').value,
+       priority_username: document.getElementById('priority_username').value,
+       priority_token_secret: document.getElementById('priority_token_secret').value,
+       priority_password_secret: document.getElementById('priority_password_secret').value,
+       priority_verify_tls: document.querySelector('[name=priority_verify_tls]').checked
+     });
+     out.textContent = '✓ ' + result.message;
+     out.style.color = 'var(--ok)';
+     toast('החיבור תקין', 'ok');
+   } catch (error) {
+     out.textContent = '⛔ ' + error.message;
+     out.style.color = 'var(--bad)';
+   } finally {
+     btn.classList.remove('busy'); btn.disabled = false;
+   }
+ });
+</script>
+{% endblock %}

@@ -1,0 +1,219 @@
+# ============================================================================
+# מבנה טופס קליטת ספק חדש
+# ----------------------------------------------------------------------------
+# הוולידציות (חובה / אורך / טיפוס / בוליאני) *אינן* נכתבות כאן — הן נלקחות
+# אוטומטית מקטלוג השדות `fields_SUPPLIERS.yaml` שנוצר מייצוא עמודות המסך.
+# הקובץ הזה קובע רק *מה מוצג ואיך*: חלוקה לשלבים, סדר, כותרת ידידותית, רמז,
+# רוחב בשורה, ורשימות ערכים.
+#
+# להוספת שדה: הוסף שורה `- field: <שם השדה>` לשלב המתאים. שדה שלא קיים
+# בקטלוג — או שדה לקריאה בלבד / מזהה פנימי — יידחה בבדיקת התקינות של הטופס.
+#
+# מפתחות אפשריים לשדה:
+#   field       שם השדה בפריוריטי (חובה)
+#   label       כותרת חלופית (ברירת מחדל: הכותרת מהקטלוג)
+#   help        טקסט עזר קצר מתחת לשדה
+#   placeholder טקסט רמז בתוך השדה
+#   type        דריסת טיפוס: text / int / real / date / bool. נחוץ רק לשדות
+#               שבייצוא עמודות המסך עמודת הטיפוס שלהם ריקה
+#   width       full / half / third  (ברירת מחדל: half)
+#   default     ערך ברירת מחדל
+#   format      בדיקת פורמט: phone / email / idnum / zip  (אזהרה, לא חוסם)
+#   options     רשימת ערכים קבועה
+#   options_file שם טבלת עזר מ-lookups/<name>.csv (עמודות code,desc)
+#   transform   ניקוי הערך: strip / upper / lower / digits_only / remove_spaces
+# ============================================================================
+screen: SUPPLIERS
+entity: SUPPLIERS            # ה-entity ב-OData שאליו נשלחת הרשומה
+key_field: SUPNAME           # שדה המפתח — נבדק מול פריוריטי לאיתור כפילות
+title: קליטת ספק חדש
+subtitle: ארבעה שלבים קצרים, אימות בסמס, והספק נפתח בפריוריטי.
+
+steps:
+  - id: identity
+    title: זהות הספק
+    icon: "🏢"
+    hint: מי הספק ואיך הוא ייקרא בפריוריטי.
+    fields:
+      - field: SUPDES
+        label: שם הספק
+        placeholder: לדוגמה — א.ב. שיווק והפצה בע"מ
+        width: full
+        transform: [strip]
+      - field: SUPNAME
+        label: מספר ספק
+        help: אפשר להשאיר ריק — פריוריטי יקצה מספר אוטומטית.
+        transform: [strip, remove_spaces]
+      - field: ESUPDES
+        label: שם באנגלית
+        placeholder: A.B. Marketing Ltd
+        transform: [strip]
+      - field: SUPTYPECODE
+        label: קוד סוג ספק
+        help: הקוד כפי שמוגדר בטבלת סוגי הספק אצלכם.
+        transform: [strip, upper]
+      - field: STATDES
+        label: סטטוס
+        default: פעיל
+        options: [פעיל, לא פעיל, מוקפא]
+      - field: OWNERLOGIN
+        label: שם משתמש מטפל
+        help: המשתמש בפריוריטי שאחראי על הספק.
+        transform: [strip]
+      - field: FOREIGN
+        label: ספק זר?
+        type: bool
+        default: "N"
+      - field: CREATEDDATE
+        label: תאריך פתיחה
+        help: ברירת מחדל — היום.
+
+  - id: contact
+    title: פרטי התקשרות
+    icon: "📞"
+    hint: איך יוצרים קשר עם הספק ולאן נשלחות ההזמנות.
+    fields:
+      - field: PHONE
+        label: טלפון
+        placeholder: 03-1234567
+        format: phone
+        transform: [strip]
+      - field: EMAIL
+        label: דואר אלקטרוני
+        placeholder: orders@supplier.co.il
+        format: email
+        transform: [strip, lower]
+      - field: FAX
+        label: פקס
+        format: phone
+        transform: [strip]
+      - field: ADDRESS
+        label: כתובת
+        width: full
+        transform: [strip]
+      - field: STATEA
+        label: עיר
+        transform: [strip]
+      - field: ZIP
+        label: מיקוד
+        format: zip
+        transform: [strip, digits_only]
+      - field: COUNTRYNAME
+        label: ארץ
+        default: ישראל
+        transform: [strip]
+
+  - id: purchase
+    title: תנאי רכש
+    icon: "📦"
+    hint: מטבע, תנאי תשלום ואספקה — משפיעים על כל הזמנת רכש.
+    fields:
+      - field: CODE
+        label: מטבע
+        default: ILS
+        options_file: currencies
+      - field: PAYCODE
+        label: קוד תנאי תשלום
+        options_file: paycodes
+      - field: STCODE
+        label: קוד משלוח
+        transform: [strip, upper]
+      - field: WARHSNAME
+        label: מחסן
+        transform: [strip, upper]
+      - field: SHIPMDAYS
+        label: זמן הובלה (ימים)
+      - field: REQDATEDAYS
+        label: ימים עד תאריך אספקה
+      - field: TYPECODE
+        label: קוד סוג הזמנת רכש
+        transform: [strip, upper]
+
+  - id: finance
+    title: הנהלת חשבונות
+    icon: "🧾"
+    hint: השדות שמאפשרים לרשום חשבוניות ולשלם לספק.
+    fields:
+      - field: COMPNUM
+        label: מספר עוסק מורשה / ח.פ.
+        format: idnum
+        transform: [strip, digits_only]
+      - field: VATNUM
+        label: מספר תיק במע"מ
+        format: idnum
+        transform: [strip, digits_only]
+      - field: ERPG_SECNAME
+        label: סעיף מאזן / רווח והפסד
+        help: שדה חובה בהגדרת המסך אצלכם.
+        width: full
+        transform: [strip]
+      - field: ERPG_TRIALBALCODE
+        label: קוד סעיף למאזן בוחן
+        transform: [strip, upper]
+      - field: ERPG_ACNGCODE
+        label: קוד חתך
+        transform: [strip, upper]
+      - field: ERPG_ACCNAME
+        label: חשבון בהנהלת חשבונות
+        transform: [strip]
+      - field: ERPG_DEPTNAME
+        label: מספר מחלקה
+        transform: [strip]
+      - field: PROFORMA
+        label: עובד בחשבוניות עסקה?
+        default: "N"
+      - field: CONFIDENTIAL
+        label: ספק חסוי?
+        default: "N"
+
+# שדות רשות נוספים — מוצגים רק כשמפעילים "שדות מתקדמים" בהגדרות.
+# כל שדה שאינו חובה, אינו לקריאה בלבד ואינו מזהה פנימי — זמין כאן.
+advanced:
+  title: שדות נוספים
+  icon: "⚙️"
+  hint: שדות פחות שכיחים מתוך מסך הספקים. מיועדים למשתמשים מנוסים.
+  fields:
+    - field: ADDRESS2
+    - field: ADDRESS3
+    - field: STATE
+    - field: STATECODE
+    - field: STATENAME
+    - field: BRANCHNAME
+    - field: SHIPPERNAME
+    - field: IMPTERMNAME
+    - field: LANG
+    - field: PRIVTYPE
+    - field: SUPNAMEPATNAME
+    - field: CONSIGWARHSNAME
+    - field: CONSIGLOCNAME
+    - field: LOCNAME
+    - field: DCMONTHS
+    - field: DCMONTHSNEW
+    - field: MINPURQUANT
+    - field: INCREMENT
+    - field: INVDAYS
+      type: int
+    - field: PLEADTIME
+      type: int
+    - field: LABDAYS
+      type: int
+    - field: ESTABLISHED
+      type: int
+    - field: EMPNUM
+      type: int
+    - field: BUSINESSTYPE
+    - field: HOSTNAME
+    - field: GPSX
+    - field: GPSY
+    - field: SHOWINWEB
+    - field: NSFLAG
+    - field: SECONDLANGTEXT
+    - field: RANKFLAG
+    - field: INTERNAL
+      type: bool
+    - field: USAPHONE
+      type: bool
+    - field: OPENPAYMENTFLAG
+    - field: INACTIVEFLAG
+    - field: RESTRICTED
+      type: bool

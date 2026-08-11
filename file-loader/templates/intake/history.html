@@ -1,0 +1,78 @@
+{% extends "intake/base.html" %}
+{% set active = 'history' %}
+{% block title %}יומן קליטות — קליטת ספקים{% endblock %}
+
+{% block body %}
+<main class="page wide">
+  <div class="pagehead">
+    <h1>יומן קליטות</h1>
+    <p>
+      {% if only_mine %}הקליטות שביצעתם.{% else %}כל הקליטות במערכת.{% endif %}
+      כל שורה מתעדת מי טען, לאיזה מספר נשלח קוד האימות, ומה פריוריטי החזיר.
+    </p>
+  </div>
+
+  <div class="card">
+    {% if rows %}
+      <div class="tablewrap">
+        <table class="table">
+          <thead><tr>
+            <th>מתי</th><th>ספק</th><th>מספר</th><th>מי טען</th>
+            <th>אימות</th><th>מצב</th><th></th>
+          </tr></thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td class="muted nowrap">{{ row.ts }}</td>
+                <td>{{ row.supplier_name or '—' }}</td>
+                <td class="mono">{{ row.key_value or '—' }}</td>
+                <td class="muted">{{ row.username }}</td>
+                <td class="mono muted">{{ row.phone or '—' }}</td>
+                <td>
+                  {% if row.status == 'created' %}
+                    <span class="pill ok">נקלט</span>
+                  {% else %}
+                    <span class="pill bad">נדחה</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <button class="btn btn-ghost btn-sm" type="button"
+                          data-detail="{{ row.id }}">פרטים</button>
+                </td>
+              </tr>
+              <tr hidden id="detail_{{ row.id }}">
+                <td colspan="7">
+                  {% if row.message %}
+                    <div class="note {{ 'ok' if row.status == 'created' else 'err' }}">
+                      <span>{{ '✓' if row.status == 'created' else '⛔' }}</span>
+                      <span>{{ row.message }}</span>
+                    </div>
+                  {% endif %}
+                  <details class="more">
+                    <summary>הנתונים שנשלחו לפריוריטי</summary>
+                    <pre class="mono" style="white-space:pre-wrap;margin:0">{{ row.payload }}</pre>
+                  </details>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty">היומן ריק.</p>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+ document.querySelectorAll('[data-detail]').forEach(function (btn) {
+   btn.addEventListener('click', function () {
+     var row = document.getElementById('detail_' + btn.dataset.detail);
+     row.hidden = !row.hidden;
+     btn.textContent = row.hidden ? 'פרטים' : 'סגירה';
+   });
+ });
+</script>
+{% endblock %}

@@ -1,0 +1,790 @@
+# ============================================================================
+# קטלוג שדות מסך SUPPLIERS בפריוריטי — נוצר אוטומטית מייצוא עמודות המסך.
+# מקור: SUPPLIERS_columns.xlsx
+# אין לערוך ידנית — הרץ מחדש:
+#   python -m intake.import_screen_spec intake/screens/... SUPPLIERS
+#
+# required = שדה חובה (M) · readonly = שדה לקריאה בלבד (R, תיאור מחושב)
+# system   = מזהה פנימי של פריוריטי — לא מוצג בטופס ולא נשלח
+# ============================================================================
+screen: SUPPLIERS
+source: SUPPLIERS_columns.xlsx
+fields:
+  SUPNAME:
+    title: "מס' ספק"
+    type: text
+    priority_type: CHAR
+    max_length: 16
+  SUPDES:
+    title: שם ספק
+    type: text
+    priority_type: RCHAR
+    max_length: 48
+    required: true
+  ESUPDES:
+    title: שם ספק (אנגלית)
+    type: text
+    priority_type: ""
+    max_length: 48
+  PRIVTYPE:
+    title: ד. הרשאה לספק - כללי
+    type: text
+    priority_type: CHAR
+    max_length: 1
+  OWNERLOGIN:
+    title: שם משתמש
+    type: text
+    priority_type: RCHAR
+    max_length: 20
+    required: true
+  STATDES:
+    title: סטטוס
+    type: text
+    priority_type: RCHAR
+    max_length: 12
+    required: true
+  CREATEDDATE:
+    title: תאריך פתיחה
+    type: date
+    priority_type: DATE
+  SUPNAMEPATNAME:
+    title: תבנית
+    type: text
+    priority_type: CHAR
+    max_length: 12
+  PHONE:
+    title: מספר טלפון
+    type: text
+    priority_type: CHAR
+    max_length: 20
+  FAX:
+    title: פקס
+    type: text
+    priority_type: CHAR
+    max_length: 20
+  EMAIL:
+    title: דואר אלקטרוני
+    type: text
+    priority_type: ""
+    max_length: 68
+  ADDRESS:
+    title: כתובת
+    type: text
+    priority_type: RCHAR
+    max_length: 80
+  ADDRESS2:
+    title: כתובת - שורה 2
+    type: text
+    priority_type: RCHAR
+    max_length: 80
+  ADDRESS3:
+    title: כתובת - שורה 3
+    type: text
+    priority_type: RCHAR
+    max_length: 80
+  STATE:
+    title: עיר ומדינה
+    type: text
+    priority_type: RCHAR
+    max_length: 40
+  STATEA:
+    title: עיר
+    type: text
+    priority_type: RCHAR
+    max_length: 40
+  STATECODE:
+    title: קוד מדינה
+    type: text
+    priority_type: CHAR
+    max_length: 24
+  STATENAME:
+    title: מדינה
+    type: text
+    priority_type: CHAR
+    max_length: 40
+  ZIP:
+    title: מיקוד
+    type: text
+    priority_type: CHAR
+    max_length: 10
+  COUNTRYNAME:
+    title: ארץ
+    type: text
+    priority_type: CHAR
+    max_length: 18
+  SHOWINWEB:
+    title: הצגה באינטרנט
+    type: bool
+    priority_type: CHAR
+    max_length: 1
+    boolean: true
+  BRANCHNAME:
+    title: סניף
+    type: text
+    priority_type: CHAR
+    max_length: 6
+  BRANCHDES:
+    title: תאור הסניף
+    type: text
+    priority_type: RCHAR
+    max_length: 32
+    readonly: true
+  BUSINESSTYPE:
+    title: תחום עיסוק
+    type: text
+    priority_type: ""
+    max_length: 32
+  CONSIGWARHSNAME:
+    title: מחסן
+    type: text
+    priority_type: CHAR
+    max_length: 4
+  CONSIGLOCNAME:
+    title: איתור
+    type: text
+    priority_type: CHAR
+    max_length: 14
+  WARHSNAME:
+    title: מחסן
+    type: text
+    priority_type: CHAR
+    max_length: 4
+  NSFLAG:
+    title: "שינוי שם?"
+    type: bool
+    priority_type: CHAR
+    max_length: 1
+    boolean: true
+  STCODE:
+    title: קוד משלוח
+    type: text
+    priority_type: CHAR
+    max_length: 8
+  STDES:
+    title: תאור משלוח
+    type: text
+    priority_type: RCHAR
+    max_length: 6
+    readonly: true
+  IMPTERMNAME:
+    title: תנאי יבוא
+    type: text
+    priority_type: CHAR
+    max_length: 4
+  HOSTNAME:
+    title: Web Site
+    type: text
+    priority_type: ""
+    max_length: 48
+  SECONDLANGTEXT:
+    title: "לקחת טקסט באנגלית?"
+    type: bool
+    priority_type: CHAR
+    max_length: 1
+    boolean: true
+  COMPNUM:
+    title: מס. עוסק מורשה
+    type: text
+    priority_type: CHAR
+    max_length: 16
+  VATNUM:
+    title: "מספר תיק במע\"מ"
+    type: text
+    priority_type: CHAR
+    max_length: 16
+  CONFIDENTIAL:
+    title: "ספק חסוי?"
+    type: bool
+    priority_type: CHAR
+    max_length: 1
+    boolean: true
+  SUPTYPECODE:
+    title: קוד סוג ספק
+    type: text
+    priority_type: CHAR
+    max_length: 3
+  SUPTYPEDES:
+    title: תאור סוג ספק
+    type: text
+    priority_type: RCHAR
+    max_length: 32
+    readonly: true
+  RANKFLAG:
+    title: ספק לדירוג
+    type: bool
+    priority_type: CHAR
+    max_length: 1
+    boolean: true
+  SUPRANK:
+    title: ציון ספק
+    type: int
+    priority_type: INT
+    max_length: 3
+    decimals: 0
+    readonly: true
+  SHIPPERNAME:
+    title: חברת הובלה/תע/ספ
+    type: text
+    priority_type: CHAR
+    max_length: 8
+  SHIPPERDES:
+    title: שם ח. הובלה/תע/ספ
+    type: text
+    priority_type: RCHAR
+    max_length: 32
+  PAYCODE:
+    title: קוד תנאי תשלום
+    type: text
+    priority_type: CHAR
+    max_length: 4
+  PAYDES:
+    title: תנאי תשלום
+    type: text
+    priority_type: RCHAR
+    max_length: 24
+    readonly: true
+  PROFORMA:
+    title: "חשבוניות עסקה?"
+    type: bool
+    priority_type: CHAR
+    max_length: 1
+    boolean: true
+  ESTABLISHED:
+    title: שנת הקמה
+    type: text
+    priority_type: ""
+    max_length: 4
+  EMPNUM:
+    title: מספר עובדים
+    type: text
+    priority_type: ""
+    max_length: 7
+  EXTFILEFLAG:
+    title: "נספחים?"
+    type: bool
+    priority_type: CHAR
+    max_length: 1
+    readonly: true
+    boolean: true
+  REQDATEDAYS:
+    title: "ימים ל-\"עד ת. אספקה\""
+    type: int
+    priority_type: INT
+    max_length: 3
+    decimals: 0
+  DCMONTHS:
+    title: חודשי DC מותרים
+    type: int
+    priority_type: INT
+    max_length: 5
+    decimals: 0
+  DCMONTHSNEW:
+    title: חודשי DC חדש
+    type: int
+    priority_type: INT
+    max_length: 5
+    decimals: 0
+  CODE:
+    title: מטבע
+    type: text
+    priority_type: CHAR
+    max_length: 3
+    required: true
+  TYPECODE:
+    title: סוג הזמנת רכש
+    type: text
+    priority_type: RCHAR
+    max_length: 3
+  TYPEDES:
+    title: תאור סוג הזמנת רכש
+    type: text
+    priority_type: RCHAR
+    max_length: 12
+    readonly: true
+  LANG:
+    title: קוד שפה
+    type: int
+    priority_type: INT
+    max_length: 6
+    decimals: 0
+  LANGNAME:
+    title: שפה
+    type: text
+    priority_type: RCHAR
+    max_length: 32
+    readonly: true
+  GPSX:
+    title: קו רוחב
+    type: text
+    priority_type: CHAR
+    max_length: 20
+  GPSY:
+    title: קו אורך
+    type: text
+    priority_type: CHAR
+    max_length: 20
+  SHIPMDAYS:
+    title: זמן הובלה ספק
+    type: int
+    priority_type: INT
+    max_length: 6
+    decimals: 0
+  MINPURQUANT:
+    title: "מינימום להזמנה/פק\"ע"
+    type: real
+    priority_type: ""
+    max_length: 17
+    decimals: 4
+  INCREMENT:
+    title: "מדרגת הזמנה/פק\"ע"
+    type: real
+    priority_type: ""
+    max_length: 17
+    decimals: 4
+  INVDAYS:
+    title: טווח קיבוץ
+    type: text
+    priority_type: ""
+    max_length: 3
+  PLEADTIME:
+    title: זמן אספקה רכש
+    type: text
+    priority_type: ""
+    max_length: 8
+  LABDAYS:
+    title: זמן בדיקות
+    type: text
+    priority_type: ""
+    max_length: 6
+  ERPG_DEPTNAME:
+    title: מספר מחלקה
+    type: text
+    priority_type: CHAR
+    max_length: 6
+  ERPG_DEPTDES:
+    title: שם מחלקה
+    type: text
+    priority_type: RCHAR
+    max_length: 32
+    readonly: true
+  ERPG_SECNAME:
+    title: ERPG_SECNAME
+    type: text
+    priority_type: ""
+    max_length: 48
+    required: true
+  ERPG_TRIALBALCODE:
+    title: ERPG_TRIALBALCODE
+    type: text
+    priority_type: ""
+    max_length: 3
+    required: true
+  ERPG_ACNGCODE:
+    title: ERPG_ACNGCODE
+    type: text
+    priority_type: ""
+    max_length: 8
+  ERPG_ACNGDES:
+    title: תאור חתך
+    type: text
+    priority_type: RCHAR
+    max_length: 32
+    readonly: true
+  ERPG_ACCNAME:
+    title: חשבון
+    type: text
+    priority_type: CHAR
+    max_length: 16
+  ERPG_ACCDES:
+    title: תאור חשבון
+    type: text
+    priority_type: RCHAR
+    max_length: 48
+    readonly: true
+  ERPG_STCODE:
+    title: קוד משלוח
+    type: text
+    priority_type: CHAR
+    max_length: 8
+  ERPG_STDES:
+    title: תאור משלוח
+    type: text
+    priority_type: RCHAR
+    max_length: 48
+    readonly: true
+  SUP:
+    title: ספק (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    system: true
+  SUPSUP:
+    title: ספק (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    system: true
+  LOCNAME:
+    title: איתור
+    type: text
+    priority_type: CHAR
+    max_length: 14
+  INACTIVE:
+    title: לא פעיל
+    type: bool
+    priority_type: ""
+    max_length: 1
+    boolean: true
+  FOREIGN:
+    title: ספק זר
+    type: text
+    priority_type: CHAR
+    max_length: 1
+  ACCOUNT:
+    title: חשבון (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  ADDRESSMAP:
+    title: ADDRESSMAP
+    type: text
+    priority_type: ""
+    max_length: 100
+    system: true
+  AFAX:
+    title: פקס אוטומטי
+    type: text
+    priority_type: ""
+    max_length: 20
+  AMAIL:
+    title: דואר אוטומטי
+    type: text
+    priority_type: ""
+    max_length: 68
+  BRANCH:
+    title: סניף (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  BRANCHCOMPANY:
+    title: תת חברה (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  CONSIGWARHS:
+    title: מחסן קונסיגנציה (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  CONSIGWARHSTYPE:
+    title: טיפוס D/F/W
+    type: text
+    priority_type: CHAR
+    max_length: 1
+  COUNTRY:
+    title: ארץ (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  EXTTYPE:
+    title: EXTTYPE
+    type: text
+    priority_type: ""
+    max_length: 1
+    system: true
+  FOLLOWUPIV:
+    title: ספק (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    system: true
+  FOLLOWUPTYPE:
+    title: טיפוס תעודה
+    type: text
+    priority_type: CHAR
+    max_length: 20
+  FOLLOWUPUSER:
+    title: משתמש (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  LANGA:
+    title: שפה (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  MAILINTERFACE:
+    title: MAILINTERFACE
+    type: text
+    priority_type: ""
+    max_length: 1
+  PAY:
+    title: תשלום (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    system: true
+  SHIPPER:
+    title: ח.הובלה/תע/ספ (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  SHIPTYPE:
+    title: סוג משלוח (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  WARHS:
+    title: מחסן (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  AGENT:
+    title: AGENT
+    type: text
+    priority_type: ""
+    max_length: 13
+    system: true
+  CURRENCY:
+    title: מטבע (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    system: true
+  CUST:
+    title: CUST
+    type: text
+    priority_type: ""
+    max_length: 13
+    system: true
+  CUSTDES:
+    title: CUSTDES
+    type: text
+    priority_type: ""
+    max_length: 48
+  CUSTNAME:
+    title: CUSTNAME
+    type: text
+    priority_type: ""
+    max_length: 16
+  MCUST:
+    title: MCUST
+    type: text
+    priority_type: ""
+    max_length: 13
+    system: true
+  INACTIVEFLAG:
+    title: לא פעיל
+    type: text
+    priority_type: CHAR
+    max_length: 1
+  NSCUST:
+    title: ספק (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    system: true
+  OPENPAYMENTFLAG:
+    title: מותר לפתוח תשלום
+    type: text
+    priority_type: CHAR
+    max_length: 1
+  OWNER:
+    title: לטיפול (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  RESTRICTED:
+    title: חסום לתשלום
+    type: text
+    priority_type: CHAR
+    max_length: 1
+  RESTRICTEDBY:
+    title: "נחסם/שוחרר ע\"י"
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  RESTRICTEDDATE:
+    title: ת. חסימה/שיחרור
+    type: date
+    priority_type: DATE
+    system: true
+  STATUSTYPE:
+    title: STATUSTYPE
+    type: text
+    priority_type: ""
+    max_length: 20
+    system: true
+  SUPSTAT:
+    title: סטטוס ספק (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  PROJ:
+    title: PROJ
+    type: text
+    priority_type: ""
+    max_length: 13
+    system: true
+  SUPTYPE:
+    title: סוג ספק (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  STATEID:
+    title: מדינה (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  STATECOUNTRY:
+    title: ארץ (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  IMPTERM:
+    title: תנאי יבוא (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  USAPHONE:
+    title: "טלפון בפורמט ארה\"ב"
+    type: text
+    priority_type: CHAR
+    max_length: 1
+  CHANGES_EXEC:
+    title: CHANGES_EXEC
+    type: text
+    priority_type: ""
+    max_length: 13
+    system: true
+  CHARKEY1:
+    title: CHARKEY1
+    type: text
+    priority_type: ""
+    max_length: 16
+    system: true
+  CHARKEY2:
+    title: CHARKEY2
+    type: text
+    priority_type: ""
+    max_length: 16
+    system: true
+  INTERNAL:
+    title: "ספק פנימי?"
+    type: text
+    priority_type: CHAR
+    max_length: 1
+  GPSERRFLAG:
+    title: שגיאת גאוקוד
+    type: bool
+    priority_type: CHAR
+    max_length: 1
+    readonly: true
+    boolean: true
+  FROMEDI:
+    title: עודכן מממשק אלקטרוני
+    type: text
+    priority_type: CHAR
+    max_length: 1
+    system: true
+  IVGUID:
+    title: ספק (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    system: true
+  STATTYPE:
+    title: סוג תעודה
+    type: text
+    priority_type: CHAR
+    max_length: 20
+    system: true
+  PORDTYPE:
+    title: סוג הזמנת רכש (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  ERPG_ACCOUNT:
+    title: חשבון (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  ERPG_ACNGROUP:
+    title: חתך (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  ERPG_DEPT:
+    title: מחלקה (ID) - ברייט
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+  ERPG_INVACCOUNT:
+    title: חשבון מלאי (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  ERPG_SECTION:
+    title: סעיף מאזן/רווח (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  ERPG_SHIPTYPE:
+    title: קוד משלוח (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true
+  ERPG_TRIALBAL:
+    title: סעיף למאזן בוחן (ID)
+    type: int
+    priority_type: INT
+    max_length: 13
+    decimals: 0
+    system: true

@@ -1,0 +1,81 @@
+{% extends "intake/base.html" %}
+{% set active = 'home' %}
+{% block title %}קליטת ספקים — Priority ERP{% endblock %}
+
+{% block body %}
+<main class="page">
+  {% if not ready %}
+    <div class="note warn">
+      <span>⚠️</span>
+      <span>
+        עדיין אין חיבור לפריוריטי.
+        {% if is_admin %}
+          <a href="{{ url_for('intake.settings') }}">הגדירו את פרטי החיבור</a> כדי להתחיל.
+        {% else %}
+          פנו למנהל המערכת כדי שיגדיר את פרטי החיבור.
+        {% endif %}
+      </span>
+    </div>
+  {% endif %}
+
+  <section class="hero">
+    <div class="txt">
+      <h2>שלום {{ user.display_name or user.username }} 👋</h2>
+      <p>פתיחת ספק חדש בפריוריטי — ארבעה שלבים קצרים ואימות בסמס.</p>
+    </div>
+    {% if ready %}
+      <a class="btn btn-primary" href="{{ url_for('intake.new_supplier') }}">ספק חדש ←</a>
+    {% else %}
+      <button class="btn btn-primary" disabled>ספק חדש ←</button>
+    {% endif %}
+  </section>
+
+  <div class="stats">
+    <div class="stat"><b>{{ stats.created }}</b><span>ספקים נקלטו</span></div>
+    <div class="stat"><b>{{ stats.failed }}</b><span>נדחו על ידי פריוריטי</span></div>
+    <div class="stat">
+      <b style="font-size:15px;line-height:2.2">{{ otp_channel_label or '—' }}</b>
+      <span>ערוץ אימות</span>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="cardhead">
+      <span class="ico">🗂</span>
+      <h2>קליטות אחרונות</h2>
+      <span style="margin-inline-start:auto">
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('intake.history') }}">כל היומן</a>
+      </span>
+    </div>
+
+    {% if recent %}
+      <div class="tablewrap">
+        <table class="table">
+          <thead><tr>
+            <th>מתי</th><th>ספק</th><th>מספר</th><th>מי טען</th><th>מצב</th>
+          </tr></thead>
+          <tbody>
+            {% for row in recent %}
+              <tr>
+                <td class="muted nowrap">{{ row.ts }}</td>
+                <td>{{ row.supplier_name or '—' }}</td>
+                <td class="mono">{{ row.key_value or '—' }}</td>
+                <td class="muted">{{ row.username }}</td>
+                <td>
+                  {% if row.status == 'created' %}
+                    <span class="pill ok">נקלט</span>
+                  {% else %}
+                    <span class="pill bad">נדחה</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty">עוד לא נקלטו ספקים. הספק הראשון מחכה 🙂</p>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

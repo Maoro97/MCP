@@ -17,3 +17,24 @@ services:
     # מפצל אותו. threads מאפשרים כמה משתמשים במקביל על אותו worker.
     autoDeploy: true              # פריסה מחדש אוטומטית בכל דחיפה לענף המחובר
     healthCheckPath: /
+    envVars:
+      # --- כלי הכנת קבצי הטעינה ---
+      - key: SECRET_KEY           # חתימת ה-session (בלעדיו התחברות לא שורדת deploy)
+        generateValue: true
+      - key: APP_PASSWORD         # סיסמת הכניסה לכלי הכנת הקבצים
+        sync: false
+      # --- ממשק קליטת הספקים (/intake) ---
+      # בלי משתמש מנהל הממשק חוסם את עצמו — זו התנהגות מכוונת.
+      - key: INTAKE_SECRET        # הצפנת הטוקן של פריוריטי במסד
+        generateValue: true
+      - key: INTAKE_ADMIN_USER    # שם המנהל הראשון של ממשק הקליטה
+        sync: false
+      - key: INTAKE_ADMIN_PASSWORD
+        sync: false
+      - key: INTAKE_ADMIN_PHONE   # טלפון לקבלת קודי האימות
+        sync: false
+      # אפשר להזין את פרטי החיבור כאן במקום במסך ההגדרות:
+      # - key: INTAKE_PRIORITY_URL
+      #   sync: false
+      # - key: INTAKE_PRIORITY_TOKEN
+      #   sync: false

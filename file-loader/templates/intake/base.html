@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}קליטת ספקים — Priority ERP{% endblock %}</title>
+<script>
+ /* בחירת הנושא נטענת לפני הציור כדי למנוע הבהוב. מפתח משותף עם שאר הכלי. */
+ (function(){try{var t=localStorage.getItem('fl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='intake/intake.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+{% block chrome %}
+<header class="topbar">
+  <div class="mark">🤝</div>
+  <div class="wordmark"><b>קליטת ספקים</b><span>Priority ERP</span></div>
+  <nav class="nav">
+    <a href="{{ url_for('intake.home') }}" class="{{ 'on' if active == 'home' }}">בית</a>
+    <a href="{{ url_for('intake.new_supplier') }}" class="{{ 'on' if active == 'new' }}">ספק חדש</a>
+    <a href="{{ url_for('intake.history') }}" class="{{ 'on' if active == 'history' }}">יומן</a>
+    {% if is_admin %}
+      <a href="{{ url_for('intake.settings') }}" class="{{ 'on' if active == 'settings' }}">הגדרות</a>
+      <a href="{{ url_for('intake.users') }}" class="{{ 'on' if active == 'users' }}">משתמשים</a>
+    {% endif %}
+    <button class="iconbtn" id="themebtn" type="button" title="החלפת מצב תצוגה">🌙</button>
+    {% if user %}
+      <span class="who">
+        <a href="{{ url_for('intake.account') }}" style="padding:0;color:inherit">{{ user.display_name or user.username }}</a>
+      </span>
+      <a href="{{ url_for('intake.logout') }}" title="יציאה">יציאה</a>
+    {% endif %}
+  </nav>
+</header>
+{% endblock %}
+
+{% block body %}{% endblock %}
+
+<div class="toast" id="toast"></div>
+<script>
+ function toggleTheme(){
+   var root = document.documentElement;
+   var cur = root.getAttribute('data-theme') ||
+             (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
+   var next = cur === 'dark' ? 'light' : 'dark';
+   root.setAttribute('data-theme', next);
+   try { localStorage.setItem('fl-theme', next); } catch (e) {}
+   paintThemeButton();
+ }
+ function paintThemeButton(){
+   var btn = document.getElementById('themebtn');
+   if (!btn) return;
+   var cur = document.documentElement.getAttribute('data-theme') ||
+             (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
+   btn.textContent = cur === 'dark' ? '☀️' : '🌙';
+ }
+ (function(){
+   var btn = document.getElementById('themebtn');
+   if (btn) btn.addEventListener('click', toggleTheme);
+   paintThemeButton();
+ })();
+
+ var CSRF = "{{ csrf }}";
+ function toast(message, kind){
+   var el = document.getElementById('toast');
+   el.textContent = message;
+   el.className = 'toast show ' + (kind || '');
+   clearTimeout(el._t);
+   el._t = setTimeout(function(){ el.className = 'toast ' + (kind || ''); }, 4200);
+ }
+ async function api(path, body){
+   const response = await fetch(path, {
+     method: 'POST',
+     headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF},
+     body: JSON.stringify(body || {})
+   });
+   let data = {};
+   try { data = await response.json(); } catch (e) {}
+   if (!response.ok) throw Object.assign(new Error(data.error || 'שגיאה לא צפויה'), {data: data});
+   return data;
+ }
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

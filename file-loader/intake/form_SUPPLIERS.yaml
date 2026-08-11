@@ -21,6 +21,8 @@
 #   placeholder טקסט רמז בתוך השדה
 #   type        דריסת טיפוס: text / int / real / date / bool. נחוץ רק לשדות
 #               שבייצוא עמודות המסך עמודת הטיפוס שלהם ריקה
+#   required    דריסת חובה (true/false). ברירת המחדל מגיעה מהקטלוג. שימושי
+#               כששדה מסומן חובה במסך אך אינו חובה ב-API
 #   width       full / half / third  (ברירת מחדל: half)
 #   default     ערך ברירת מחדל
 #   format      בדיקת פורמט: phone / email / idnum / zip  (אזהרה, לא חוסם)
@@ -143,13 +145,16 @@ steps:
         label: מספר תיק במע"מ
         format: idnum
         transform: [strip, digits_only]
+      # שני השדות האלה מסומנים חובה בהגדרת *המסך*, אך לא ב-API — ולכן הם
+      # רשות בטופס. אם פריוריטי כן ידרוש אותם, הוא יחזיר שגיאה מפורשת בטעינה.
       - field: ERPG_SECNAME
         label: סעיף מאזן / רווח והפסד
-        help: שדה חובה בהגדרת המסך אצלכם.
+        required: false
         width: full
         transform: [strip]
       - field: ERPG_TRIALBALCODE
         label: קוד סעיף למאזן בוחן
+        required: false
         transform: [strip, upper]
       - field: ERPG_ACNGCODE
         label: קוד חתך

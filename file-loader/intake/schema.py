@@ -102,13 +102,15 @@ def _resolve_field(screen, entry, catalog):
     if meta.get("system"):
         raise SchemaError(f"השדה '{name}' הוא מזהה פנימי של פריוריטי")
 
-    # `type` בטופס גובר על הקטלוג — נחוץ לשדות שבייצוא עמודות המסך עמודת
-    # הטיפוס שלהם ריקה (למשל שנת הקמה או מספר עובדים, שהם מספרים לכל דבר).
+    # `type` ו-`required` בטופס גוברים על הקטלוג. `type` נחוץ לשדות שבייצוא
+    # עמודות המסך עמודת הטיפוס שלהם ריקה; `required` נחוץ כי לא כל שדה שמסומן
+    # חובה *במסך* הוא חובה גם ב-API — פריוריטי נשאר הסמכות, ואם הוא כן ידרוש
+    # את השדה, הדחייה שלו תוצג למשתמש כמו כל שגיאה אחרת.
     field = {
         "name": name,
         "label": entry.get("label") or meta.get("title") or name,
         "type": entry.get("type") or meta.get("type", "text"),
-        "required": bool(meta.get("required")),
+        "required": bool(entry["required"] if "required" in entry else meta.get("required")),
         "max_length": meta.get("max_length"),
         "decimals": meta.get("decimals"),
         "boolean": bool(meta.get("boolean")),

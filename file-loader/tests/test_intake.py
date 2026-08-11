@@ -31,15 +31,13 @@ from intake import auth, otp, priority, schema, security, store, views  # noqa: 
 
 SCREEN = "SUPPLIERS"
 
-# ספק תקין מינימלי — כל שדות החובה של המסך
+# ספק תקין מינימלי — כל שדות החובה של הטופס
 VALID = {
     "SUPDES": "א.ב. שיווק והפצה בעמ",
     "SUPNAME": "S1001",
     "STATDES": "פעיל",
     "OWNERLOGIN": "maor",
     "CODE": "ILS",
-    "ERPG_SECNAME": "ספקים שוטפים",
-    "ERPG_TRIALBALCODE": "300",
 }
 
 
@@ -72,6 +70,18 @@ class CatalogTest(unittest.TestCase):
         for name in fields:
             self.assertFalse(catalog[name].get("readonly"), name)
             self.assertFalse(catalog[name].get("system"), name)
+
+    def test_form_can_relax_a_field_the_screen_marks_mandatory(self):
+        """
+        ERPG_SECNAME / ERPG_TRIALBALCODE מסומנים M בהגדרת המסך אך אינם חובה
+        ב-API — הקטלוג נשאר נאמן לאקסל, והטופס הוא זה שמרפה.
+        """
+        catalog = schema.load_catalog(SCREEN)
+        fields = schema.form_fields(SCREEN)
+        for name in ("ERPG_SECNAME", "ERPG_TRIALBALCODE"):
+            self.assertTrue(catalog[name]["required"], name)
+            self.assertIn(name, fields)
+            self.assertFalse(fields[name]["required"], name)
 
     def test_form_rejects_readonly_field(self):
         with self.assertRaises(schema.SchemaError):

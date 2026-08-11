@@ -97,7 +97,8 @@ class PriorityClient:
         return context
 
     # -- שכבת התקשורת ---------------------------------------------------
-    def _request(self, method, path, body=None, query=None):
+    def _request(self, method, path, body=None, query=None, accept="application/json",
+                 parse="json"):
         if not self.url:
             raise PriorityError("לא הוגדרה כתובת שירות לפריוריטי")
 
@@ -108,7 +109,7 @@ class PriorityClient:
         data = None
         headers = {
             "Authorization": self.auth_header(),
-            "Accept": "application/json",
+            "Accept": accept,
             "User-Agent": "priority-supplier-intake/1.0",
         }
         if body is not None:
@@ -120,6 +121,8 @@ class PriorityClient:
             with urllib.request.urlopen(request, timeout=self.timeout,
                                         context=self._ssl_context()) as response:
                 raw = response.read().decode("utf-8", "replace")
+                if parse == "text":
+                    return response.status, raw
                 return response.status, (json.loads(raw) if raw.strip() else {})
         except urllib.error.HTTPError as exc:
             raw = exc.read().decode("utf-8", "replace")
@@ -172,6 +175,23 @@ class PriorityClient:
         _status, payload = self._request("POST", entity, body=body)
         return payload if isinstance(payload, dict) else {}
 
+    def entity_properties(self, entity):
+        """
+        שמות השדות שקיימים בפועל ב-OData עבור ה-entity, לפי $metadata.
+
+        נחוץ כי ייצוא עמודות המסך רחב יותר מה-API: יש עמודות שמופיעות במסך
+        בפריוריטי אך אינן חשופות כשדה ב-OData, ופריוריטי דוחה אותן בטעינה
+        ("The property X does not exist on type ..."). ההשוואה הזו מאתרת את
+        כולן מראש, במקום לגלות אותן אחת-אחת בכל ניסיון טעינה.
+        """
+        _status, raw = self._request("GET", "$metadata", accept="application/xml",
+                                     parse="text")
+        properties = parse_metadata_properties(raw, entity)
+        if not properties:
+            raise PriorityError(
+                f"לא נמצאה הגדרה של הטבלה {entity} ב-$metadata של פריוריטי.")
+        return properties
+
 
 # ---------------------------------------------------------------------------
 # תרגום שגיאות לשפה של המשתמש
@@ -179,6 +199,31 @@ class PriorityClient:
 def _escape_odata(value):
     """בריחה לערך מחרוזת ב-$filter (גרש בודד מוכפל)."""
     return str(value).replace("'", "''")
+
+
+def _local_name(tag):
+    """שם התג בלי מרחב השמות — ה-EDMX משתמש בכמה גרסאות namespace."""
+    return tag.rsplit("}", 1)[-1]
+
+
+def parse_metadata_properties(xml_text, entity):
+    """מחזיר את שמות ה-Property של EntityType מסוים מתוך מסמך $metadata."""
+    import xml.etree.ElementTree as ET
+
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as exc:
+        raise PriorityError("לא ניתן לקרוא את $metadata של פריוריטי.",
+                            detail=str(exc)) from exc
+
+    for node in root.iter():
+        if _local_name(node.tag) != "EntityType":
+            continue
+        if (node.get("Name") or "").upper() != entity.upper():
+            continue
+        return {child.get("Name") for child in node
+                if _local_name(child.tag) == "Property" and child.get("Name")}
+    return set()
 
 
 def extract_priority_message(raw):

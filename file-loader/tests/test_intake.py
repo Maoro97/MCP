@@ -262,6 +262,37 @@ class PriorityClientTest(unittest.TestCase):
     def test_filter_escapes_quotes(self):
         self.assertEqual(priority._escape_odata("O'Brien"), "O''Brien")
 
+    def test_metadata_properties_parsed(self):
+        props = priority.parse_metadata_properties(METADATA_XML, "SUPPLIERS")
+        self.assertEqual(props, {"SUPNAME", "SUPDES", "STATDES"})
+
+    def test_metadata_unknown_entity_is_empty(self):
+        self.assertEqual(priority.parse_metadata_properties(METADATA_XML, "ORDERS"), set())
+
+    def test_metadata_bad_xml_raises_hebrew_error(self):
+        with self.assertRaises(priority.PriorityError):
+            priority.parse_metadata_properties("<not xml", "SUPPLIERS")
+
+
+# $metadata מקוצר בסגנון פריוריטי — כולל namespace, כדי שהפרסור ייבדק כמו במציאות
+METADATA_XML = """<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx" Version="4.0">
+  <edmx:DataServices>
+    <Schema xmlns="http://docs.oasis-open.org/odata/ns/edm" Namespace="Priority.OData">
+      <EntityType Name="SUPPLIERS">
+        <Key><PropertyRef Name="SUPNAME"/></Key>
+        <Property Name="SUPNAME" Type="Edm.String"/>
+        <Property Name="SUPDES" Type="Edm.String"/>
+        <Property Name="STATDES" Type="Edm.String"/>
+        <NavigationProperty Name="SUPPLIERSCONTACTS" Type="Collection(Priority.OData.X)"/>
+      </EntityType>
+      <EntityType Name="CUSTOMERS">
+        <Property Name="CUSTNAME" Type="Edm.String"/>
+      </EntityType>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>"""
+
 
 # ---------------------------------------------------------------------------
 class FakeClient:
@@ -285,6 +316,12 @@ class FakeClient:
 
     def test_connection(self, entity="SUPPLIERS"):
         return {"ok": True, "status": 200, "message": "ok", "sample_count": 1}
+
+    def entity_properties(self, _entity):
+        return set(FakeClient.properties)
+
+    # ברירת מחדל: פריוריטי מכיר את כל שדות הטופס
+    properties = []
 
 
 class FlowTest(unittest.TestCase):
@@ -483,6 +520,30 @@ class FlowTest(unittest.TestCase):
         for name in ("SUPDES", "STATDES", "OWNERLOGIN", "CODE",
                      "ERPG_SECNAME", "ERPG_TRIALBALCODE"):
             self.assertIn(f'data-field="{name}"', html)
+
+    def test_field_check_passes_when_priority_knows_every_field(self):
+        self.login()
+        FakeClient.properties = list(schema.form_fields(SCREEN, include_advanced=True))
+        result = self.post_json("/intake/api/check-fields", {}).get_json()
+        self.assertTrue(result["ok"], result.get("missing"))
+        self.assertEqual(result["missing"], [])
+
+    def test_field_check_reports_fields_priority_does_not_have(self):
+        self.login()
+        known = list(schema.form_fields(SCREEN, include_advanced=True))
+        FakeClient.properties = [n for n in known if n not in ("SUPTYPECODE", "GPSX")]
+        result = self.post_json("/intake/api/check-fields", {}).get_json()
+        self.assertFalse(result["ok"])
+        self.assertEqual({f["name"] for f in result["missing"]}, {"SUPTYPECODE", "GPSX"})
+
+    def test_field_check_is_admin_only(self):
+        store.create_user("clerk2", "Passw0rd-Long", "פקיד", "0521234567", "user")
+        self.login("clerk2", "Passw0rd-Long")
+        self.assertEqual(self.post_json("/intake/api/check-fields", {}).status_code, 403)
+
+    def test_removed_field_is_gone_from_the_form(self):
+        """FOREIGN אינו קיים ב-OData של פריוריטי — אסור שיישלח."""
+        self.assertNotIn("FOREIGN", schema.form_fields(SCREEN, include_advanced=True))
 
     def test_settings_page_never_echoes_the_token(self):
         self.login()

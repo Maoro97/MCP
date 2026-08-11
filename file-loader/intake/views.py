@@ -379,6 +379,39 @@ def settings(user):
     )
 
 
+@bp.route("/api/check-fields", methods=["POST"])
+@auth.admin_required
+def api_check_fields(user):
+    """
+    משווה את שדות הטופס מול $metadata של פריוריטי.
+
+    ייצוא עמודות המסך כולל עמודות שאינן חשופות ב-OData (למשל FOREIGN), ולכן
+    בלי הבדיקה הזו מגלים אותן רק כשפריוריטי דוחה טעינה — שדה אחד בכל פעם.
+    """
+    config = _config()
+    if not store.config_is_ready(config):
+        return jsonify(error="לא הוגדר חיבור לפריוריטי."), 400
+
+    form = schema.build_form(SCREEN, include_advanced=True)
+    try:
+        available = client_from_config(config).entity_properties(form["entity"])
+    except priority.PriorityError as exc:
+        return jsonify(error=exc.message, detail=exc.detail), 400
+
+    shown, hidden = [], []
+    for step in form["steps"]:
+        for field in step["fields"]:
+            if field["name"] in available:
+                continue
+            (hidden if step["id"] == "advanced" else shown).append(
+                {"name": field["name"], "label": field["label"], "step": step["title"]})
+
+    total = sum(len(step["fields"]) for step in form["steps"])
+    return jsonify(ok=not shown and not hidden, checked=total,
+                   available=len(available), missing=shown + hidden,
+                   entity=form["entity"])
+
+
 @bp.route("/api/test-connection", methods=["POST"])
 @auth.admin_required
 def api_test_connection(user):

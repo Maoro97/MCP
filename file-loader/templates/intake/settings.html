@@ -83,8 +83,10 @@
 
       <div style="display:flex;gap:12px;align-items:center;margin-top:18px;flex-wrap:wrap">
         <button class="btn btn-ghost" type="button" id="btn_test">בדיקת חיבור</button>
+        <button class="btn btn-ghost" type="button" id="btn_fields">בדיקת שדות מול פריוריטי</button>
         <span id="test_result" class="muted" style="font-size:13.5px"></span>
       </div>
+      <div id="fields_result"></div>
     </section>
 
     <section class="card">
@@ -206,6 +208,40 @@
  document.getElementById('priority_auth').addEventListener('change', syncAll);
  document.getElementById('otp_channel').addEventListener('change', syncAll);
  syncAll();
+
+ /* משווה את שדות הטופס ל-$metadata: מאתר בבת אחת שדות שפריוריטי לא מכיר,
+    במקום לגלות אותם אחד-אחד בכל ניסיון טעינה. */
+ document.getElementById('btn_fields').addEventListener('click', async function () {
+   var btn = this;
+   var out = document.getElementById('fields_result');
+   btn.classList.add('busy'); btn.disabled = true;
+   out.innerHTML = '';
+   try {
+     var result = await api("{{ url_for('intake.api_check_fields') }}", {});
+     var note = document.createElement('div');
+     note.style.marginTop = '14px';
+     if (result.ok) {
+       note.className = 'note ok';
+       note.innerHTML = '<span>✓</span><span>כל ' + result.checked +
+         ' שדות הטופס קיימים בטבלה ' + result.entity + ' בפריוריטי.</span>';
+     } else {
+       note.className = 'note err';
+       var list = result.missing.map(function (f) {
+         return f.label + ' (' + f.name + ') — שלב "' + f.step + '"';
+       }).join('<br>');
+       note.innerHTML = '<span>⛔</span><span>' + result.missing.length +
+         ' שדות אינם קיימים ב-OData של פריוריטי ויגרמו לדחיית הטעינה. ' +
+         'הסירו אותם מ-<span class="mono">intake/form_SUPPLIERS.yaml</span>:<br><br>' +
+         list + '</span>';
+     }
+     out.appendChild(note);
+   } catch (error) {
+     out.innerHTML = '<div class="note err" style="margin-top:14px"><span>⛔</span><span>' +
+       error.message + '</span></div>';
+   } finally {
+     btn.classList.remove('busy'); btn.disabled = false;
+   }
+ });
 
  document.getElementById('btn_test').addEventListener('click', async function () {
    var btn = this;

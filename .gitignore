@@ -26,3 +26,7 @@ next-env.d.ts
 __pycache__/
 *.pyc
 file-loader/sample_customers.xlsx
+
+# מפתחות מקומיים שנוצרים ב-run-intake.bat — לא נכנסים ל-git לעולם
+.intake-env.bat
+file-loader/.intake-env.bat

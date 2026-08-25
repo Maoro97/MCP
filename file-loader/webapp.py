@@ -527,45 +527,17 @@ GRID = """
 <!doctype html><html lang="he" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>טבלת טעינה — {{ screen }}</title>
-<script>(function(){try{var t=localStorage.getItem('fl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+{{ theme_head|safe }}
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
- :root{
-  --bg:#eef2f9;--surface:#ffffff;--surface-2:#f7f9fc;--border:#e5eaf2;--text:#0f172a;--muted:#64748b;
-  --brand:#4f46e5;--brand-2:#6366f1;--red:#dc2626;
-  --bad-bg:#fef2f2;--bad-fg:#dc2626;--warn-bg:#fffbeb;--warn-fg:#b45309;
-  --ok-bg:#dcfce7;--ok-fg:#166534;--ign-bg:#e0e7ff;--ign-fg:#4338ca;--tot-bg:#eef2f7;--tot-fg:#334155;
-  --shadow:0 1px 2px rgba(16,24,40,.05),0 10px 30px rgba(16,24,40,.07);
- }
- @media (prefers-color-scheme:dark){:root:not([data-theme]){
-  --bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;--text:#e8edf6;--muted:#93a1b8;
-  --brand:#818cf8;--brand-2:#a5b4fc;
-  --bad-bg:rgba(220,38,38,.15);--bad-fg:#f87171;--warn-bg:rgba(217,119,6,.16);--warn-fg:#fbbf24;
-  --ok-bg:rgba(5,150,105,.18);--ok-fg:#34d399;--ign-bg:rgba(99,102,241,.22);--ign-fg:#a5b4fc;
-  --tot-bg:rgba(148,163,184,.16);--tot-fg:#cbd5e1;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 34px rgba(0,0,0,.45);
- }}
- :root[data-theme="dark"]{
-  --bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;--text:#e8edf6;--muted:#93a1b8;
-  --brand:#818cf8;--brand-2:#a5b4fc;
-  --bad-bg:rgba(220,38,38,.15);--bad-fg:#f87171;--warn-bg:rgba(217,119,6,.16);--warn-fg:#fbbf24;
-  --ok-bg:rgba(5,150,105,.18);--ok-fg:#34d399;--ign-bg:rgba(99,102,241,.22);--ign-fg:#a5b4fc;
-  --tot-bg:rgba(148,163,184,.16);--tot-fg:#cbd5e1;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 34px rgba(0,0,0,.45);
- }
- .brand{display:flex;align-items:center;gap:10px}
- .brand .logo-img{height:40px;width:auto}
- .brand-tx{display:flex;flex-direction:column;line-height:1.03}
- .brand-name{font-weight:800;font-size:18px;color:var(--text);letter-spacing:-.01em}
- .brand-sub{font-weight:600;font-size:11.5px;color:#1e50c8}
- .apphead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px}
+{{ theme_css|safe }}
+ /* מיפוי טוקני הטבלה הישנים למערכת המשותפת (רקעי סטטוס לתאים) */
+ :root{--brand:var(--accent);--brand-2:var(--accent);
+  --bad-bg:var(--red-soft);--bad-fg:var(--red);--warn-bg:var(--amber-soft);--warn-fg:var(--amber);
+  --ok-bg:var(--green-soft);--ok-fg:var(--green);--ign-bg:var(--accent-soft);--ign-fg:var(--accent);
+  --tot-bg:var(--surface-3);--tot-fg:var(--muted)}
  .apphead .ttl h1{margin:0}.apphead .ttl .sub{margin:0}
- .themebtn{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;
-  padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
- *{box-sizing:border-box}
- body{margin:0;color:var(--text);font-family:"Assistant",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Arial,sans-serif;
-  background:radial-gradient(1000px 420px at 100% -8%,rgba(99,102,241,.14),transparent 60%),var(--bg)}
  .wrap{max-width:1460px;margin:0 auto;padding:22px 18px 90px}
  h1{font-size:23px;font-weight:800;margin:0 0 3px;letter-spacing:-.01em}
  .sub{color:var(--muted);font-size:14px;margin:0 0 16px}
@@ -575,13 +547,16 @@ GRID = """
  .pill.tot{background:var(--tot-bg);color:var(--tot-fg)}.pill.ok{background:var(--ok-bg);color:var(--ok-fg)}
  .pill.bad{background:var(--bad-bg);color:var(--bad-fg)}.pill.warn{background:var(--warn-bg);color:var(--warn-fg)}
  .pill.ign{background:var(--ign-bg);color:var(--ign-fg)}
- button{border:0;border-radius:11px;padding:9px 15px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s}
- .b-check{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}.b-check:hover{background:var(--border)}
- .b-gen{background:linear-gradient(140deg,#10b981,#059669);color:#fff;box-shadow:0 6px 16px rgba(5,150,105,.32)}
- .b-gen:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(5,150,105,.42)}
- .b-save{background:linear-gradient(140deg,var(--brand-2),var(--brand));color:#fff;box-shadow:0 6px 16px rgba(79,70,229,.32)}
- .b-save:hover{transform:translateY(-1px);box-shadow:0 10px 22px rgba(79,70,229,.42)}
- .spacer{flex:1}a.back{color:var(--brand);text-decoration:none;font-weight:700;font-size:14px}
+ button{border:0;border-radius:var(--r);padding:9px 14px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .13s,border-color .13s,transform .05s;display:inline-flex;align-items:center;gap:7px}
+ button svg{flex:none}
+ .b-check{background:var(--surface);color:var(--text);border:1px solid var(--border-strong)}.b-check:hover{background:var(--surface-2);border-color:var(--faint)}
+ .b-gen{background:var(--green);color:#fff}
+ .b-gen:hover{filter:brightness(.94)}
+ .b-save{background:var(--accent);color:var(--accent-fg)}
+ .b-save:hover{background:var(--accent-hover)}
+ button:active{transform:translateY(.5px)}
+ .spacer{flex:1}a.back{color:var(--muted);text-decoration:none;font-weight:500;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+ a.back:hover{color:var(--text)}
  .chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer}.chk input{width:16px;height:16px;accent-color:var(--brand)}
  .banner{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);color:var(--brand);border-radius:12px;padding:11px 15px;margin:8px 0;font-size:14px}
  .tablewrap{overflow:auto;max-height:calc(100vh - 230px);border:1px solid var(--border);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}
@@ -644,9 +619,9 @@ GRID = """
  .toast.ok{border-left-color:#16a34a}.toast.err{border-left-color:var(--red)}
  .pager{display:flex;gap:10px;align-items:center;justify-content:center;margin:16px 0;font-size:14px;color:var(--muted)}
  .pager button{background:var(--surface);color:var(--text);border:1px solid var(--border)}.pager button:disabled{opacity:.4;cursor:default}
- .dl{display:inline-block;color:#fff;text-decoration:none;border-radius:11px;padding:11px 20px;font-weight:700;margin:6px 8px 6px 0;box-shadow:var(--shadow);transition:.15s;background:linear-gradient(140deg,#10b981,#059669)}
- .dl:hover{transform:translateY(-1px)}
- .dl.rej{background:linear-gradient(140deg,#f43f5e,#dc2626)}.dl.rep{background:linear-gradient(140deg,#64748b,#475569)}
+ .dl{display:inline-flex;align-items:center;gap:7px;color:#fff;text-decoration:none;border-radius:var(--r);padding:10px 18px;font-weight:600;font-size:14px;margin:6px 8px 6px 0;transition:filter .13s;background:var(--green)}
+ .dl:hover{filter:brightness(.94)}
+ .dl.rej{background:var(--red)}.dl.rep{background:var(--muted)}
  .hint{color:var(--muted);font-size:13px}
  .mapcard{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);margin:8px 0 4px;padding:2px 16px}
  .mapcard summary{cursor:pointer;font-weight:700;padding:12px 0;list-style:none;display:flex;align-items:center;gap:10px}
@@ -667,21 +642,26 @@ GRID = """
  .jbar .fld label{font-size:12px;color:var(--muted);font-weight:600}
  .jbar .fld input{width:110px;padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);font-family:inherit;font-size:14px}
  .jbar .fld input:focus{outline:none;border-color:var(--brand)}
- .jbar .jt{font-weight:700;color:var(--brand);align-self:center;margin-inline-end:4px}
- .b-jchk{background:#475569;color:#fff}.b-jbal{background:linear-gradient(140deg,#6366f1,#4f46e5);color:#fff}
+ .jbar .jt{font-weight:700;color:var(--accent);align-self:center;margin-inline-end:4px;display:inline-flex;align-items:center;gap:7px}
+ .b-jchk{background:var(--surface);color:var(--text);border:1px solid var(--border-strong)}.b-jchk:hover{background:var(--surface-2)}
+ .b-jbal{background:var(--accent);color:var(--accent-fg)}.b-jbal:hover{background:var(--accent-hover)}
  .bar2{margin-top:-6px;padding:10px 14px}.tool-lbl{font-weight:700;color:var(--muted);font-size:14px}
  .bar2 .mini{padding:7px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);font-family:inherit;font-size:14px}
  .bar2 .mini#bulkval{min-width:200px}
  tr.filterrow th{padding:4px 6px;position:sticky;top:0}
  tr.filterrow input{width:100%;min-width:90px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font:inherit;font-size:13px}
-</style></head><body><div class="wrap">
- <div class="apphead">
-  <div class="ttl" style="display:flex;align-items:center;gap:14px">
-   <a class="themebtn" style="text-decoration:none" href="/" title="חזרה לדף הבית">🏠 דף הבית</a>
-   <h1>טבלת טעינה — {{ screen }}</h1></div>
-  <div style="display:flex;align-items:center;gap:14px">{{ brand|safe }}
-   <button id="themebtn" class="themebtn" onclick="toggleTheme()">🌙 מצב כהה</button></div>
- </div>
+</style></head><body>
+ <header class="topbar">
+  <div style="display:flex;align-items:center;gap:12px;min-width:0">
+   <a class="navbtn solid" href="/" title="חזרה לדף הבית">{{ icon('home',16)|safe }}<span>דף הבית</span></a>
+   <h1 style="font-size:16px;font-weight:700;margin:0;letter-spacing:-.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">טבלת טעינה · {{ screen }}</h1>
+  </div>
+  <nav class="topnav">
+   {{ brand|safe }}
+   <button id="themebtn" class="navbtn" onclick="toggleTheme()" title="החלף מצב תצוגה" aria-label="החלף מצב תצוגה"></button>
+  </nav>
+ </header>
+ <div class="wrap">
  <div class="bar">
   <span class="pill tot" id="p-tot">סה״כ 0</span>
   <span class="pill ok" id="p-ok">תקינות 0</span>
@@ -689,15 +669,15 @@ GRID = """
   <span class="pill warn" id="p-warn">אזהרות 0</span>
   <span class="pill ign" id="p-ign">מיוצאות למרות בעיה 0</span>
   <span class="spacer"></span>
-  <button class="b-check" id="toggleview" onclick="toggleView()">🎯 הצג רק שורות בעייתיות</button>
-  <button class="b-check" onclick="ignoreAllWarnings()" title="סמן את כל שורות האזהרה כמיוצאות">🚫 התעלם מאזהרות</button>
-  <button class="b-check" onclick="revalidate()">🔄 בדוק מחדש</button>
-  <button class="b-gen" onclick="generate()">⬇ צור קובץ טעינה</button>
-  <button class="b-save" onclick="saveLoad()" title="שמור את הטעינה בהיסטוריה לאחזור עתידי">💾 שמירה בהיסטוריה</button>
-  <a class="back" href="/history">📜 היסטוריה</a>
+  <button class="b-check" id="toggleview" onclick="toggleView()">{{ icon('search',15)|safe }}<span>הצג רק שורות בעייתיות</span></button>
+  <button class="b-check" onclick="ignoreAllWarnings()" title="סמן את כל שורות האזהרה כמיוצאות">{{ icon('check',15)|safe }}התעלם מאזהרות</button>
+  <button class="b-check" onclick="revalidate()">{{ icon('check-list',15)|safe }}בדוק מחדש</button>
+  <button class="b-gen" onclick="generate()">{{ icon('download',15)|safe }}צור קובץ טעינה</button>
+  <button class="b-save" onclick="saveLoad()" title="שמור את הטעינה בהיסטוריה לאחזור עתידי">{{ icon('check-circle',15)|safe }}שמירה בהיסטוריה</button>
+  <a class="back" href="/history">{{ icon('history',15)|safe }}היסטוריה</a>
  </div>
  <div class="bar bar2">
-  <span class="tool-lbl">🔧 עדכון גורף</span>
+  <span class="tool-lbl">עדכון גורף</span>
   <select id="bulkcol" class="mini"></select>
   <input id="bulkval" class="mini" placeholder="ערך חדש לכל השורות">
   <button class="b-check" onclick="bulkUpdate()">החל על הכל</button>
@@ -800,7 +780,9 @@ function toggleView(){
 }
 function updateToggleBtn(){
   const b=$('toggleview'); if(!b) return;
-  b.textContent = (GRID.mode==='errors' || onlyProblems) ? '📋 הצג את כל השורות' : '🎯 הצג רק שורות בעייתיות';
+  b.innerHTML = (GRID.mode==='errors' || onlyProblems)
+    ? '{{ icon("check-list",15)|safe }}<span>הצג את כל השורות</span>'
+    : '{{ icon("search",15)|safe }}<span>הצג רק שורות בעייתיות</span>';
 }
 function computeSlice(){
   const disp=displayed();
@@ -976,16 +958,17 @@ async function remap(){
 // --- מנוע הסבת תנועות יומן ---
 function renderJournal(){
   const box=$('journalbar'); if(!box) return;
-  if(!GRID.journal){ box.innerHTML=''; return; }
+  if(!GRID.journal){ box.innerHTML=''; box.className=''; return; }
+  box.className='jbar';
   box.innerHTML=
-   '<span class="jt">⚖️ תנועות יומן</span>'+
+   '<span class="jt">{{ icon("balance",17)|safe }} תנועות יומן</span>'+
    '<div class="fld"><label>מטבע ראשי</label><input id="j-primary" value="ILS"></div>'+
    '<div class="fld"><label>מטבע משני</label><input id="j-secondary" value="USD"></div>'+
    '<div class="fld"><label>סף איזון ראשי</label><input id="j-maxp" type="number" step="0.01" value="1"></div>'+
    '<div class="fld"><label>סף איזון משני</label><input id="j-maxs" type="number" step="0.01" value="1"></div>'+
-   '<button class="b-jchk" onclick="journalFx()">💱 טיוב מט"ח</button>'+
-   '<button class="b-jchk" onclick="journalCheck()">🔍 בדיקת תנועות</button>'+
-   '<button class="b-jbal" onclick="journalBalance()">⚖️ איזון תנועות</button>';
+   '<button class="b-jchk" onclick="journalFx()">{{ icon("coins",15)|safe }}טיוב מט"ח</button>'+
+   '<button class="b-jchk" onclick="journalCheck()">{{ icon("check-list",15)|safe }}בדיקת תנועות</button>'+
+   '<button class="b-jbal" onclick="journalBalance()">{{ icon("balance",15)|safe }}איזון תנועות</button>';
 }
 function journalOpts(){
   return {secondary: ($('j-secondary')||{}).value||'', primary: ($('j-primary')||{}).value||'',
@@ -1105,15 +1088,11 @@ function flash(kind,text){const t=$('toast');if(!t)return;
   t.textContent=text;t.className='toast '+(kind==='ok'?'ok':'err')+' show';
   clearTimeout(ft);ft=setTimeout(()=>{t.classList.remove('show');},3000);}
 
-function toggleTheme(){var r=document.documentElement,cur=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
-  var nx=cur==='dark'?'light':'dark';r.setAttribute('data-theme',nx);try{localStorage.setItem('fl-theme',nx);}catch(e){}updateThemeBtn();}
-function updateThemeBtn(){var b=$('themebtn');if(!b)return;
-  var cur=document.documentElement.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
-  b.textContent=cur==='dark'?'☀️ מצב בהיר':'🌙 מצב כהה';}
-
 updateToggleBtn();
-updateThemeBtn(); fillBulkSelect(); renderBanner(); renderMapping(); renderJournal(); render();
-</script></body></html>
+fillBulkSelect(); renderBanner(); renderMapping(); renderJournal(); render();
+</script>
+{{ theme_js|safe }}
+</body></html>
 """
 
 

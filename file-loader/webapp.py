@@ -153,6 +153,201 @@ THEME_HEAD = (
 )
 
 
+# ===========================================================================
+# מערכת עיצוב משותפת (Design System) — מקור אמת אחד לכל המסכים.
+# פלטה מונוכרומטית בהשראת Linear/Vercel: אפורים ניטרליים + אקסנט אחד מרוסן,
+# ללא גרדיאנטים, אייקוני-קו (SVG) אחידים, פוקוס נגיש, ומצב כהה/בהיר.
+# מוזרק לכל התבניות דרך context_processor (theme_css / icon / theme_js).
+# ===========================================================================
+import json as _json
+
+# --- ספריית אייקונים (Lucide-style, stroke=currentColor) ---
+_ICON_PATHS = {
+    "moon": '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+    "sun": '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4'
+           'M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    "history": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    "rates": '<path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/>',
+    "logout": '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>'
+              '<path d="M10 17l5-5-5-5"/><path d="M15 12H3"/>',
+    "home": '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/>',
+    "upload": '<path d="M12 13v8"/><path d="m8 17 4-4 4 4"/>'
+              '<path d="M20 16.6A5 5 0 0 0 18 7h-1.3A8 8 0 1 0 4 15.3"/>',
+    "file": '<path d="M14 3v5h5"/><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12'
+            'a2 2 0 0 0 2-2V8Z"/>',
+    "arrow-l": '<path d="M19 12H5"/><path d="m11 5-7 7 7 7"/>',
+    "arrow-r": '<path d="M5 12h14"/><path d="m13 5 7 7-7 7"/>',
+    "lock": '<rect x="4" y="10" width="16" height="11" rx="2"/>'
+            '<path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+    "search": '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+    "trash": '<path d="M4 7h16"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>'
+             '<path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/>',
+    "pencil": '<path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/>'
+              '<path d="M13.5 6.5l3 3"/>',
+    "chevron-l": '<path d="m15 6-6 6 6 6"/>',
+    "check": '<path d="M20 6 9 17l-5-5"/>',
+    "check-circle": '<circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+    "download": '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+    "balance": '<path d="M12 3v18"/><path d="M7 7h10"/><path d="m5 7-3 6h6Z"/>'
+               '<path d="m19 7-3 6h6Z"/><path d="M8 21h8"/>',
+    "check-list": '<path d="M4 6h11"/><path d="M4 12h11"/><path d="M4 18h7"/>'
+                  '<path d="m17 15 2 2 4-4"/>',
+    "coins": '<circle cx="9" cy="9" r="6"/><path d="M21 15a6 6 0 0 1-9 5.2"/>'
+             '<path d="M9 6.5v5M7.5 7.5h2.2a1 1 0 0 1 0 2H8a1 1 0 0 0 0 2h2.5"/>',
+    "sparkle": '<path d="M12 3l1.8 4.9L18.7 10l-4.9 1.8L12 16.7l-1.8-4.9L5.3 10'
+               'l4.9-2.1Z"/>',
+    "alert": '<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2 18a2 2 0 0 0 1.7 3'
+             'h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>',
+}
+
+
+def icon(name, size=18, cls=None):
+    """מחזיר SVG של אייקון-קו אחיד (משתמש ב-currentColor, אז מקבל צבע מההקשר)."""
+    p = _ICON_PATHS.get(name, "")
+    c = f' class="{cls}"' if cls else ""
+    return (f'<svg{c} width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" '
+            f'stroke="currentColor" stroke-width="1.75" stroke-linecap="round" '
+            f'stroke-linejoin="round" aria-hidden="true">{p}</svg>')
+
+
+# --- טוקנים + רכיבים משותפים (מוזרק לתוך <style> בכל תבנית) ---
+THEME_CSS = """
+ :root{
+  --bg:#fbfbfc; --surface:#ffffff; --surface-2:#f5f6f8; --surface-3:#eef0f3;
+  --border:#e7e8ec; --border-strong:#d7d9df;
+  --text:#17181b; --muted:#61646c; --faint:#8a8d95;
+  --accent:#5b57d6; --accent-hover:#4b47c4; --accent-fg:#ffffff;
+  --accent-soft:rgba(91,87,214,.10); --accent-border:rgba(91,87,214,.35);
+  --green:#2f9e44; --green-soft:rgba(47,158,68,.12);
+  --red:#e03131; --red-soft:rgba(224,49,49,.10);
+  --amber:#e8850c; --amber-soft:rgba(232,133,12,.12);
+  --r-sm:8px; --r:10px; --r-lg:14px;
+  --shadow:0 1px 2px rgba(16,18,25,.04),0 2px 8px rgba(16,18,25,.05);
+  --shadow-lg:0 12px 32px rgba(16,18,25,.10),0 2px 8px rgba(16,18,25,.05);
+  --ring:0 0 0 3px var(--accent-soft);
+ }
+ @media (prefers-color-scheme:dark){:root:not([data-theme]){
+  --bg:#0b0c0e; --surface:#131417; --surface-2:#191a1e; --surface-3:#212328;
+  --border:#26282d; --border-strong:#33363c;
+  --text:#edeef0; --muted:#9b9ea5; --faint:#71747b;
+  --accent:#8b8ff7; --accent-hover:#9ea1f8; --accent-fg:#0b0c0e;
+  --accent-soft:rgba(139,143,247,.14); --accent-border:rgba(139,143,247,.4);
+  --green:#51cf66; --green-soft:rgba(81,207,102,.14);
+  --red:#ff6b6b; --red-soft:rgba(255,107,107,.13);
+  --amber:#fcc419; --amber-soft:rgba(252,196,25,.14);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.35);
+  --shadow-lg:0 16px 40px rgba(0,0,0,.55),0 4px 16px rgba(0,0,0,.4);
+ }}
+ :root[data-theme="dark"]{
+  --bg:#0b0c0e; --surface:#131417; --surface-2:#191a1e; --surface-3:#212328;
+  --border:#26282d; --border-strong:#33363c;
+  --text:#edeef0; --muted:#9b9ea5; --faint:#71747b;
+  --accent:#8b8ff7; --accent-hover:#9ea1f8; --accent-fg:#0b0c0e;
+  --accent-soft:rgba(139,143,247,.14); --accent-border:rgba(139,143,247,.4);
+  --green:#51cf66; --green-soft:rgba(81,207,102,.14);
+  --red:#ff6b6b; --red-soft:rgba(255,107,107,.13);
+  --amber:#fcc419; --amber-soft:rgba(252,196,25,.14);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.35);
+  --shadow-lg:0 16px 40px rgba(0,0,0,.55),0 4px 16px rgba(0,0,0,.4);
+ }
+ *{box-sizing:border-box}
+ html{-webkit-text-size-adjust:100%}
+ body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);line-height:1.55;
+  font-family:"Assistant",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  font-feature-settings:"cv01","ss01";letter-spacing:-.006em}
+ svg{flex:none;vertical-align:middle}
+ ::selection{background:var(--accent-soft)}
+ /* --- מיתוג --- */
+ .brand{display:flex;align-items:center;gap:10px}
+ .brand .logo-img{height:38px;width:auto}
+ .brand-tx{display:flex;flex-direction:column;line-height:1.08}
+ .brand-name{font-weight:700;font-size:16px;color:var(--text);letter-spacing:-.02em}
+ .brand-sub{font-weight:500;font-size:11.5px;color:var(--muted);letter-spacing:.01em}
+ /* --- סרגל עליון --- */
+ .topbar{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  height:56px;padding:0 20px;border-bottom:1px solid var(--border);
+  background:color-mix(in srgb,var(--surface) 85%,transparent);
+  backdrop-filter:saturate(1.4) blur(10px);position:sticky;top:0;z-index:40}
+ .topnav{display:flex;align-items:center;gap:6px}
+ .navbtn{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 11px;
+  border-radius:var(--r-sm);border:1px solid transparent;background:transparent;
+  color:var(--muted);font:inherit;font-size:13px;font-weight:500;cursor:pointer;
+  text-decoration:none;transition:background .13s,color .13s,border-color .13s;white-space:nowrap}
+ .navbtn:hover{background:var(--surface-2);color:var(--text);border-color:var(--border)}
+ .navbtn svg{color:var(--faint);transition:color .13s}
+ .navbtn:hover svg{color:var(--muted)}
+ .navbtn.solid{border-color:var(--border);background:var(--surface)}
+ /* --- כרטיס --- */
+ .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--shadow)}
+ /* --- טפסים --- */
+ label{display:block;font-weight:600;margin:0 0 7px;font-size:13px;color:var(--text)}
+ input[type=text],input[type=number],input[type=search],input[type=password],select,textarea{
+  width:100%;padding:9px 12px;border:1px solid var(--border-strong);border-radius:var(--r);
+  font-size:14px;font-family:inherit;background:var(--surface);color:var(--text);
+  transition:border-color .13s,box-shadow .13s}
+ input::placeholder,textarea::placeholder{color:var(--faint)}
+ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+ select{cursor:pointer;appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2361646c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+  background-repeat:no-repeat;background-position:left 11px center;padding-left:34px}
+ /* --- כפתורים --- */
+ .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:10px 16px;border-radius:var(--r);border:1px solid var(--border-strong);
+  background:var(--surface);color:var(--text);font:inherit;font-size:14px;font-weight:600;
+  cursor:pointer;transition:background .13s,border-color .13s,transform .05s,box-shadow .13s}
+ .btn:hover{background:var(--surface-2);border-color:var(--faint)}
+ .btn:active{transform:translateY(.5px)}
+ .btn:focus-visible{outline:none;box-shadow:var(--ring)}
+ .btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);
+  box-shadow:0 1px 2px rgba(16,18,25,.10)}
+ .btn-primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+ .btn-lg{padding:13px 20px;font-size:15px;width:100%}
+ .btn svg{color:currentColor}
+ /* --- כללי --- */
+ .muted{color:var(--muted);font-size:13px}
+ a{color:var(--accent)}
+ .backlink{display:inline-flex;align-items:center;gap:6px;color:var(--muted);
+  text-decoration:none;font-weight:500;font-size:13px}
+ .backlink:hover{color:var(--text)}
+ .backlink svg{color:var(--faint)}
+ code{background:var(--surface-2);border:1px solid var(--border);padding:1px 6px;
+  border-radius:6px;font-size:12.5px}
+ .trust{display:flex;align-items:center;gap:9px;justify-content:center;margin:16px auto 0;
+  max-width:560px;padding:10px 14px;border:1px solid var(--border);border-radius:var(--r);
+  background:var(--surface);color:var(--muted);font-size:13px}
+ .trust svg{color:var(--green)}
+ .trust b{color:var(--text);font-weight:600}
+"""
+
+
+def _theme_js():
+    """סקריפט מעבר בהיר/כהה משותף — מחליף אייקון (שמש/ירח) + תווית בכפתור #themebtn."""
+    moon = _json.dumps(icon("moon", 16) + "<span>מצב כהה</span>")
+    sun = _json.dumps(icon("sun", 16) + "<span>מצב בהיר</span>")
+    return (
+        "<script>(function(){var MOON=" + moon + ",SUN=" + sun + ";"
+        "window.toggleTheme=function(){var r=document.documentElement,"
+        "cur=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');"
+        "var nx=cur==='dark'?'light':'dark';r.setAttribute('data-theme',nx);"
+        "try{localStorage.setItem('fl-theme',nx);}catch(e){}updateThemeBtn();};"
+        "window.updateThemeBtn=function(){var b=document.getElementById('themebtn');if(!b)return;"
+        "var cur=document.documentElement.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');"
+        "b.innerHTML=(cur==='dark'?SUN:MOON);};updateThemeBtn();})();</script>"
+    )
+
+
+THEME_JS = _theme_js()
+
+
+@app.context_processor
+def _inject_design_system():
+    """מזריק את מערכת העיצוב (CSS/אייקונים/JS) לכל התבניות אוטומטית."""
+    return {"theme_css": THEME_CSS, "icon": icon, "theme_js": THEME_JS,
+            "theme_head": THEME_HEAD}
+
+
 def _prune_runs():
     if len(RUNS) > _RUNS_MAX:  # ניקוי ריצות ישנות
         for old in sorted(RUNS, key=lambda k: RUNS[k]["created"])[:len(RUNS) - _RUNS_MAX]:
@@ -246,89 +441,47 @@ UPLOAD = """
 <!doctype html><html lang="he" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>הכנת קובץ טעינה — Priority ERP</title>
-<script>(function(){try{var t=localStorage.getItem('fl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+{{ theme_head|safe }}
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
- :root{
-  --bg:#eef2f9;--surface:#ffffff;--surface-2:#f7f9fc;--border:#e5eaf2;
-  --text:#0f172a;--muted:#64748b;
-  --brand:#4f46e5;--brand-2:#6366f1;--brand-700:#4338ca;
-  --green:#059669;--red:#dc2626;--radius:18px;
-  --shadow:0 1px 2px rgba(16,24,40,.05),0 8px 24px rgba(16,24,40,.07);
-  --shadow-lg:0 20px 50px rgba(37,40,90,.16);
- }
- @media (prefers-color-scheme:dark){:root:not([data-theme]){
-  --bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;
-  --text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--brand-2:#a5b4fc;--brand-700:#6366f1;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.4);--shadow-lg:0 24px 60px rgba(0,0,0,.55);
- }}
- :root[data-theme="dark"]{
-  --bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;
-  --text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--brand-2:#a5b4fc;--brand-700:#6366f1;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.4);--shadow-lg:0 24px 60px rgba(0,0,0,.55);
- }
- .brand{display:flex;align-items:center;gap:11px}
- .brand .logo-img{height:46px;width:auto}
- .brand-tx{display:flex;flex-direction:column;line-height:1.05}
- .brand-name{font-weight:800;font-size:21px;color:var(--text);letter-spacing:-.01em}
- .brand-sub{font-weight:600;font-size:12.5px;color:#1e50c8}
- .topbar{display:flex;align-items:center;justify-content:space-between;max-width:720px;margin:0 auto 4px;padding:0 2px}
- .themebtn{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;
-  padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;width:auto;margin:0;box-shadow:none}
- .themebtn:hover{transform:none;background:var(--surface-2);box-shadow:none}
- *{box-sizing:border-box}
- body{margin:0;min-height:100vh;color:var(--text);line-height:1.6;
-  font-family:"Assistant",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,Arial,sans-serif;
-  background:
-   radial-gradient(1100px 500px at 100% -10%,rgba(99,102,241,.18),transparent 60%),
-   radial-gradient(900px 500px at -10% 0%,rgba(16,185,129,.12),transparent 55%),
-   var(--bg);}
- .wrap{max-width:720px;margin:0 auto;padding:56px 20px 60px}
- .hero{text-align:center;margin-bottom:26px}
- .logo{width:60px;height:60px;border-radius:18px;margin:0 auto 16px;display:grid;place-items:center;
-  font-size:30px;color:#fff;background:linear-gradient(140deg,var(--brand-2),var(--brand));
-  box-shadow:0 10px 24px rgba(79,70,229,.4)}
- h1{font-size:28px;font-weight:800;margin:0 0 6px;letter-spacing:-.02em}
- .hero p{color:var(--muted);margin:0;font-size:16px}
- .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:26px;box-shadow:var(--shadow)}
- label{display:block;font-weight:600;margin:0 0 7px;font-size:14px}
- select,input[type=text],input[type=number]{width:100%;padding:11px 13px;border:1.5px solid var(--border);
-  border-radius:12px;font-size:15px;font-family:inherit;background:var(--surface-2);color:var(--text);transition:.15s}
- select:focus,input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 4px rgba(99,102,241,.15);background:var(--surface)}
- .row{display:flex;gap:14px;flex-wrap:wrap}.row>div{flex:1;min-width:180px;margin-bottom:18px}
- .drop{border:2px dashed var(--border);border-radius:14px;padding:34px 20px;text-align:center;cursor:pointer;
-  background:var(--surface-2);transition:.18s;margin-bottom:6px}
- .drop:hover{border-color:var(--brand-2)}
- .drop.over{border-color:var(--brand);background:rgba(99,102,241,.08);transform:scale(1.01)}
- .drop .ico{font-size:30px;display:block;margin-bottom:8px}
- .drop b{color:var(--brand)}.drop small{display:block;color:var(--muted);margin-top:6px}
- .fname{margin-top:12px;font-weight:700;color:var(--green)}
- button{width:100%;background:linear-gradient(140deg,var(--brand-2),var(--brand));color:#fff;border:0;
-  border-radius:12px;padding:14px;font-size:16px;font-weight:700;cursor:pointer;margin-top:14px;
-  box-shadow:0 8px 20px rgba(79,70,229,.32);transition:.15s;font-family:inherit}
- button:hover{transform:translateY(-1px);box-shadow:0 12px 26px rgba(79,70,229,.42)}
- button:active{transform:translateY(0)}
- .muted{color:var(--muted);font-size:13.5px;text-align:center;margin-top:18px}
- .err{background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.3);color:#dc2626;border-radius:12px;padding:16px 18px;white-space:pre-wrap}
- code{background:var(--surface-2);border:1px solid var(--border);padding:2px 7px;border-radius:6px;font-size:13px}
- a.back{color:var(--brand);text-decoration:none;font-weight:700}
-</style></head><body><div class="wrap">
- <div class="topbar">{{ brand|safe }}
-  <div style="display:flex;gap:8px;align-items:center">
-   <a class="themebtn" style="text-decoration:none" href="/rates">💱 שערי בנק ישראל</a>
-   <a class="themebtn" style="text-decoration:none" href="/history">📜 היסטוריה</a>
-   {% if auth_on %}<a class="themebtn" style="text-decoration:none" href="/logout">🚪 יציאה</a>{% endif %}
-   <button id="themebtn" class="themebtn" onclick="toggleTheme()">🌙 מצב כהה</button></div></div>
+{{ theme_css|safe }}
+ .wrap{max-width:660px;margin:0 auto;padding:52px 20px 60px}
+ .hero{text-align:center;margin-bottom:28px}
+ .hero .logo{width:52px;height:52px;border-radius:14px;margin:0 auto 18px;display:grid;place-items:center;
+  color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent-border)}
+ h1{font-size:27px;font-weight:700;margin:0 0 8px;letter-spacing:-.03em}
+ .hero p{color:var(--muted);margin:0;font-size:15.5px;max-width:460px;margin:0 auto}
+ .card{padding:24px}
+ .row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px}.row>div{flex:1;min-width:170px;margin-bottom:16px}
+ .drop{border:1.5px dashed var(--border-strong);border-radius:var(--r);padding:32px 20px;text-align:center;
+  cursor:pointer;background:var(--surface-2);transition:border-color .15s,background .15s}
+ .drop:hover{border-color:var(--accent)}
+ .drop.over{border-color:var(--accent);background:var(--accent-soft)}
+ .drop .ico{color:var(--faint);display:block;margin:0 auto 10px;width:fit-content}
+ .drop b{color:var(--accent);font-weight:600}.drop .fmts{display:block;color:var(--faint);margin-top:8px;font-size:12.5px;letter-spacing:.02em}
+ .fname{margin-top:12px;font-weight:600;color:var(--green);display:inline-flex;align-items:center;gap:6px}
+ .err{background:var(--red-soft);border:1px solid var(--red);color:var(--red);border-radius:var(--r);padding:15px 17px;white-space:pre-wrap}
+ form.card{margin-top:2px}
+</style></head><body>
+ <header class="topbar">
+  {{ brand|safe }}
+  <nav class="topnav">
+   <a class="navbtn" href="/rates">{{ icon('rates',16)|safe }}<span>שערי בנק ישראל</span></a>
+   <a class="navbtn" href="/history">{{ icon('history',16)|safe }}<span>היסטוריה</span></a>
+   {% if auth_on %}<a class="navbtn" href="/logout">{{ icon('logout',16)|safe }}<span>יציאה</span></a>{% endif %}
+   <button id="themebtn" class="navbtn" onclick="toggleTheme()" title="החלף מצב תצוגה" aria-label="החלף מצב תצוגה"></button>
+  </nav>
+ </header>
+ <div class="wrap">
  <div class="hero">
-  <div class="logo">📥</div>
+  <div class="logo">{{ icon('upload',26)|safe }}</div>
   <h1>הכנת קובץ טעינה ל-Priority ERP</h1>
-  <p>העלה קובץ אקסל, בחר מסך יעד, ותקבל טבלת טעינה חכמה לפני הפקת הקובץ.</p>
+  <p>העלה קובץ אקסל, בחר מסך יעד, וקבל טבלת טעינה חכמה לפני הפקת הקובץ.</p>
  </div>
  {% if error %}
-  <div class="card"><div class="err">❌ {{ error }}</div>
-   <p style="margin-top:14px"><a class="back" href="/">→ חזרה</a></p></div>
+  <div class="card" style="padding:22px"><div class="err">{{ error }}</div>
+   <p style="margin:14px 0 0"><a class="backlink" href="/">{{ icon('arrow-r',15)|safe }} חזרה</a></p></div>
  {% else %}
   <form class="card" method="post" action="/process" enctype="multipart/form-data">
    {% if not screens %}<div class="err">לא נמצאו קבצי מיפוי בתיקיית <code>mappings/</code>.</div>
@@ -342,28 +495,28 @@ UPLOAD = """
      <input type="number" id="header_row" name="header_row" min="1" placeholder="זיהוי אוטומטי"></div>
    </div>
    <label>קובץ קלט</label>
-   <div class="drop" id="drop"><span class="ico">📄</span><b>גרור לכאן קובץ</b> או לחץ לבחירה<small>xlsx · txt · dat · csv</small>
+   <div class="drop" id="drop"><span class="ico">{{ icon('file',28)|safe }}</span>
+    <b>גרור לכאן קובץ</b> או לחץ לבחירה<span class="fmts">xlsx · txt · dat · csv</span>
     <input type="file" id="file" name="file" accept=".xlsx,.xls,.txt,.dat,.csv,.tsv" hidden required>
     <div class="fname" id="fname"></div></div>
-   <button type="submit">טען לטבלה ←</button>{% endif %}
+   <button type="submit" class="btn btn-primary btn-lg" style="margin-top:18px">
+    טען לטבלה {{ icon('arrow-l',17)|safe }}</button>{% endif %}
   </form>
-  <p class="muted">🔒 הכל רץ מקומית על המחשב שלך — הקובץ לא נשלח לשום שרת חיצוני.<br>
-   הכלי מזהה אוטומטית את שורת הכותרת גם כשהיא לא בשורה הראשונה.</p>
+  <div class="trust">{{ icon('lock',16)|safe }}
+   <span><b>הכל רץ מקומית</b> — הקובץ לא נשלח לשום שרת חיצוני. הכלי מזהה אוטומטית את שורת הכותרת גם כשאינה בשורה הראשונה.</span></div>
  {% endif %}
-</div><script>
+ </div>
+<script>
  const drop=document.getElementById('drop'),file=document.getElementById('file'),fname=document.getElementById('fname');
+ const FICO='{{ icon("check",15)|safe }}';
  if(drop){drop.addEventListener('click',()=>file.click());
-  file.addEventListener('change',()=>{if(file.files[0])fname.textContent='📄 '+file.files[0].name;});
+  file.addEventListener('change',()=>{if(file.files[0])fname.innerHTML=FICO+' '+file.files[0].name;});
   ['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over');}));
   ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over');}));
-  drop.addEventListener('drop',ev=>{file.files=ev.dataTransfer.files;if(file.files[0])fname.textContent='📄 '+file.files[0].name;});}
- function toggleTheme(){var r=document.documentElement,cur=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
-  var nx=cur==='dark'?'light':'dark';r.setAttribute('data-theme',nx);try{localStorage.setItem('fl-theme',nx);}catch(e){}updateThemeBtn();}
- function updateThemeBtn(){var b=document.getElementById('themebtn');if(!b)return;
-  var cur=document.documentElement.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
-  b.textContent=cur==='dark'?'☀️ מצב בהיר':'🌙 מצב כהה';}
- updateThemeBtn();
-</script></body></html>
+  drop.addEventListener('drop',ev=>{file.files=ev.dataTransfer.files;if(file.files[0])fname.innerHTML=FICO+' '+file.files[0].name;});}
+</script>
+{{ theme_js|safe }}
+</body></html>
 """
 
 

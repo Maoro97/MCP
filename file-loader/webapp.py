@@ -1643,19 +1643,16 @@ HISTORY = """
 <!doctype html><html lang="he" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>היסטוריית טעינות</title>
-<script>(function(){try{var t=localStorage.getItem('fl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+{{ theme_head|safe }}
 <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
- :root{--bg:#eef2f9;--surface:#fff;--surface-2:#f7f9fc;--border:#e5eaf2;--text:#0f172a;--muted:#64748b;--brand:#4f46e5;
-  --ok-fg:#166534;--bad-fg:#dc2626;--shadow:0 1px 2px rgba(16,24,40,.05),0 10px 30px rgba(16,24,40,.07);}
- @media (prefers-color-scheme:dark){:root:not([data-theme]){--bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;--text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--ok-fg:#34d399;--bad-fg:#f87171;}}
- :root[data-theme="dark"]{--bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;--text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--ok-fg:#34d399;--bad-fg:#f87171;}
- *{box-sizing:border-box}body{margin:0;font-family:"Assistant",-apple-system,"Segoe UI",system-ui,Arial,sans-serif;background:var(--bg);color:var(--text)}
- .wrap{max-width:1180px;margin:0 auto;padding:26px 18px 70px}
- .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
- h1{font-size:22px;font-weight:800;margin:0}
- a.back{color:var(--brand);text-decoration:none;font-weight:700}
- .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+{{ theme_css|safe }}
+ /* מיפוי שמות טוקנים ישנים למערכת המשותפת */
+ :root{--brand:var(--accent);--brand-2:var(--accent);--ok-fg:var(--green);--bad-fg:var(--red)}
+ .wrap{max-width:1180px;margin:0 auto;padding:24px 18px 70px}
+ h1{font-size:20px;font-weight:700;margin:0;letter-spacing:-.02em;display:flex;align-items:center;gap:9px}
+ h1 svg{color:var(--accent)}
+ .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden}
  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:14px 16px}
  .kpi .n{font-size:26px;font-weight:800;line-height:1.1}.kpi .l{font-size:12.5px;color:var(--muted);margin-top:3px}
@@ -1679,11 +1676,11 @@ HISTORY = """
  .name{font-weight:700}.vcount{font-size:11px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1px 8px;margin-right:6px}
  .client{color:var(--brand);font-weight:600}
  .dl{color:var(--brand);text-decoration:none;font-weight:600;margin-left:10px;white-space:nowrap}
- .dl.open{color:#fff;background:var(--brand);padding:4px 10px;border-radius:8px;font-size:12.5px}
+ .dl.open{color:var(--accent-fg);background:var(--brand);padding:4px 10px;border-radius:8px;font-size:12.5px}
  .btn{background:var(--surface);border:1px solid var(--border);border-radius:8px;cursor:pointer;font:inherit;font-size:13px;padding:5px 9px;color:var(--text)}
  .btn:hover{border-color:var(--brand);color:var(--brand)}
  .btn.dng{color:var(--bad-fg)}.btn.dng:hover{background:rgba(220,38,38,.1);border-color:var(--bad-fg);color:var(--bad-fg)}
- .btn.pri{background:var(--brand);color:#fff;border-color:var(--brand)}
+ .btn.pri{background:var(--brand);color:var(--accent-fg);border-color:var(--brand)}
  .stsel{border-radius:20px;border:1.5px solid var(--border);padding:4px 9px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;background:var(--surface)}
  .st-draft{color:var(--muted)}.st-ready{color:var(--brand);border-color:var(--brand)}
  .st-loaded{color:var(--ok-fg);border-color:var(--ok-fg);background:rgba(5,150,105,.08)}
@@ -1692,32 +1689,39 @@ HISTORY = """
  .tag{font-size:12px;color:var(--muted)}
  .acts{display:flex;gap:6px;justify-content:flex-start}
  input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--brand)}
- #bulkbar{display:none;align-items:center;gap:10px;background:var(--brand);color:#fff;border-radius:12px;padding:9px 15px;margin-bottom:12px;font-weight:600}
- #bulkbar .btn{background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.35)}
- #bulkbar .btn:hover{background:rgba(255,255,255,.28);color:#fff}
-</style></head><body><div class="wrap">
- <div class="head"><h1>📜 היסטוריית טעינות</h1><a class="back" href="/">→ חזרה</a></div>
+ #bulkbar{display:none;align-items:center;gap:10px;background:var(--brand);color:var(--accent-fg);border-radius:var(--r);padding:9px 15px;margin-bottom:12px;font-weight:600}
+ #bulkbar .btn{background:color-mix(in srgb,var(--accent-fg) 16%,transparent);color:var(--accent-fg);border-color:color-mix(in srgb,var(--accent-fg) 36%,transparent)}
+ #bulkbar .btn:hover{background:color-mix(in srgb,var(--accent-fg) 28%,transparent);color:var(--accent-fg)}
+</style></head><body>
+ <header class="topbar">
+  <h1>{{ icon('history',20)|safe }} היסטוריית טעינות</h1>
+  <nav class="topnav">
+   <a class="navbtn" href="/">{{ icon('arrow-r',16)|safe }}<span>חזרה</span></a>
+   <button id="themebtn" class="navbtn" onclick="toggleTheme()" title="החלף מצב תצוגה" aria-label="החלף מצב תצוגה"></button>
+  </nav>
+ </header>
+ <div class="wrap">
  {% if dbinfo %}
- <div style="margin-bottom:14px;font-size:13px;padding:11px 15px;border-radius:12px;
+ <div style="margin-bottom:14px;font-size:13px;padding:11px 15px;border-radius:var(--r);
    border:1px solid var(--border);
-   background:{{ 'rgba(5,150,105,.09)' if (dbinfo.ok and (dbinfo.backend=='postgres' or not dbinfo.vercel)) else 'rgba(220,38,38,.08)' }}">
+   background:{{ 'var(--green-soft)' if (dbinfo.ok and (dbinfo.backend=='postgres' or not dbinfo.vercel)) else 'var(--red-soft)' }}">
   {% if dbinfo.backend=='postgres' and dbinfo.ok %}
-   ✅ מסד נתונים: <b>Postgres</b> — מחובר ושומר לצמיתות ({{ dbinfo.count }} רשומות).
+   מסד נתונים: <b>Postgres</b> — מחובר ושומר לצמיתות ({{ dbinfo.count }} רשומות).
   {% elif dbinfo.backend=='postgres' and not dbinfo.ok %}
-   ⛔ מסד נתונים: <b>Postgres</b> מוגדר אך אין חיבור — {{ dbinfo.error }}
+   מסד נתונים: <b>Postgres</b> מוגדר אך אין חיבור — {{ dbinfo.error }}
   {% elif dbinfo.vercel %}
-   ⚠️ מסד נתונים: <b>SQLite זמני</b> (‎/tmp‎) — <b>ההיסטוריה לא תישמר ב-Vercel</b>.
+   מסד נתונים: <b>SQLite זמני</b> (‎/tmp‎) — <b>ההיסטוריה לא תישמר ב-Vercel</b>.
    חבר מסד Postgres (Storage → Create Database) ועשה Redeploy. ראה VERCEL.md.
   {% else %}
-   ✅ מסד נתונים: <b>SQLite</b> ({{ dbinfo.count }} רשומות).
+   מסד נתונים: <b>SQLite</b> ({{ dbinfo.count }} רשומות).
   {% endif %}
  </div>
  {% endif %}
 
  <div class="kpis">
-  <div class="kpi"><div class="n">{{ stats.files }}</div><div class="l">📁 קבצים בהיסטוריה</div></div>
-  <div class="kpi"><div class="n">{{ stats.versions }}</div><div class="l">🗂️ סה״כ גרסאות/טעינות</div></div>
-  <div class="kpi"><div class="n">{{ '{:,}'.format(stats.valid_rows) }}</div><div class="l">✓ שורות תקינות (גרסה אחרונה)</div></div>
+  <div class="kpi"><div class="n">{{ stats.files }}</div><div class="l">קבצים בהיסטוריה</div></div>
+  <div class="kpi"><div class="n">{{ stats.versions }}</div><div class="l">סה״כ גרסאות/טעינות</div></div>
+  <div class="kpi"><div class="n">{{ '{:,}'.format(stats.valid_rows) }}</div><div class="l">שורות תקינות (גרסה אחרונה)</div></div>
   <div class="kpi"><div class="n">{{ stats.success }}%</div><div class="l">📈 אחוז הצלחה ממוצע</div></div>
  </div>
 
@@ -1767,7 +1771,7 @@ HISTORY = """
 <script>const GROUPS={{ groups|tojson }};</script>
 <script>
 const $=id=>document.getElementById(id);
-const ST={draft:{l:'טיוטה',c:'st-draft'},ready:{l:'מוכן',c:'st-ready'},loaded:{l:'✅ נטען',c:'st-loaded'}};
+const ST={draft:{l:'טיוטה',c:'st-draft'},ready:{l:'מוכן',c:'st-ready'},loaded:{l:'נטען',c:'st-loaded'}};
 const norm=s=>String(s==null?'':s);
 let sortK='ts',sortDir=-1;                 // ברירת מחדל: עודכן לאחרונה, יורד
 const expanded=new Set(),selected=new Set();
@@ -1825,9 +1829,9 @@ function render(){
     const h=g.versions[0]||{},op=expanded.has(g.key),sel=selected.has(g.key);
     html+='<tr class="grp'+(op?' open':'')+'" onclick="toggleExp(\\''+g.key+'\\')">'+
       '<td onclick="event.stopPropagation()"><input type="checkbox" '+(sel?'checked':'')+' onclick="toggleSel(\\''+g.key+'\\',this)"></td>'+
-      '<td class="name"><span class="chev">▸</span>🏷️ '+esc(g.name||'ללא שם')+
+      '<td class="name"><span class="chev">▸</span>'+esc(g.name||'ללא שם')+
         (g.version_count>1?'<span class="vcount">v'+g.version_count+'</span>':'')+'</td>'+
-      '<td>'+(g.client?'<span class="client">👤 '+esc(g.client)+'</span>':'<span class="tag">—</span>')+'</td>'+
+      '<td>'+(g.client?'<span class="client">'+esc(g.client)+'</span>':'<span class="tag">—</span>')+'</td>'+
       '<td>'+esc(g.screen)+'</td>'+
       '<td class="tag">'+esc(h.ts)+'</td>'+
       '<td class="ok">'+(h.valid||0)+'</td>'+
@@ -1895,6 +1899,7 @@ function updateArrows(){document.querySelectorAll('th.sortable').forEach(th=>{
 const _r=render;render=function(){_r();updateArrows();};
 render();
 </script>
+{{ theme_js|safe }}
 </body></html>
 """
 
@@ -2017,75 +2022,49 @@ RATES = """
 <!doctype html><html lang="he" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>שערי בנק ישראל — אימות משיכת נתונים</title>
-<script>(function(){try{var t=localStorage.getItem('fl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+{{ theme_head|safe }}
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
- :root{--bg:#eef2f9;--surface:#fff;--surface-2:#f7f9fc;--border:#e5eaf2;--text:#0f172a;--muted:#64748b;
-  --brand:#4f46e5;--brand-2:#6366f1;--green:#059669;--red:#dc2626;--amber:#b45309;--radius:18px;
-  --shadow:0 1px 2px rgba(16,24,40,.05),0 8px 24px rgba(16,24,40,.07);}
- @media (prefers-color-scheme:dark){:root:not([data-theme]){--bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;
-  --text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--brand-2:#a5b4fc;--green:#34d399;--red:#f87171;--amber:#fbbf24;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.4);}}
- :root[data-theme="dark"]{--bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;
-  --text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--brand-2:#a5b4fc;--green:#34d399;--red:#f87171;--amber:#fbbf24;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.4);}
- .brand{display:flex;align-items:center;gap:11px}.brand .logo-img{height:46px;width:auto}
- .brand-tx{display:flex;flex-direction:column;line-height:1.05}
- .brand-name{font-weight:800;font-size:21px;color:var(--text)}.brand-sub{font-weight:600;font-size:12.5px;color:#1e50c8}
- *{box-sizing:border-box}
- body{margin:0;min-height:100vh;color:var(--text);line-height:1.6;
-  font-family:"Assistant",-apple-system,"Segoe UI",system-ui,Arial,sans-serif;
-  background:radial-gradient(1100px 500px at 100% -10%,rgba(99,102,241,.18),transparent 60%),
-   radial-gradient(900px 500px at -10% 0%,rgba(16,185,129,.12),transparent 55%),var(--bg);}
- .wrap{max-width:900px;margin:0 auto;padding:26px 20px 70px}
- .topbar{display:flex;align-items:center;justify-content:space-between;margin:0 auto 18px}
- .themebtn{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;
-  padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:none}
- .themebtn:hover{background:var(--surface-2)}
- .hero{text-align:center;margin-bottom:22px}
- .logo{width:58px;height:58px;border-radius:18px;margin:0 auto 14px;display:grid;place-items:center;
-  font-size:28px;color:#fff;background:linear-gradient(140deg,var(--brand-2),var(--brand));box-shadow:0 10px 24px rgba(79,70,229,.4)}
- h1{font-size:26px;font-weight:800;margin:0 0 6px;letter-spacing:-.02em}.hero p{color:var(--muted);margin:0}
- .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow);margin-bottom:18px}
- label{display:block;font-weight:600;margin:0 0 7px;font-size:14px}
- input[type=date],input[type=text]{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;
-  font-size:15px;font-family:inherit;background:var(--surface-2);color:var(--text)}
- input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 4px rgba(99,102,241,.15);background:var(--surface)}
+{{ theme_css|safe }}
+ .wrap{max-width:900px;margin:0 auto;padding:28px 20px 70px}
+ .hero{text-align:center;margin-bottom:24px}
+ .hero .logo{width:50px;height:50px;border-radius:14px;margin:0 auto 14px;display:grid;place-items:center;
+  color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent-border)}
+ h1{font-size:25px;font-weight:700;margin:0 0 6px;letter-spacing:-.03em}.hero p{color:var(--muted);margin:0;font-size:15px}
+ .card{padding:22px;margin-bottom:18px}
  .row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}.row>div{flex:1;min-width:180px}
  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
- .chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1.5px solid var(--border);
-  border-radius:999px;padding:7px 13px;font-size:13.5px;font-weight:600;cursor:pointer;user-select:none;transition:.12s}
- .chip.on{background:rgba(99,102,241,.14);border-color:var(--brand);color:var(--brand)}
- .chip small{color:var(--muted);font-weight:500}
- button.go{width:auto;background:linear-gradient(140deg,var(--brand-2),var(--brand));color:#fff;border:0;border-radius:12px;
-  padding:13px 26px;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 8px 20px rgba(79,70,229,.32);font-family:inherit}
- button.go:hover{transform:translateY(-1px)}button.go:disabled{opacity:.6;cursor:default;transform:none}
- table{border-collapse:collapse;width:100%;font-size:14.5px}
- th,td{text-align:right;padding:12px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
- th{background:var(--surface-2);font-weight:700;position:sticky;top:0}
- td.rate{font-weight:800;font-variant-numeric:tabular-nums;font-size:16px}
- .ok{color:var(--green);font-weight:700}.bad{color:var(--red);font-weight:700}.warn{color:var(--amber);font-weight:700}
- .muted{color:var(--muted);font-size:13px}
- .note{background:rgba(99,102,241,.07);border:1px solid var(--border);border-radius:12px;padding:12px 15px;color:var(--muted);font-size:13px;margin-top:12px}
- .spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.5);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-left:7px}
+ .chip{display:inline-flex;align-items:center;gap:7px;background:var(--accent-soft);border:1px solid var(--accent-border);
+  border-radius:999px;padding:6px 13px;font-size:13px;font-weight:600;color:var(--accent);cursor:pointer;user-select:none;transition:.12s}
+ .chip:hover{background:var(--accent-border)}
+ .chip small{color:var(--muted);font-weight:500}.chip .x{opacity:.6}
+ table{border-collapse:collapse;width:100%;font-size:14px}
+ th,td{text-align:right;padding:11px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+ th{background:var(--surface-2);font-weight:600;color:var(--muted);position:sticky;top:0;font-size:13px}
+ td.rate{font-weight:700;font-variant-numeric:tabular-nums;font-size:15px}
+ .ok{color:var(--green);font-weight:600}.bad{color:var(--red);font-weight:600}.warn{color:var(--amber);font-weight:600}
+ .note{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:12px 15px;color:var(--muted);font-size:12.5px;margin-top:12px}
+ .spin{display:inline-block;width:14px;height:14px;border:2px solid color-mix(in srgb,var(--accent-fg) 45%,transparent);border-top-color:var(--accent-fg);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-left:7px}
  @keyframes sp{to{transform:rotate(360deg)}}
- code{background:var(--surface-2);border:1px solid var(--border);padding:2px 7px;border-radius:6px;font-size:12.5px;direction:ltr;display:inline-block}
- a.back{color:var(--brand);text-decoration:none;font-weight:700}
+ code{direction:ltr;display:inline-block}
  .empty{padding:34px;text-align:center;color:var(--muted)}
-</style></head><body><div class="wrap">
- <div class="topbar">{{ brand|safe }}
-  <div style="display:flex;gap:8px;align-items:center">
-   <a class="themebtn" href="/">→ חזרה לטעינה</a>
-   <button id="themebtn" class="themebtn" onclick="toggleTheme()">🌙 מצב כהה</button></div></div>
- <div class="hero"><div class="logo">💱</div>
+</style></head><body>
+ <header class="topbar">{{ brand|safe }}
+  <nav class="topnav">
+   <a class="navbtn" href="/">{{ icon('arrow-r',16)|safe }}<span>חזרה לטעינה</span></a>
+   <button id="themebtn" class="navbtn" onclick="toggleTheme()" title="החלף מצב תצוגה" aria-label="החלף מצב תצוגה"></button>
+  </nav>
+ </header>
+ <div class="wrap">
+ <div class="hero"><div class="logo">{{ icon('rates',24)|safe }}</div>
   <h1>שערי בנק ישראל</h1>
   <p>משיכה חיה מ-API של בנק ישראל (מול השקל) — לאימות שהנתונים נמשכים כראוי.</p></div>
 
  <div class="card">
   <div class="row">
    <div><label for="rdate">תאריך</label><input type="date" id="rdate"></div>
-   <div style="flex:none"><button class="go" id="gobtn" onclick="fetchRates()">משוך שערים ←</button></div>
+   <div style="flex:none"><button class="btn btn-primary" id="gobtn" onclick="fetchRates()">משוך שערים {{ icon('arrow-l',16)|safe }}</button></div>
   </div>
   <label style="margin-top:16px">מטבעות</label>
   <div class="chips" id="chips"></div>
@@ -2109,8 +2088,8 @@ RATES = """
  function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
  function renderChips(){
   $('chips').innerHTML=[...picked].map(c=>
-   '<span class="chip on" onclick="toggle(\\''+esc(c)+'\\')">'+esc(c)+
-   (DESC[c]?' <small>'+esc(DESC[c])+'</small>':'')+' ✕</span>').join('');
+   '<span class="chip" onclick="toggle(\\''+esc(c)+'\\')">'+esc(c)+
+   (DESC[c]?' <small>'+esc(DESC[c])+'</small>':'')+' <span class="x">×</span></span>').join('');
  }
  function toggle(c){picked.delete(c);renderChips();}
  function addCur(){let v=($('addcur').value||'').trim().toUpperCase();if(!v)return;picked.add(v);$('addcur').value='';renderChips();}
@@ -2145,13 +2124,10 @@ RATES = """
      ' שערים · תאריך מבוקש: '+esc(j.requested||'—')+'</p>';
   $('results').innerHTML=h;
  }
- function toggleTheme(){var r=document.documentElement,cur=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
-  var nx=cur==='dark'?'light':'dark';r.setAttribute('data-theme',nx);try{localStorage.setItem('fl-theme',nx);}catch(e){}updateThemeBtn();}
- function updateThemeBtn(){var b=$('themebtn');if(!b)return;
-  var cur=document.documentElement.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
-  b.textContent=cur==='dark'?'☀️ מצב בהיר':'🌙 מצב כהה';}
- $('rdate').value=today();updateThemeBtn();renderChips();
-</script></body></html>
+ $('rdate').value=today();renderChips();
+</script>
+{{ theme_js|safe }}
+</body></html>
 """
 
 
@@ -2222,43 +2198,25 @@ LOGIN = """
 <!doctype html><html lang="he" dir="rtl"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>התחברות — Priority ERP</title>
-<script>(function(){try{var t=localStorage.getItem('fl-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+{{ theme_head|safe }}
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
- :root{--bg:#eef2f9;--surface:#fff;--surface-2:#f7f9fc;--border:#e5eaf2;--text:#0f172a;--muted:#64748b;
-  --brand:#4f46e5;--brand-2:#6366f1;--red:#dc2626;--radius:18px;--shadow:0 20px 50px rgba(37,40,90,.16);}
- @media (prefers-color-scheme:dark){:root:not([data-theme]){--bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;
-  --text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--brand-2:#a5b4fc;--red:#f87171;--shadow:0 24px 60px rgba(0,0,0,.55);}}
- :root[data-theme="dark"]{--bg:#0b1120;--surface:#111a2e;--surface-2:#0f1728;--border:#233047;
-  --text:#e8edf6;--muted:#93a1b8;--brand:#818cf8;--brand-2:#a5b4fc;--red:#f87171;--shadow:0 24px 60px rgba(0,0,0,.55);}
- .brand{display:flex;align-items:center;gap:11px;justify-content:center;margin-bottom:20px}
- .brand .logo-img{height:46px;width:auto}.brand-tx{display:flex;flex-direction:column;line-height:1.05;text-align:right}
- .brand-name{font-weight:800;font-size:21px;color:var(--text)}.brand-sub{font-weight:600;font-size:12.5px;color:#1e50c8}
- *{box-sizing:border-box}
- body{margin:0;min-height:100vh;display:grid;place-items:center;color:var(--text);
-  font-family:"Assistant",-apple-system,"Segoe UI",system-ui,Arial,sans-serif;
-  background:radial-gradient(1100px 500px at 100% -10%,rgba(99,102,241,.18),transparent 60%),
-   radial-gradient(900px 500px at -10% 0%,rgba(16,185,129,.12),transparent 55%),var(--bg);}
- .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:34px 30px;box-shadow:var(--shadow);width:min(400px,92vw)}
- .logo{width:56px;height:56px;border-radius:16px;margin:0 auto 14px;display:grid;place-items:center;
-  font-size:26px;color:#fff;background:linear-gradient(140deg,var(--brand-2),var(--brand));box-shadow:0 10px 24px rgba(79,70,229,.4)}
- h1{font-size:22px;font-weight:800;margin:0 0 4px;text-align:center}
+{{ theme_css|safe }}
+ body{display:grid;place-items:center;padding:20px}
+ .brand{justify-content:center;margin-bottom:22px}
+ .card{padding:32px 30px;width:min(390px,94vw);box-shadow:var(--shadow-lg)}
+ .logo{width:50px;height:50px;border-radius:14px;margin:0 auto 14px;display:grid;place-items:center;
+  color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent-border)}
+ h1{font-size:21px;font-weight:700;margin:0 0 4px;text-align:center;letter-spacing:-.02em}
  .sub{color:var(--muted);text-align:center;margin:0 0 22px;font-size:14px}
- label{display:block;font-weight:600;margin:14px 0 6px;font-size:14px}
- input{width:100%;padding:12px 13px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;
-  font-family:inherit;background:var(--surface-2);color:var(--text)}
- input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 4px rgba(99,102,241,.15);background:var(--surface)}
- button{width:100%;margin-top:22px;background:linear-gradient(140deg,var(--brand-2),var(--brand));color:#fff;border:0;
-  border-radius:12px;padding:13px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 8px 20px rgba(79,70,229,.32);font-family:inherit}
- button:hover{transform:translateY(-1px)}
- .err{background:rgba(220,38,38,.09);border:1px solid rgba(220,38,38,.32);color:var(--red);
-  border-radius:12px;padding:11px 14px;font-size:13.5px;margin-top:16px;text-align:center}
+ .card label{margin:14px 0 6px}
+ .err{background:var(--red-soft);border:1px solid var(--red);color:var(--red);
+  border-radius:var(--r);padding:10px 14px;font-size:13.5px;margin-top:16px;text-align:center}
 </style></head><body>
  <form class="card" method="post" action="/login">
   {{ brand|safe }}
-  <div class="logo">🔒</div>
+  <div class="logo">{{ icon('lock',24)|safe }}</div>
   <h1>התחברות למערכת</h1>
   <p class="sub">הכנת קבצי טעינה ל-Priority ERP</p>
   <input type="hidden" name="next" value="{{ next }}">
@@ -2266,8 +2224,9 @@ LOGIN = """
   <input id="username" name="username" autocomplete="username" autofocus>
   <label for="password">סיסמה</label>
   <input id="password" name="password" type="password" autocomplete="current-password">
-  {% if error %}<div class="err">❌ {{ error }}</div>{% endif %}
-  <button type="submit">התחבר ←</button>
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+  <button type="submit" class="btn btn-primary btn-lg" style="margin-top:22px">
+   התחבר {{ icon('arrow-l',16)|safe }}</button>
  </form>
 </body></html>
 """

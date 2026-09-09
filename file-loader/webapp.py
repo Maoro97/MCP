@@ -176,6 +176,7 @@ _ICON_PATHS = {
     "file": '<path d="M14 3v5h5"/><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12'
             'a2 2 0 0 0 2-2V8Z"/>',
     "arrow-l": '<path d="M19 12H5"/><path d="m11 5-7 7 7 7"/>',
+    "undo": '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a6 6 0 0 1 0 12h-4"/>',
     "arrow-r": '<path d="M5 12h14"/><path d="m13 5 7 7-7 7"/>',
     "lock": '<rect x="4" y="10" width="16" height="11" rx="2"/>'
             '<path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
@@ -550,6 +551,7 @@ GRID = """
  button{border:0;border-radius:var(--r);padding:9px 14px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .13s,border-color .13s,transform .05s;display:inline-flex;align-items:center;gap:7px}
  button svg{flex:none}
  .b-check{background:var(--surface);color:var(--text);border:1px solid var(--border-strong)}.b-check:hover{background:var(--surface-2);border-color:var(--faint)}
+ .b-check:disabled{opacity:.45;cursor:default;background:var(--surface)}.b-check:disabled:hover{border-color:var(--border-strong)}
  .b-gen{background:var(--green);color:#fff}
  .b-gen:hover{filter:brightness(.94)}
  .b-save{background:var(--accent);color:var(--accent-fg)}
@@ -669,6 +671,7 @@ GRID = """
   <span class="pill warn" id="p-warn">אזהרות 0</span>
   <span class="pill ign" id="p-ign">מיוצאות למרות בעיה 0</span>
   <span class="spacer"></span>
+  <button class="b-check" id="undobtn" onclick="undo()" title="בטל את הפעולה האחרונה (Ctrl+Z)" disabled>{{ icon('undo',15)|safe }}<span>ביטול</span></button>
   <button class="b-check" id="toggleview" onclick="toggleView()">{{ icon('search',15)|safe }}<span>הצג רק שורות בעייתיות</span></button>
   <button class="b-check" onclick="ignoreAllWarnings()" title="סמן את כל שורות האזהרה כמיוצאות">{{ icon('check',15)|safe }}התעלם מאזהרות</button>
   <button class="b-check" onclick="revalidate()">{{ icon('check-list',15)|safe }}בדוק מחדש</button>
@@ -727,8 +730,10 @@ function fillBulkSelect(){
 function bulkUpdate(){
   const sel=$('bulkcol'); if(!sel||sel.value==='') return;
   const ci=+sel.value, val=($('bulkval')||{}).value||'';
-  GRID.rows.forEach(r=>{ if(r.cells[ci]) r.cells[ci].value=val; });
-  render(); flash('ok','עודכנו '+GRID.rows.length+' שורות בעמודה '+GRID.columns[ci].target+'.');
+  const changes=[];
+  GRID.rows.forEach((r,idx)=>{ if(r.cells[ci] && r.cells[ci].value!==val){ changes.push({gi:idx,prev:r.cells[ci].value}); r.cells[ci].value=val; } });
+  if(changes.length) pushUndo({type:'bulk',ci,changes,label:'עדכון גורף «'+(GRID.columns[ci].title||GRID.columns[ci].target)+'» ('+changes.length+' שורות)'});
+  render(); flash('ok','עודכנו '+changes.length+' שורות בעמודה '+GRID.columns[ci].target+'.');
 }
 function setFilter(ci,v){ if(v) colFilter[ci]=v; else delete colFilter[ci]; page=0; renderBody(); }
 function matchesFilters(r){
@@ -810,7 +815,9 @@ function buildRows(slice,cols){
       const wst=colWidths[ci]?' style="min-width:'+colWidths[ci]+'px"':'';
       const fd=c.constant?'':'<span class="filldown" title="מלא ערך זה לכל השורות בעמודה" onclick="fillDown('+gi+','+ci+')">⤓</span>';
       h+='<td class="'+cls+'"'+title+'><input data-ci="'+ci+'" value="'+esc(cell.value)+'"'+ro+wst+
-         ' oninput="upd('+gi+','+ci+',this.value)">'+fd+'</td>';
+         ' onfocus="cellFocus('+gi+','+ci+',this.value)"'+
+         ' oninput="upd('+gi+','+ci+',this.value)"'+
+         ' onchange="cellChange('+gi+','+ci+',this.value)">'+fd+'</td>';
     }
     h+='</tr>';
   }
@@ -881,15 +888,41 @@ function updateCounts(){
   $('p-ign').textContent='מיוצאות למרות בעיה '+ign; $('p-ign').style.display = ign? '' : 'none';
 }
 function upd(gi,ci,val){ GRID.rows[gi].cells[ci].value=val; }
+
+// ===== ביטול פעולה אחרונה (UNDO) =====
+// מחסנית פעולות הפיכות: עריכת תא, מילוי-עמודה, ועדכון גורף. כל פעולה שומרת את
+// הערכים הקודמים כדי שנוכל לשחזר אותם. Ctrl+Z מפעיל אף הוא.
+let UNDO=[]; const UNDO_MAX=200; let _cellPrev=null;
+function pushUndo(entry){ UNDO.push(entry); if(UNDO.length>UNDO_MAX) UNDO.shift(); updateUndoBtn(); }
+function updateUndoBtn(){ const b=$('undobtn'); if(b) b.disabled = UNDO.length===0; }
+function cellFocus(gi,ci,v){ _cellPrev=v; }              // ערך התא לפני העריכה
+function cellChange(gi,ci,v){                            // בעת יציאה מהתא — רושמים לביטול
+  if(_cellPrev!==null && _cellPrev!==v)
+    pushUndo({type:'cell',ci,changes:[{gi:gi,prev:_cellPrev}],label:'עריכת תא'});
+  _cellPrev=null;
+}
+async function undo(){
+  const e=UNDO.pop();
+  if(!e){ flash('err','אין פעולה לביטול.'); return; }
+  (e.changes||[]).forEach(ch=>{
+    const r=GRID.rows[ch.gi];
+    if(r && r.cells[e.ci]) r.cells[e.ci].value=ch.prev;
+  });
+  updateUndoBtn();
+  render();                                             // עדכון מיידי של הטבלה מהמודל
+  await revalidate();                                   // רענון צביעה/סטטוסים מהשרת
+  flash('ok','בוטל: '+(e.label||'הפעולה האחרונה')+'.');
+}
 // מילוי ערך תא לכל שאר השורות של אותה עמודה (כמו גרירה באקסל).
 // כשיש סינון פעיל — ממלא רק את השורות המסוננות/המוצגות.
 async function fillDown(gi,ci){
   const src=GRID.rows[gi] && GRID.rows[gi].cells[ci];
   if(!src) return;
-  const val=src.value; let n=0;
+  const val=src.value; let n=0; const changes=[];
   const visible=new Set(displayed().map(x=>x[0]));   // אינדקסים של השורות המוצגות
-  GRID.rows.forEach((r,idx)=>{ if(visible.has(idx) && r.cells[ci] && r.cells[ci].value!==val){ r.cells[ci].value=val; n++; } });
+  GRID.rows.forEach((r,idx)=>{ if(visible.has(idx) && r.cells[ci] && r.cells[ci].value!==val){ changes.push({gi:idx,prev:r.cells[ci].value}); r.cells[ci].value=val; n++; } });
   const nm=GRID.columns[ci].title||GRID.columns[ci].target;
+  if(changes.length) pushUndo({type:'fill',ci,changes,label:'מילוי עמודה «'+nm+'» ('+n+' שורות)'});
   const filtered = Object.keys(colFilter).length>0 || onlyProblems;
   await revalidate();
   flash('ok','מולא "'+esc(val)+'" ל-'+n+(filtered?' שורות מסוננות':' שורות')+' בעמודה «'+esc(nm)+'».');
@@ -1088,7 +1121,16 @@ function flash(kind,text){const t=$('toast');if(!t)return;
   t.textContent=text;t.className='toast '+(kind==='ok'?'ok':'err')+' show';
   clearTimeout(ft);ft=setTimeout(()=>{t.classList.remove('show');},3000);}
 
-updateToggleBtn();
+// קיצור מקלדת Ctrl+Z / Cmd+Z לביטול (כשלא עורכים באופן פעיל שדה טקסט חופשי)
+document.addEventListener('keydown',function(ev){
+  if((ev.ctrlKey||ev.metaKey) && !ev.shiftKey && (ev.key==='z'||ev.key==='Z')){
+    const a=document.activeElement;
+    // בתוך תא-טבלה: תן לדפדפן לבטל את הקלדת התו; אחרת — בטל פעולה שלמה
+    if(a && a.tagName==='INPUT' && a.closest('#grid')) return;
+    ev.preventDefault(); undo();
+  }
+});
+updateToggleBtn(); updateUndoBtn();
 fillBulkSelect(); renderBanner(); renderMapping(); renderJournal(); render();
 </script>
 {{ theme_js|safe }}

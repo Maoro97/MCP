@@ -62,7 +62,14 @@ columns:
   - {source: ["ת. אסמכתא", "תאריך אסמכתא", "ת.אסמ", "ת.אסמכתא"], target: CURDATE, type: date}
   - {source: ["ת. ערך", "תאריך ערך", "ת.ערך"], target: FNCDATE, type: date}
   - {source: ["__ACCOUNT__", "חשבון", "מפתח חשבון", "ח-ן נגדי", "חשבון נגדי"], target: ACCNAME, transform: [strip]}
-  - {source: ["קוד מרכז רווח", "מרכז רווח"], target: COSTCNAME, transform: [strip]}
+  - {source: ["קוד מרכז רווח", "מרכז רווח", "מרכז רווח 1"], target: COSTCNAME, max_length: 16, transform: [strip]}
+  - {source: ["מרכז רווח 2", "קוד מרכז רווח 2"], target: COSTCNAME2, max_length: 16, transform: [strip]}
+  - {source: ["מרכז רווח 3", "קוד מרכז רווח 3"], target: COSTCNAME3, max_length: 16, transform: [strip]}
+  - {source: ["מרכז רווח 4", "קוד מרכז רווח 4"], target: COSTCNAME4, max_length: 16, transform: [strip]}
+  - {source: ["מרכז רווח 5", "קוד מרכז רווח 5"], target: COSTCNAME5, max_length: 16, transform: [strip]}
+  - {source: ["סניף"], target: BRANCHNAME, max_length: 6, transform: [strip]}
+  - {source: ["פרויקט", "פרוייקט"], target: DOCNO, max_length: 20, transform: [strip]}
+  - {source: ["תקציב", "קוד תקציב"], target: BUDCODE, max_length: 30, transform: [strip]}
   # C/D — נגזר מעמודות חובה/זכות (__DC__), או ממקור ישיר אם קיים
   - {source: ["__DC__", "חובה/זכות", "חובה זכות", "C/D"], target: DEBIT, transform: [strip]}
   # סכום ראשי — עמודת האיחוד (__AMOUNT_PRIMARY__) אם הגיע מחובה/זכות, אחרת ממקור ישיר
@@ -71,7 +78,8 @@ columns:
   - {source: ["תוכנת מקור"], target: DNAME, default: "", transform: [strip]}
   - {source: ['אסמכתא 1 שורת ת"י', "אסמכתא 1 שורת תי"], target: FNCIREF1, transform: [strip]}
   - {source: ['אסמכתא 2 שורת ת"י', "אסמכתא 2 שורת תי"], target: FNCIREF2, transform: [strip]}
-  - {source: ['פרטים שורת ת"י', "פרטים שורת תי", "פרטים"], target: DETAILS, transform: [strip]}
+  - {source: ['פרטים שורת ת"י', "פרטים שורת תי", "פרטים"], target: DETAILS, max_length: 24, transform: [strip]}
+  - {source: ["הערה", "הערות שורה"], target: TEXT, max_length: 32, transform: [strip]}
   - {source: ["__AMOUNT_FX__", "סכום במטבע העסקה", "סכום מטח עסקה"], target: SUM5, transform: [strip]}
   - {source: ["מטבע העסקה", "מטח עסקה", "מט"], target: CODE5, transform: [strip],
      value_map: {"$": "USD", "€": "EUR", "£": "GBP", "₪": "ILS"}, lookup: currencies}

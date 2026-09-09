@@ -35,6 +35,12 @@ journal:
   fx_credit_source: ['חובה/זכות(מט"ח) זכות']
   # אם הסכום מגיע בעמודה אחת עם סימן: שלילי=C, חיובי=D, והסכום בערך מוחלט
   signed_source: ["סכום עם סימן", "סכום מסומן"]
+  # עמודה משולבת: תא אחד שמכיל גם תווית (זכות/חובה/credit/debit) וגם מספר ->
+  # המספר לעמודת הסכום הראשי (SUM1), והתווית לעמודת C/D (זכות/credit=C, חובה/debit=D).
+  # combined_source = שמות-עמודה אפשריים; combined_autodetect = זיהוי אוטומטי של
+  # העמודה לפי תוכן התאים (תווית + מספר) גם כשהכותרת לא מוכרת.
+  combined_source: ["חובה/זכות", "credit/debit", "debit/credit", "תנועה", "סכום ותנועה"]
+  combined_autodetect: true
   # סוג תנועה לפי הסכום הראשי: 0 -> הש, אחרת -> מ
   transtype: FNCPATNAME
   transtype_zero: "הש"

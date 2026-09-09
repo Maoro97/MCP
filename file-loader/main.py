@@ -15,6 +15,7 @@ main.py — כלי הכנת קבצי טעינה לממשקי File Load של Prio
 
 import argparse
 import os
+import re
 import sys
 import datetime as _dt
 from collections import Counter
@@ -463,6 +464,48 @@ def _fmt_account(v):
     return "" if s.lower() == "nan" else s
 
 
+# עמודה משולבת: תא שמכיל תווית זכות/חובה (credit/debit) יחד עם מספר.
+_CREDIT_KW = ("credit", "זכות")     # -> C
+_DEBIT_KW = ("debit", "חובה")       # -> D
+_NUM_RE = re.compile(r"-?\d[\d,]*\.?\d*")
+
+
+def _dc_from_text(s):
+    """מזהה C/D מטקסט חופשי: 'זכות'/'credit' -> C, 'חובה'/'debit' -> D.
+    מחזיר '' אם אין תווית או שהיא דו-משמעית (גם וגם)."""
+    low = str(s).lower()
+    has_c = any(k in low for k in _CREDIT_KW)
+    has_d = any(k in low for k in _DEBIT_KW)
+    if has_c and not has_d:
+        return "C"
+    if has_d and not has_c:
+        return "D"
+    return ""
+
+
+def _extract_number(s):
+    """שולף את הערך המספרי הראשון ממחרוזת מעורבת (למשל 'זכות 1,200.50' -> 1200.5)."""
+    m = _NUM_RE.search(str(s))
+    return _to_float(m.group(0)) if m else None
+
+
+def _detect_combined_dc_col(df):
+    """מאתר אוטומטית עמודה שבה התאים מכילים תווית זכות/חובה *וגם* מספר —
+    מחזיר את שם העמודה עם הכי הרבה תאים כאלה (אם יש כמות מספקת), אחרת None."""
+    best, best_n = None, 0
+    for col in df.columns:
+        if str(col).startswith("__"):        # דלג על עמודות נגזרות
+            continue
+        vals = [v for v in df[col]
+                if not (v is None or str(v).strip() == "" or str(v).strip().lower() == "nan")]
+        if len(vals) < 2:
+            continue
+        qual = sum(1 for v in vals if _dc_from_text(v) and _extract_number(v) is not None)
+        if qual >= 2 and qual >= 0.5 * len(vals) and qual > best_n:
+            best, best_n = col, qual
+    return best
+
+
 def preprocess_journal_df(df, mapping):
     """
     עיבוד מקדים ל-DataFrame לפני בניית הטבלה (מסכי יומן):
@@ -476,7 +519,8 @@ def preprocess_journal_df(df, mapping):
     require = mapping.get("require_source") or []
     if not (jc.get("debit_source") or jc.get("credit_source") or jc.get("signed_source")
             or jc.get("fx_debit_source") or jc.get("fx_credit_source") or min_vals or require
-            or jc.get("account_ffill")):
+            or jc.get("account_ffill") or jc.get("combined_source")
+            or jc.get("combined_autodetect")):
         return df
 
     df = df.copy()
@@ -574,6 +618,26 @@ def preprocess_journal_df(df, mapping):
                 amt.append("0"); dc.append("")          # 0 -> יטופל בכלל הש/מ
             else:
                 amt.append(abs(n)); dc.append("C" if n < 0 else "D")
+        df[DERIVED_AMOUNT_PRIMARY], df[DERIVED_DC] = amt, dc
+
+    # (5) עמודה משולבת: תא עם תווית זכות/חובה (credit/debit) + מספר ->
+    #     המספר (בערך מוחלט) לעמודת הסכום הראשי (SUM1), והתווית ל-C/D.
+    #     מקור מפורש (combined_source) גובר; אחרת, אם combined_autodetect=true —
+    #     מזוהה אוטומטית.
+    csrc = jc.get("combined_source")
+    ccol = next((n for n in (csrc or []) if n in df.columns), None)
+    if ccol is None and jc.get("combined_autodetect"):
+        ccol = _detect_combined_dc_col(df)
+    if ccol is not None:
+        amt, dc = [], []
+        for _, row in df.iterrows():
+            v = row[ccol]
+            if _cell_empty(v):
+                amt.append(""); dc.append("")
+                continue
+            num = _extract_number(v)
+            amt.append(abs(num) if num is not None else "")
+            dc.append(_dc_from_text(v))
         df[DERIVED_AMOUNT_PRIMARY], df[DERIVED_DC] = amt, dc
 
     return df

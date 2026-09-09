@@ -41,6 +41,12 @@ journal:
   # העמודה לפי תוכן התאים (תווית + מספר) גם כשהכותרת לא מוכרת.
   combined_source: ["חובה/זכות", "credit/debit", "debit/credit", "תנועה", "סכום ותנועה"]
   combined_autodetect: true
+  # עמודות חובה/זכות נפרדות המזוהות לפי *כותרת* (למשל "Credit (Entered Currency)",
+  # "Debit (Accounted Currency)", "סכום חובה", "סכום זכות"): הערך המספרי -> SUM1,
+  # והצד לפי הכותרת -> C/D. dc_prefer מצמצם לכותרת מסוימת כשיש כמה עמודות באותו צד
+  # (למשל "entered" או "accounted"); ריק = הערך הראשון שנמצא.
+  dc_by_header: true
+  dc_prefer: ""
   # סוג תנועה לפי הסכום הראשי: 0 -> הש, אחרת -> מ
   transtype: FNCPATNAME
   transtype_zero: "הש"

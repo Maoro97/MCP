@@ -489,6 +489,30 @@ def _extract_number(s):
     return _to_float(m.group(0)) if m else None
 
 
+def _mostly_numeric(series, frac=0.6):
+    """True אם רוב התאים הלא-ריקים בעמודה הם מספרים (כדי לא לבלבל עמודת-סכום
+    עם עמודת טקסט שבמקרה כותרתה מכילה credit/debit)."""
+    vals = [v for v in series
+            if not (v is None or str(v).strip() == "" or str(v).strip().lower() == "nan")]
+    if not vals:
+        return False
+    numeric = sum(1 for v in vals if _extract_number(v) is not None)
+    return numeric >= frac * len(vals)
+
+
+def _dc_header_kind(col):
+    """מסווג *כותרת* עמודה לפי המילה בשמה: 'Credit …'/'זכות' -> C,
+    'Debit …'/'חובה' -> D. מחזיר None אם אין מילה כזו או ששתיהן מופיעות."""
+    low = str(col).lower()
+    is_c = any(k in low for k in _CREDIT_KW)
+    is_d = any(k in low for k in _DEBIT_KW)
+    if is_c and not is_d:
+        return "C"
+    if is_d and not is_c:
+        return "D"
+    return None
+
+
 def _detect_combined_dc_col(df):
     """מאתר אוטומטית עמודה שבה התאים מכילים תווית זכות/חובה *וגם* מספר —
     מחזיר את שם העמודה עם הכי הרבה תאים כאלה (אם יש כמות מספקת), אחרת None."""
@@ -520,7 +544,7 @@ def preprocess_journal_df(df, mapping):
     if not (jc.get("debit_source") or jc.get("credit_source") or jc.get("signed_source")
             or jc.get("fx_debit_source") or jc.get("fx_credit_source") or min_vals or require
             or jc.get("account_ffill") or jc.get("combined_source")
-            or jc.get("combined_autodetect")):
+            or jc.get("combined_autodetect") or jc.get("dc_by_header")):
         return df
 
     df = df.copy()
@@ -639,6 +663,38 @@ def preprocess_journal_df(df, mapping):
             amt.append(abs(num) if num is not None else "")
             dc.append(_dc_from_text(v))
         df[DERIVED_AMOUNT_PRIMARY], df[DERIVED_DC] = amt, dc
+
+    # (6) עמודות חובה/זכות לפי *כותרת*: קובץ עם עמודות נפרדות שכותרתן מכילה
+    #     Credit/Debit (או זכות/חובה) — לכל היותר אחת מהן מכילה מספר בשורה.
+    #     הערך המספרי -> הסכום הראשי (SUM1); הצד (לפי הכותרת) -> C/D.
+    #     dc_prefer (אופציונלי): כשיש כמה עמודות באותו צד (למשל "Entered"/
+    #     "Accounted"), מעדיפים כותרת שמכילה מחרוזת זו לבחירת הסכום.
+    if jc.get("dc_by_header"):
+        prefer = str(jc.get("dc_prefer") or "").lower()
+
+        def _amount_cols(kind):                      # עמודות-סכום של צד נתון (D/C)
+            cols = [c for c in df.columns
+                    if not str(c).startswith("__") and _dc_header_kind(c) == kind
+                    and _mostly_numeric(df[c])]
+            if prefer:                               # העדפת כותרת מסוימת (מטבע)
+                cols.sort(key=lambda c: 0 if prefer in str(c).lower() else 1)
+            return cols
+
+        dcols, ccols = _amount_cols("D"), _amount_cols("C")
+        if dcols or ccols:
+            amt, dc = [], []
+            for _, row in df.iterrows():
+                dv = next((_extract_number(row[c]) for c in dcols if not _cell_empty(row[c])
+                           and _extract_number(row[c]) is not None), None)
+                cv = next((_extract_number(row[c]) for c in ccols if not _cell_empty(row[c])
+                           and _extract_number(row[c]) is not None), None)
+                if dv is not None:
+                    amt.append(abs(dv)); dc.append("D")
+                elif cv is not None:
+                    amt.append(abs(cv)); dc.append("C")
+                else:
+                    amt.append(""); dc.append("")
+            df[DERIVED_AMOUNT_PRIMARY], df[DERIVED_DC] = amt, dc
 
     return df
 

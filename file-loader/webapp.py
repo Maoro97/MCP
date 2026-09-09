@@ -1205,7 +1205,8 @@ def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None):
         "overflow": len(overflow_items), "total": total, "total_warn": total_warn,
         "warnings": warnings, "warn_count": warn_count,
         "map_warnings": core.mapping_field_warnings(mapping, screen),
-        "excel_columns": list(df.columns), "assignment": assignment,
+        "excel_columns": [c for c in df.columns if not str(c).startswith("__")],
+        "assignment": assignment,
         "unmatched_required": req_missing, "unmatched_optional": opt_missing,
         "journal": mapping.get("journal"),  # תפקידי עמודות להסבת תנועות יומן
         "source_name": RUNS[run_id].get("source_name", ""),

@@ -682,12 +682,20 @@ def preprocess_journal_df(df, mapping):
 
         dcols, ccols = _amount_cols("D"), _amount_cols("C")
         if dcols or ccols:
+            def _first_nonzero(row, cols):
+                # הצד הלא-פעיל מגיע לעיתים כ-0 (ולא ריק) — לכן בוחרים את הערך
+                # הראשון שאינו ריק *ואינו אפס*.
+                for c in cols:
+                    if _cell_empty(row[c]):
+                        continue
+                    n = _extract_number(row[c])
+                    if n is not None and n != 0:
+                        return n
+                return None
             amt, dc = [], []
             for _, row in df.iterrows():
-                dv = next((_extract_number(row[c]) for c in dcols if not _cell_empty(row[c])
-                           and _extract_number(row[c]) is not None), None)
-                cv = next((_extract_number(row[c]) for c in ccols if not _cell_empty(row[c])
-                           and _extract_number(row[c]) is not None), None)
+                dv = _first_nonzero(row, dcols)
+                cv = _first_nonzero(row, ccols)
                 if dv is not None:
                     amt.append(abs(dv)); dc.append("D")
                 elif cv is not None:

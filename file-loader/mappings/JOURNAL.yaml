@@ -46,7 +46,7 @@ journal:
   # והצד לפי הכותרת -> C/D. dc_prefer מצמצם לכותרת מסוימת כשיש כמה עמודות באותו צד
   # (למשל "entered" או "accounted"); ריק = הערך הראשון שנמצא.
   dc_by_header: true
-  dc_prefer: ""
+  dc_prefer: "accounted"   # SUM1 = מטבע מקומי -> העדף "Accounted Currency" כשקיים
   # סוג תנועה לפי הסכום הראשי: 0 -> הש, אחרת -> מ
   transtype: FNCPATNAME
   transtype_zero: "הש"
@@ -64,7 +64,7 @@ exclude_if_all_zero: [SUM1, SUM2, SUM5]
 columns:
   # מס' תנועת היומן = מספר הכותרת (מאגד את שורות התנועה). "תנועה" בכרטסת הוא מספר
   # השורה/התזוזה — ולכן הקיבוץ לאיזון הוא לפי "כותרת", לא לפי "תנועה".
-  - {source: ["מס. תנועת היומן", "מס תנועת היומן", "מספר תנועת יומן", "כותרת"], target: FNCNUM, transform: [strip]}
+  - {source: ["מס. תנועת היומן", "מס תנועת היומן", "מספר תנועת יומן", "מס תנועה יומן", "מס. תנועה יומן", "מספר תנועה יומן", "מס תנועה", "כותרת"], target: FNCNUM, transform: [strip]}
   - {target: LINE, generate: rownum}                                   # מספור שורות רץ אוטומטי
   # סוג תנועה — נגזר אוטומטית מהסכום (הש/מ), אך אם קיים במקור נטען ממנו
   - {source: ["סוג תנועה"], target: FNCPATNAME, transform: [strip]}

@@ -489,6 +489,11 @@ def _extract_number(s):
     return _to_float(m.group(0)) if m else None
 
 
+def _cell_blank(v):
+    """True אם התא ריק לכל דבר (None/רווחים/nan)."""
+    return v is None or str(v).strip() == "" or str(v).strip().lower() == "nan"
+
+
 def _mostly_numeric(series, frac=0.6):
     """True אם רוב התאים הלא-ריקים בעמודה הם מספרים (כדי לא לבלבל עמודת-סכום
     עם עמודת טקסט שבמקרה כותרתה מכילה credit/debit)."""
@@ -725,6 +730,16 @@ def evaluate_grid(mapping, input_rows, reserved_keys=None, excel_rows=None):
     key_fields = mapping.get("key_fields") or []
     reserved_keys = reserved_keys or set()
     is_document = bool(subform_defs(mapping)) or bool(mapping.get("document"))
+
+    # השלמה אוטומטית בין שדות: מעתיקים ערך משדה אחד לשני כשהיעד ריק
+    # (למשל SUM2 -> SUM5). לא דורסים ערך שהמשתמש הזין ידנית.
+    for rule in (mapping.get("copy_when_empty") or []):
+        src, dst = rule.get("from"), rule.get("to")
+        if not (src and dst):
+            continue
+        for row in input_rows:
+            if _cell_blank(row.get(dst)) and not _cell_blank(row.get(src)):
+                row[dst] = row.get(src)
 
     rows_out = []
     for i, row in enumerate(input_rows):
@@ -1343,16 +1358,20 @@ def _encodable(ch, py_enc) -> bool:
 # ---------------------------------------------------------------------------
 # כתיבת קובץ הטעינה
 # ---------------------------------------------------------------------------
-def reorder_for_export(valid_records, mapping, order_targets):
+def reorder_for_export(valid_records, mapping, order_targets, hidden_targets=None):
     """
     מסדר מחדש את העמודות לפי סדר מבוקש (order_targets — רשימת שמות target).
     מחזיר (רשומות_מסודרות, מיפוי_מסודר) כך שגם קובץ הטעינה וגם שורת הכותרת
     (אם include_header) יֵצאו בסדר הזה. עמודות שלא צוינו נוספות בסוף.
+    hidden_targets: עמודות שהמשתמש הסתיר — יוסרו לגמרי מהייצוא.
     """
     columns = mapping["columns"]
     tmap = {c["target"]: i for i, c in enumerate(columns)}
-    order = [t for t in (order_targets or []) if t in tmap]
-    order += [c["target"] for c in columns if c["target"] not in order]  # השלמת חוסרים
+    hidden = {t for t in (hidden_targets or []) if t in tmap}
+    order = [t for t in (order_targets or []) if t in tmap and t not in hidden]
+    # השלמת חוסרים (למעט מוסתרות)
+    order += [c["target"] for c in columns
+              if c["target"] not in order and c["target"] not in hidden]
     idx = [tmap[t] for t in order]
 
     new_columns = [columns[i] for i in idx]

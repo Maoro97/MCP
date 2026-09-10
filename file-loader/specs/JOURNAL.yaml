@@ -5,7 +5,7 @@ source: Priority JOURNAL (LOADGL) field catalog
 fields:
   FNCNUM:
     title: "מס. תנועת היומן"
-    max_length: 8
+    max_length: 16
     required: true
   LINE:
     title: "שורה"
@@ -45,11 +45,11 @@ fields:
     title: "חובה/זכות"
     max_length: 1
   SUM1:
-    title: "סכום ב{LC.F}"
+    title: "סכום בשקלים"
     type: number
     decimals: 2
   SUM2:
-    title: "סכום ב{FC.F}"
+    title: "סכום בדולרים"
     type: number
     decimals: 2
   EXCHANGE2:

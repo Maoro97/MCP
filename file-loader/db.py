@@ -29,6 +29,7 @@ def _pg_url():
 
 _PG_URL = _pg_url()
 IS_PG = bool(_PG_URL)
+_LAST_WRITE_ERROR = ""      # סיבת הכישלון האחרונה בכתיבה — מוצגת במסך ההיסטוריה
 PH = "%s" if IS_PG else "?"           # תו ה-placeholder לפי המנוע
 _BLOB_COL = "BYTEA" if IS_PG else "BLOB"
 _ID_COL = "BIGSERIAL PRIMARY KEY" if IS_PG else "INTEGER PRIMARY KEY AUTOINCREMENT"
@@ -92,36 +93,48 @@ def _binary(content):
     return sqlite3.Binary(content)
 
 
+def _safe_exec(sql):
+    """מריץ הצהרה בודדת ב*חיבור נפרד*, כך שכישלון של אחת לא ישפיע על השאר.
+    קריטי ל-Postgres: שם הצהרה שנכשלת מבטלת את כל הטרנזקציה, וכל ההצהרות
+    שאחריה נכשלות ("current transaction is aborted") — כך עמודות מיגרציה
+    לא נוספו בפועל, וההוספה להיסטוריה נכשלה בשקט."""
+    try:
+        with _conn() as conn:
+            _cursor(conn).execute(sql)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def init_db():
     """יוצר את הטבלאות (idempotent) ומייבא היסטוריה ישנה מ-history.jsonl פעם אחת."""
-    with _conn() as conn:
-        cur = _cursor(conn)
-        cur.execute(
-            "CREATE TABLE IF NOT EXISTS loads("
-            f"  id {_ID_COL},"
-            "  ts TEXT, screen TEXT, source TEXT, name TEXT, client TEXT, status TEXT,"
-            "  total INTEGER, valid INTEGER, invalid INTEGER, warnings INTEGER,"
-            "  via TEXT, run_id TEXT, has_rejected INTEGER, \"user\" TEXT)")
-        # מיגרציה למסדים ותיקים: הוספת עמודות שנוספו לאורך הדרך (idempotent)
-        for _col in ("name TEXT", "client TEXT", "status TEXT"):
-            try:
-                cur.execute(f"ALTER TABLE loads ADD COLUMN {_col}")
-            except Exception:  # noqa: BLE001 — כבר קיימת
-                pass
+    _safe_exec(
+        "CREATE TABLE IF NOT EXISTS loads("
+        f"  id {_ID_COL},"
+        "  ts TEXT, screen TEXT, source TEXT, name TEXT, client TEXT, status TEXT,"
+        "  total INTEGER, valid INTEGER, invalid INTEGER, warnings INTEGER,"
+        "  via TEXT, run_id TEXT, has_rejected INTEGER, \"user\" TEXT)")
+    # מיגרציה למסדים ותיקים — כל הצהרה בחיבור משלה (ראה _safe_exec)
+    for _c in ("name", "client", "status"):
+        if IS_PG:
+            _safe_exec(f"ALTER TABLE loads ADD COLUMN IF NOT EXISTS {_c} TEXT")
+        else:
+            _safe_exec(f"ALTER TABLE loads ADD COLUMN {_c} TEXT")
         # נירמול ל-'' כדי שקיבוץ/השוואה יעבדו בלי טיפול ב-NULL
-        for _c in ("name", "client", "status"):
-            try:
-                cur.execute(f"UPDATE loads SET {_c}='' WHERE {_c} IS NULL")
-            except Exception:  # noqa: BLE001
-                pass
-        cur.execute(
-            "CREATE TABLE IF NOT EXISTS load_files("
-            f"  id {_ID_COL},"
-            "  load_id INTEGER, name TEXT, label TEXT, kind TEXT,"
-            f"  content {_BLOB_COL})")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_files_load ON load_files(load_id)")
-        cur.execute("SELECT COUNT(*) AS n FROM loads")
-        empty = cur.fetchone()["n"] == 0
+        _safe_exec(f"UPDATE loads SET {_c}='' WHERE {_c} IS NULL")
+    _safe_exec(
+        "CREATE TABLE IF NOT EXISTS load_files("
+        f"  id {_ID_COL},"
+        "  load_id INTEGER, name TEXT, label TEXT, kind TEXT,"
+        f"  content {_BLOB_COL})")
+    _safe_exec("CREATE INDEX IF NOT EXISTS idx_files_load ON load_files(load_id)")
+    try:
+        with _conn() as conn:
+            cur = _cursor(conn)
+            cur.execute("SELECT COUNT(*) AS n FROM loads")
+            empty = cur.fetchone()["n"] == 0
+    except Exception:  # noqa: BLE001
+        return
     if empty:
         _import_jsonl()
 
@@ -169,7 +182,9 @@ def add_load(entry):
                 return cur.fetchone()["id"]
             cur.execute(f"INSERT INTO loads({names}) VALUES({marks})", vals)
             return cur.lastrowid
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 — נשמור את הסיבה לתצוגה במסך ההיסטוריה
+        global _LAST_WRITE_ERROR
+        _LAST_WRITE_ERROR = str(e)[:300]
         return None
 
 
@@ -405,6 +420,23 @@ def status():
         info["ok"] = True
     except Exception as e:  # noqa: BLE001
         info["error"] = str(e)[:200]
+        return info
+    # חיבור תקין אינו מספיק: בודקים שכל עמודות הכתיבה קיימות בפועל, אחרת
+    # השמירה תיכשל בשקט (מסד ישן שהמיגרציה לא הושלמה בו).
+    missing = []
+    for col in ("name", "client", "status", "source", "run_id"):
+        try:
+            with _conn() as conn:
+                _cursor(conn).execute(f"SELECT {col} FROM loads LIMIT 1")
+        except Exception:  # noqa: BLE001
+            missing.append(col)
+    if missing:
+        info["ok"] = False
+        info["error"] = ("חסרות עמודות במסד: " + ", ".join(missing) +
+                         " — המיגרציה לא הושלמה. בצע Redeploy; אם התקלה נמשכת, "
+                         "מחק את טבלת loads והיא תיווצר מחדש.")
+    elif _LAST_WRITE_ERROR:
+        info["error"] = "שגיאת הכתיבה האחרונה: " + _LAST_WRITE_ERROR
     return info
 
 

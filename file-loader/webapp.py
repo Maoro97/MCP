@@ -177,6 +177,7 @@ _ICON_PATHS = {
             'a2 2 0 0 0 2-2V8Z"/>',
     "arrow-l": '<path d="M19 12H5"/><path d="m11 5-7 7 7 7"/>',
     "undo": '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a6 6 0 0 1 0 12h-4"/>',
+    "filter-off": '<path d="M21 3H5l5.6 6.7"/><path d="M14 14v6l-4 2v-9"/><path d="m3 3 18 18"/>',
     "arrow-r": '<path d="M5 12h14"/><path d="m13 5 7 7-7 7"/>',
     "lock": '<rect x="4" y="10" width="16" height="11" rx="2"/>'
             '<path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
@@ -423,16 +424,40 @@ def _store_run_files(load_id, run_dir, files, screen, has_rejected):
             continue
 
 
+def _hebrew_headers(mapping):
+    """מיפוי {target: כותרת בעברית} לייצוא לאקסל. אם אין שם עברי בקטלוג —
+    נשאר קוד השדה. כשיש כפילות בשם, מוסיפים את הקוד בסוגריים."""
+    cols = core.all_columns(mapping)
+    titles = [(c["target"], (c.get("title") or "").strip()) for c in cols]
+    seen = {}
+    for _t, name in titles:
+        if name:
+            seen[name] = seen.get(name, 0) + 1
+    out = {}
+    for target, name in titles:
+        if not name:
+            out[target] = target
+        elif seen.get(name, 0) > 1:
+            out[target] = f"{name} ({target})"
+        else:
+            out[target] = name
+    return out
+
+
 def _rejected_df(mapping, items):
-    """items: רשימת (excel_row, {target:value}, reason)."""
+    """items: רשימת (excel_row, {target:value}, reason). הכותרות בעברית."""
     targets = [c["target"] for c in core.all_columns(mapping)]
+    heb = _hebrew_headers(mapping)
     data = []
     for excel_row, values, reason in items:
         row = dict(values)
-        row["שורה"] = excel_row
-        row["סיבת פסילה"] = reason
+        row["__excel_row__"] = excel_row
+        row["__reason__"] = reason
         data.append(row)
-    return pd.DataFrame(data, columns=targets + ["שורה", "סיבת פסילה"])
+    df = pd.DataFrame(data, columns=targets + ["__excel_row__", "__reason__"])
+    heb["__excel_row__"] = "שורה באקסל"      # שם ייחודי — 'שורה' תפוס ע\"י LINE
+    heb["__reason__"] = "סיבת פסילה"
+    return df.rename(columns=heb)
 
 
 # ---------------------------------------------------------------------------
@@ -650,6 +675,20 @@ GRID = """
  .bar2{margin-top:-6px;padding:10px 14px}.tool-lbl{font-weight:700;color:var(--muted);font-size:14px}
  .bar2 .mini{padding:7px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);font-family:inherit;font-size:14px}
  .bar2 .mini#bulkval{min-width:200px}
+ /* כפתור הסתרת עמודה בכותרת */
+ th.col .hidecol{position:absolute;left:14px;top:3px;cursor:pointer;color:var(--muted);opacity:0;
+  font-size:12px;line-height:1;padding:2px 4px;border-radius:5px;transition:.12s;z-index:5}
+ th.col:hover .hidecol{opacity:.6}
+ th.col .hidecol:hover{opacity:1;background:var(--red-soft);color:var(--red)}
+ /* סרגל עמודות מוסתרות */
+ #hiddenbar{display:none;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--r);padding:9px 14px;margin:8px 0}
+ #hiddenbar .hb-lbl{font-size:13px;font-weight:600;color:var(--muted)}
+ .hchip{display:inline-flex;align-items:center;gap:5px;background:var(--surface-2);
+  border:1px solid var(--border-strong);border-radius:999px;padding:4px 11px;font-size:12.5px;
+  cursor:pointer;transition:.12s}
+ .hchip:hover{border-color:var(--accent);color:var(--accent)}
+ .hchip b{font-size:14px;line-height:1}
  tr.filterrow th{padding:4px 6px;position:sticky;top:0}
  tr.filterrow input{width:100%;min-width:90px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font:inherit;font-size:13px}
 </style></head><body>
@@ -672,6 +711,7 @@ GRID = """
   <span class="pill ign" id="p-ign">מיוצאות למרות בעיה 0</span>
   <span class="spacer"></span>
   <button class="b-check" id="undobtn" onclick="undo()" title="בטל את הפעולה האחרונה (Ctrl+Z)" disabled>{{ icon('undo',15)|safe }}<span>ביטול</span></button>
+  <button class="b-check" onclick="clearFilters()" title="נקה את כל הסינונים בטבלה">{{ icon('filter-off',15)|safe }}<span>בטל סינון</span></button>
   <button class="b-check" id="toggleview" onclick="toggleView()">{{ icon('search',15)|safe }}<span>הצג רק שורות בעייתיות</span></button>
   <button class="b-check" onclick="ignoreAllWarnings()" title="סמן את כל שורות האזהרה כמיוצאות">{{ icon('check',15)|safe }}התעלם מאזהרות</button>
   <button class="b-check" onclick="revalidate()">{{ icon('check-list',15)|safe }}בדוק מחדש</button>
@@ -685,7 +725,8 @@ GRID = """
   <input id="bulkval" class="mini" placeholder="ערך חדש לכל השורות">
   <button class="b-check" onclick="bulkUpdate()">החל על הכל</button>
  </div>
- <div id="banner"></div><div id="mapping"></div><div id="journalbar"></div><div id="toast" class="toast"></div>
+ <div id="banner"></div><div id="mapping"></div><div id="journalbar"></div>
+ <div id="hiddenbar"></div><div id="toast" class="toast"></div>
  <div class="legend">
   <span><i class="sw-bad"></i>שגוי</span>
   <span><i class="sw-warn"></i>אזהרה</span>
@@ -717,6 +758,9 @@ let page = 0;
 let colOrder = GRID.columns.map((_, i) => i);   // סדר תצוגה/ייצוא של העמודות
 let colWidths = {};                             // רוחב מותאם לעמודה (ci -> px)
 let colFilter = {};                             // סינון לכל עמודה (ci -> טקסט)
+let hiddenCols = new Set();                     // עמודות שהוסתרו (לא מוצגות ולא מיוצאות)
+// סדר העמודות המוצגות בפועל (ללא המוסתרות) — משמש לתצוגה וגם לייצוא
+function visCols(){ return colOrder.filter(ci => !hiddenCols.has(ci)); }
 let onlyProblems = false;                        // הצגת שורות בעייתיות בלבד (toggle)
 const $ = id => document.getElementById(id);
 
@@ -804,7 +848,7 @@ function buildRows(slice,cols){
     if(problem) act+='<span class="ign" title="'+(r.ignore?'בטל התעלמות':'התעלם מהבעיה — ייצא בכל זאת')+
        '" onclick="toggleIgnore('+gi+')">'+(r.ignore?'↩':'🚫')+'</span>';
     h+='<tr class="'+rowcls+'"><td class="act">'+act+'</td><td class="rownum">'+r.excel_row+'</td>';
-    for(const ci of colOrder){
+    for(const ci of visCols()){
       const cell=r.cells[ci], c=cols[ci];
       let cls=c.constant?'const':'';
       if(r.ignore){ if(cell.error||cell.warning) cls+=' ign-cell'; }
@@ -829,23 +873,26 @@ function render(){
   const cols=GRID.columns;
   const {disp,pages,slice}=computeSlice();
   let h='<thead><tr><th class="act"></th><th class="rownum">#</th>';
-  for(const ci of colOrder){ const c=cols[ci];
+  for(const ci of visCols()){ const c=cols[ci];
     const w=colWidths[ci]?' style="min-width:'+colWidths[ci]+'px"':'';
     h+='<th class="col" draggable="true" data-ci="'+ci+'"'+w+' ondragstart="dragStart(event,'+ci+
        ')" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropCol(event,'+ci+
        ')" ondragend="dragEnd(event)"><span class="rez" title="גרור לשינוי רוחב" onmousedown="startResize(event,'+ci+
-       ')"></span><span class="grip">⋮⋮</span><span class="tgt">'+esc(c.title||c.target)+
+       ')"></span><span class="hidecol" title="הסתר עמודה זו (לא תיוצא)" draggable="false"'+
+       ' onclick="event.stopPropagation();hideCol('+ci+')">✕</span>'+
+       '<span class="grip">⋮⋮</span><span class="tgt">'+esc(c.title||c.target)+
        (c.required?' <span class="reqdot" title="שדה חובה">•</span>':'')+
        '</span><span class="src">'+(c.title?esc(c.target):(c.constant?'ערך קבוע':esc(c.source||'')))+'</span></th>';
   }
   h+='</tr>';
   h+='<tr class="filterrow"><th class="act"></th><th class="rownum">🔎</th>';   // סינון קבוע לכל עמודה
-  for(const ci of colOrder)
+  for(const ci of visCols())
     h+='<th><input value="'+esc(colFilter[ci]||'')+'" placeholder="סנן" oninput="setFilter('+ci+',this.value)"></th>';
   h+='</tr></thead><tbody id="gridbody">'+buildRows(slice,cols)+'</tbody>';
   $('grid').innerHTML=h;
   renderPager(disp.length,pages);
   updateCounts();
+  renderHiddenBar();
   try{ syncScroll(); }catch(e){}
 }
 // עדכון רק גוף הטבלה (בלי לבנות מחדש את שורת הסינון) — כדי לשמור פוקוס בכתיבה
@@ -950,6 +997,38 @@ function dropCol(e,toCi){ e.preventDefault();
   const [m]=colOrder.splice(from,1); colOrder.splice(to,0,m); render();
 }
 
+// --- הסתרת עמודות (לא מוצגות בטבלה ולא נכתבות לקובץ/לאקסל) ---
+function colName(ci){ const c=GRID.columns[ci]; return c ? (c.title||c.target) : ''; }
+function hideCol(ci){
+  const c=GRID.columns[ci];
+  if(c && c.required){ flash('err','לא ניתן להסתיר שדה חובה («'+esc(colName(ci))+'»).'); return; }
+  if(visCols().length<=1){ flash('err','חייבת להישאר לפחות עמודה אחת מוצגת.'); return; }
+  hiddenCols.add(ci); delete colFilter[ci]; page=0; render();
+  flash('ok','העמודה «'+esc(colName(ci))+'» הוסתרה — לא תיכלל בייצוא.');
+}
+function showCol(ci){ hiddenCols.delete(ci); render(); }
+function showAllCols(){ if(!hiddenCols.size) return; hiddenCols.clear(); render();
+  flash('ok','כל העמודות המוסתרות הוחזרו.'); }
+function renderHiddenBar(){
+  const box=$('hiddenbar'); if(!box) return;
+  if(!hiddenCols.size){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='flex';
+  let h='<span class="hb-lbl">עמודות מוסתרות ('+hiddenCols.size+'):</span>';
+  colOrder.filter(ci=>hiddenCols.has(ci)).forEach(ci=>{
+    h+='<span class="hchip" title="לחץ להצגה מחדש" onclick="showCol('+ci+')">'+
+       esc(colName(ci))+' <b>+</b></span>';
+  });
+  h+='<button class="b-check" style="margin-inline-start:auto" onclick="showAllCols()">הצג את כל העמודות</button>';
+  box.innerHTML=h;
+}
+
+// --- ביטול כל הסינונים בטבלה ---
+function clearFilters(){
+  const had=Object.keys(colFilter).length;
+  colFilter={}; page=0; render();
+  flash(had?'ok':'err', had? ('בוטלו '+had+' סינונים.') : 'אין סינונים פעילים.');
+}
+
 // --- פאנל מיפוי עמודות (Excel -> שדה פריוריטי) ---
 function renderMapping(){
   const box=$('mapping'); if(!box||!GRID.excel_columns) return;
@@ -1046,7 +1125,8 @@ function collect(){
     rows:GRID.rows.map(r=>{const o={};r.cells.forEach(c=>o[c.target]=c.value);return o;}),
     excel_rows:GRID.rows.map(r=>r.excel_row),
     ignore:GRID.rows.map(r=>!!r.ignore),                 // שורות שסומנו להתעלמות
-    order:colOrder.map(ci=>GRID.columns[ci].target)};   // סדר עמודות לייצוא
+    order:visCols().map(ci=>GRID.columns[ci].target),    // סדר עמודות לייצוא (ללא מוסתרות)
+    hidden:[...hiddenCols].map(ci=>GRID.columns[ci] && GRID.columns[ci].target).filter(Boolean)};
 }
 function keepIgnore(newRows){   // שמירת סימוני ההתעלמות אחרי רענון מהשרת
   const old=GRID.rows;
@@ -1550,9 +1630,11 @@ def _produce_load(save):
     # סדר עמודות מבוקש (אם המשתמש סידר מחדש בטבלה) — חל על קובץ הטעינה ועל rejected.
     # לא רלוונטי למסמכים (אב/בן) שבהם הסדר קבוע לפי הרמות.
     order = data.get("order")
+    hidden = data.get("hidden") or []          # עמודות שהמשתמש הסתיר — לא ייצאו
     export_mapping = mapping
-    if order and not mapping.get("leveled") and not core.subform_defs(mapping):
-        valid_records, export_mapping = core.reorder_for_export(valid_records, mapping, order)
+    if (order or hidden) and not mapping.get("leveled") and not core.subform_defs(mapping):
+        valid_records, export_mapping = core.reorder_for_export(
+            valid_records, mapping, order, hidden_targets=hidden)
 
     run_id = uuid.uuid4().hex
     run_dir = os.path.join(WEB_OUTPUT, run_id)

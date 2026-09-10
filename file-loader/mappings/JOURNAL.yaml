@@ -61,6 +61,11 @@ require_source: [FNCNUM]
 # שורה שכל שלושת הסכומים בה 0/ריק — לא תיטען לקובץ (מסומנת בבדיקת התנועות)
 exclude_if_all_zero: [SUM1, SUM2, SUM5]
 
+# השלמה אוטומטית: ערך בסכום המשני (SUM2) יועתק גם לסכום מט"ח העסקה (SUM5)
+# כשזה ריק — ערך שהוזן ידנית ב-SUM5 לא נדרס.
+copy_when_empty:
+  - {from: SUM2, to: SUM5}
+
 columns:
   # מס' תנועת היומן = מספר הכותרת (מאגד את שורות התנועה). "תנועה" בכרטסת הוא מספר
   # השורה/התזוזה — ולכן הקיבוץ לאיזון הוא לפי "כותרת", לא לפי "תנועה".
@@ -87,6 +92,8 @@ columns:
   # סכום ראשי — עמודת האיחוד (__AMOUNT_PRIMARY__) אם הגיע מחובה/זכות, אחרת ממקור ישיר
   - {source: ["__AMOUNT_PRIMARY__", "סכום במטבע לוקאלי", "סכום במטבע לוקאל", "סכום מטבע ראשי"], target: SUM1, transform: [strip]}
   - {source: ["סכום במטבע משני USD", "סכום במטבע משני", "סכום דולרי"], target: SUM2, transform: [strip]}
+  - {source: ['מט"ח', "מטח", "מטבע"], target: CODE3, max_length: 3, transform: [strip],
+     value_map: {"$": "USD", "€": "EUR", "£": "GBP", "₪": "ILS"}, lookup: currencies}
   - {source: ["תוכנת מקור"], target: DNAME, default: "", transform: [strip]}
   - {source: ['אסמכתא 1 שורת ת"י', "אסמכתא 1 שורת תי"], target: FNCIREF1, transform: [strip]}
   - {source: ['אסמכתא 2 שורת ת"י', "אסמכתא 2 שורת תי"], target: FNCIREF2, transform: [strip]}
@@ -97,4 +104,4 @@ columns:
      value_map: {"$": "USD", "€": "EUR", "£": "GBP", "₪": "ILS"}, lookup: currencies}
   - {source: ["משתמש", "שם משתמש"], target: USERLOGIN, transform: [strip]}
   # עמודת הערות למיישם — מוצגת בטבלה אך אינה נכתבת לקובץ הסופי
-  - {target: NOTES, manual: true, exclude: true}
+  - {target: NOTES, title: "הערות למיישם", manual: true, exclude: true}

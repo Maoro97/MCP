@@ -356,6 +356,34 @@ def _prune_runs():
             RUNS.pop(old, None)
 
 
+# מסכים שהמיפוי שלהם כולל קטע journal: (מסכי תנועות יומן). נשמר בזיכרון כי
+# core.load_mapping אינו מקושש — הוא פותח, מפרסר ומעשיר YAML בכל קריאה, ועמוד
+# ההעלאה מרנדר בכל בקשה (כולל כל מסלול שגיאה). החתימה לפי mtime+גודל, כדי
+# שעריכת קובץ מיפוי בפיתוח עדיין תתרענן בלי הפעלה מחדש.
+_JOURNAL_SCREENS = {"sig": None, "names": []}
+
+
+def _journal_screens():
+    d = core.MAPPINGS_DIR
+    try:
+        sig = tuple(sorted(
+            (f, os.path.getmtime(os.path.join(d, f)), os.path.getsize(os.path.join(d, f)))
+            for f in os.listdir(d) if f.endswith((".yaml", ".yml"))))
+    except OSError:
+        return []
+    if _JOURNAL_SCREENS["sig"] == sig:
+        return _JOURNAL_SCREENS["names"]
+    names = []
+    for s in core.available_screens():
+        try:
+            if (core.load_mapping(s) or {}).get("journal"):
+                names.append(s)
+        except Exception:  # noqa: BLE001 — מיפוי שבור לא יפיל את עמוד הבית
+            continue
+    _JOURNAL_SCREENS.update(sig=sig, names=names)
+    return names
+
+
 # ---------------------------------------------------------------------------
 # עוזרים
 # ---------------------------------------------------------------------------
@@ -402,7 +430,9 @@ def _store_snapshot(load_id, mapping, screen, data, run):
         rows.append(dict(values))
         excel.append(excel_row)
     blob = json.dumps({"screen": screen, "rows": rows, "excel_rows": excel,
-                       "source_name": run.get("source_name", "")},
+                       "source_name": run.get("source_name", ""),
+                       # מטבעות ההסבה — כדי שפתיחה מחדש מההיסטוריה תשמר אותם
+                       "currency": dict(run.get("opts") or {})},
                       ensure_ascii=False).encode("utf-8")
     db.add_file(load_id, "__snapshot__.json", "טבלה", "snapshot", blob)
 
@@ -489,7 +519,9 @@ UPLOAD = """
  .fname{margin-top:12px;font-weight:600;color:var(--green);display:inline-flex;align-items:center;gap:6px}
  .err{background:var(--red-soft);border:1px solid var(--red);color:var(--red);border-radius:var(--r);padding:15px 17px;white-space:pre-wrap}
  form.card{margin-top:2px}
-</style></head><body>
+</style>
+<noscript><style>.curfld{display:block!important}</style></noscript>
+</head><body>
  <header class="topbar">
   {{ brand|safe }}
   <nav class="topnav">
@@ -519,6 +551,17 @@ UPLOAD = """
      <input type="text" id="sheet" name="sheet" placeholder="ברירת מחדל: הראשון"></div>
     <div><label for="header_row">שורת כותרת (רשות)</label>
      <input type="number" id="header_row" name="header_row" min="1" placeholder="זיהוי אוטומטי"></div>
+    {# מטבעות ההסבה — רלוונטיים רק למסכי תנועות יומן. מצב ההתחלה מחושב בשרת לפי
+       המסך שנבחר כברירת מחדל, כדי שלא יהיה הבהוב של השדות לפני שה-JS רץ. #}
+    {% set jrn0 = screens and screens[0] in journal_screens %}
+    <div class="curfld"{% if not jrn0 %} style="display:none"{% endif %}>
+     <label for="cur_primary">מטבע ראשי</label>
+     <input type="text" id="cur_primary" name="cur_primary" value="ILS" autocomplete="off"
+            placeholder='ILS / ש"ח / ₪'></div>
+    <div class="curfld"{% if not jrn0 %} style="display:none"{% endif %}>
+     <label for="cur_secondary">מטבע משני (רשות)</label>
+     <input type="text" id="cur_secondary" name="cur_secondary" value="USD" autocomplete="off"
+            placeholder="ריק = ללא מטבע משני"></div>
    </div>
    <label>קובץ קלט</label>
    <div class="drop" id="drop"><span class="ico">{{ icon('file',28)|safe }}</span>
@@ -540,6 +583,12 @@ UPLOAD = """
   ['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over');}));
   ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over');}));
   drop.addEventListener('drop',ev=>{file.files=ev.dataTransfer.files;if(file.files[0])fname.innerHTML=FICO+' '+file.files[0].name;});}
+ // שדות המטבע מוצגים רק למסכי תנועות יומן (המיפוי שלהם כולל קטע journal:).
+ // display:none מוציא פריט flex מהפריסה לגמרי, ולכן שאר השדות נפרשים כמו קודם.
+ const JSCREENS={{ (journal_screens or [])|tojson }}, scr=document.getElementById('screen');
+ function syncCur(){const on=JSCREENS.indexOf(scr.value)>=0;
+  document.querySelectorAll('.curfld').forEach(d=>{d.style.display=on?'':'none';});}
+ if(scr){scr.addEventListener('change',syncCur);syncCur();}
 </script>
 {{ theme_js|safe }}
 </body></html>
@@ -562,7 +611,10 @@ GRID = """
  :root{--brand:var(--accent);--brand-2:var(--accent);
   --bad-bg:var(--red-soft);--bad-fg:var(--red);--warn-bg:var(--amber-soft);--warn-fg:var(--amber);
   --ok-bg:var(--green-soft);--ok-fg:var(--green);--ign-bg:var(--accent-soft);--ign-fg:var(--accent);
-  --tot-bg:var(--surface-3);--tot-fg:var(--muted)}
+  --tot-bg:var(--surface-3);--tot-fg:var(--muted);
+  /* ריחוף ושורה פעילה — נגזרים מהטוקן accent ולכן עובדים בשני מצבי התצוגה */
+  --row-hover:color-mix(in srgb,var(--accent) 5%,transparent);
+  --row-sel:color-mix(in srgb,var(--accent) 14%,transparent)}
  .apphead .ttl h1{margin:0}.apphead .ttl .sub{margin:0}
  .wrap{max-width:1460px;margin:0 auto;padding:22px 18px 90px}
  h1{font-size:23px;font-weight:800;margin:0 0 3px;letter-spacing:-.01em}
@@ -593,7 +645,7 @@ GRID = """
  .topscroll>div{height:1px}
  table{border-collapse:separate;border-spacing:0;width:100%;font-size:14px}
  th,td{border-bottom:1px solid var(--border);border-left:1px solid var(--border);padding:0;text-align:right;white-space:nowrap}
- th{background:var(--surface-2);padding:10px 12px;position:sticky;top:0;z-index:2}
+ th{background:var(--surface-2);padding:10px 12px;position:sticky;top:0;z-index:6}
  th .tgt{font-weight:700}th .src{display:block;font-weight:400;color:var(--muted);font-size:11.5px;direction:ltr}
  th .reqdot{color:var(--bad-fg);font-weight:800}
  th.col{cursor:grab;user-select:none;transition:.15s}th.col:active{cursor:grabbing}
@@ -604,13 +656,23 @@ GRID = """
  th.col.dragging{opacity:.4}
  th.rownum,td.rownum{background:var(--surface-2);color:var(--muted);text-align:center;font-size:12px;min-width:44px;padding:6px}
  th.act,td.act{text-align:center;min-width:66px;padding:2px}
- tbody tr:hover td:not(.bad):not(.warn):not(.ign-cell){background:rgba(99,102,241,.045)}
+ tbody tr:hover td:not(.bad):not(.warn):not(.ign-cell){background:var(--row-hover)}
+ /* השורה הפעילה — חייבת לבוא *אחרי* כלל הריחוף: שני הכללים שקולים בספציפיות
+    (:not תורם את ספציפיות הארגומנט) ולכן סדר המקור מכריע. */
+ tbody tr.rowsel td:not(.bad):not(.warn):not(.ign-cell){background:var(--row-sel)}
+ /* מנצח את tr.rowbad/tr.rowign, אך בלי background — כדי שרקע השגיאה ישרוד */
+ tbody tr.rowsel td.rownum{color:var(--accent);font-weight:800;box-shadow:inset 0 0 0 2px var(--accent)}
  td input{border:0;background:transparent;width:100%;min-width:110px;padding:9px 11px;font:inherit;color:inherit;outline:none;border-radius:6px}
  td.bad{background:var(--bad-bg);position:relative}td.bad input{color:var(--bad-fg);font-weight:600}
  td.bad::after{content:"!";position:absolute;top:2px;left:5px;color:var(--red);font-weight:800;font-size:11px}
  td.warn{background:var(--warn-bg);position:relative}td.warn input{color:var(--warn-fg);font-weight:600}
  td.warn::after{content:"⚠";position:absolute;top:1px;left:3px;font-size:10px}
  td input:focus{background:var(--surface);box-shadow:inset 0 0 0 2px var(--brand)}
+ /* מצב עריכה (F2): החצים האופקיים מזיזים סמן בתוך התא. סימון ברור — אחרת נראה
+    כאילו החצים "נתקעו". הסמל מימין כדי לא להתנגש ב-!/⚠ של שגיאה/אזהרה שמשמאל. */
+ tbody td.editing input{background:var(--surface);box-shadow:inset 0 0 0 2px var(--amber)}
+ tbody td.editing::before{content:"✎";position:absolute;top:1px;right:3px;font-size:10px;
+  color:var(--amber);font-weight:800;z-index:2}
  td.const input{background:var(--surface-2);color:var(--muted)}
  tbody td{position:relative}
  .filldown{position:absolute;left:3px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:12px;font-weight:800;
@@ -624,6 +686,9 @@ GRID = """
  tr.rowign td input{color:var(--muted)}
  td.ign-cell{background:var(--ign-bg)}
  .legend{display:flex;gap:14px;color:var(--muted);font-size:12.5px;margin:12px 4px;flex-wrap:wrap;align-items:center}
+ /* רמז מקלדת — כדי ש-F2 יהיה מגלה-מעצמו ולא ידע נסתר */
+ .legend .kbd-hint{margin-inline-start:auto;color:var(--faint)}
+ .legend .kbd-hint b{color:var(--muted);font-weight:700}
  .legend i{display:inline-block;width:12px;height:12px;border-radius:4px;vertical-align:middle;margin-left:5px;border:1px solid var(--border)}
  .legend i.sw-bad{background:var(--bad-bg)}.legend i.sw-warn{background:var(--warn-bg)}
  .legend i.sw-const{background:var(--surface-2)}.legend i.sw-ign{background:var(--ign-bg)}
@@ -669,7 +734,14 @@ GRID = """
  .jbar .fld label{font-size:12px;color:var(--muted);font-weight:600}
  .jbar .fld input{width:110px;padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);font-family:inherit;font-size:14px}
  .jbar .fld input:focus{outline:none;border-color:var(--brand)}
+ /* מטבע לקריאה בלבד — נקבע במסך ההעלאה. אותן מידות כמו השדות שלידו */
+ .jbar .fld .ro{display:inline-block;box-sizing:border-box;min-width:110px;text-align:center;
+  padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--surface-3);
+  color:var(--muted);font-weight:600;font-size:14px}
  .jbar .jt{font-weight:700;color:var(--accent);align-self:center;margin-inline-end:4px;display:inline-flex;align-items:center;gap:7px}
+ /* הודעת מידע בקובץ גדול: הבדיקה על כל השורות, בטבלה מוצגות רק הבעייתיות */
+ .jbar .jnote{flex-basis:100%;font-size:12.5px;color:var(--muted);background:var(--surface-2);
+  border:1px dashed var(--border-strong);border-radius:9px;padding:7px 11px;margin-top:2px}
  .b-jchk{background:var(--surface);color:var(--text);border:1px solid var(--border-strong)}.b-jchk:hover{background:var(--surface-2)}
  .b-jbal{background:var(--accent);color:var(--accent-fg)}.b-jbal:hover{background:var(--accent-hover)}
  .bar2{margin-top:-6px;padding:10px 14px}.tool-lbl{font-weight:700;color:var(--muted);font-size:14px}
@@ -689,7 +761,7 @@ GRID = """
   cursor:pointer;transition:.12s}
  .hchip:hover{border-color:var(--accent);color:var(--accent)}
  .hchip b{font-size:14px;line-height:1}
- tr.filterrow th{padding:4px 6px;position:sticky;top:0}
+ tr.filterrow th{padding:4px 6px;position:sticky;top:var(--hdr-h,42px);z-index:5}
  tr.filterrow input{width:100%;min-width:90px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font:inherit;font-size:13px}
 </style></head><body>
  <header class="topbar">
@@ -732,6 +804,7 @@ GRID = """
   <span><i class="sw-warn"></i>אזהרה</span>
   <span><i class="sw-ign"></i>מיוצא למרות בעיה</span>
   <span><i class="sw-const"></i>ערך קבוע</span>
+  <span class="kbd-hint">מקלדת: <b>חצים</b> מעבר בין תאים · <b>Enter</b> שורה מטה ·   <b>F2</b> עריכה בתוך התא (יציאה: F2 / Esc / Enter) · <b>Ctrl+חץ</b> קצה השורה</span>
  </div>
  <div class="topscroll" id="topscroll"><div id="topscroll-inner"></div></div>
  <div class="tablewrap"><table id="grid"></table></div>
@@ -763,6 +836,13 @@ let hiddenCols = new Set();                     // עמודות שהוסתרו (
 function visCols(){ return colOrder.filter(ci => !hiddenCols.has(ci)); }
 let onlyProblems = false;                        // הצגת שורות בעייתיות בלבד (toggle)
 const $ = id => document.getElementById(id);
+// --- תא/שורה פעילים + שחזור פוקוס אחרי בנייה מחדש של הטבלה ---
+let activeGi = null;   // אינדקס השורה הפעילה ב-GRID.rows
+let activeCi = null;   // מזהה העמודה הפעילה (לא מיקום חזותי)
+let restore  = null;   // צילום הפוקוס שנלכד לפני render/paintBody
+let HDR_H    = 0;      // גובה שורת הכותרת הראשונה (px) — לשורת הסינון הדביקה
+let HDR_ALL  = 0;      // גובה כל ה-thead — היסט הגלילה כדי לא להסתיר תא מתחתיו
+let editMode = false;  // F2 — במצב עריכה החצים האופקיים מזיזים סמן ולא עוברים תא
 
 // עדכון גורף — קובע ערך זהה לכל השורות בעמודה נבחרת
 function fillBulkSelect(){
@@ -847,7 +927,7 @@ function buildRows(slice,cols){
     let act='<span class="del" title="מחק שורה" onclick="delRow('+gi+')">🗑</span>';
     if(problem) act+='<span class="ign" title="'+(r.ignore?'בטל התעלמות':'התעלם מהבעיה — ייצא בכל זאת')+
        '" onclick="toggleIgnore('+gi+')">'+(r.ignore?'↩':'🚫')+'</span>';
-    h+='<tr class="'+rowcls+'"><td class="act">'+act+'</td><td class="rownum">'+r.excel_row+'</td>';
+    h+='<tr data-gi="'+gi+'" class="'+rowcls+'"><td class="act">'+act+'</td><td class="rownum">'+r.excel_row+'</td>';
     for(const ci of visCols()){
       const cell=r.cells[ci], c=cols[ci];
       let cls=c.constant?'const':'';
@@ -870,6 +950,7 @@ function buildRows(slice,cols){
   return h;
 }
 function render(){
+  captureFocus();                      // חייב להיות ראשון — לפני שה-DOM נמחק
   const cols=GRID.columns;
   const {disp,pages,slice}=computeSlice();
   let h='<thead><tr><th class="act"></th><th class="rownum">#</th>';
@@ -887,21 +968,205 @@ function render(){
   h+='</tr>';
   h+='<tr class="filterrow"><th class="act"></th><th class="rownum">🔎</th>';   // סינון קבוע לכל עמודה
   for(const ci of visCols())
-    h+='<th><input value="'+esc(colFilter[ci]||'')+'" placeholder="סנן" oninput="setFilter('+ci+',this.value)"></th>';
+    h+='<th><input data-fci="'+ci+'" value="'+esc(colFilter[ci]||'')+'" placeholder="סנן" oninput="setFilter('+ci+',this.value)"></th>';
   h+='</tr></thead><tbody id="gridbody">'+buildRows(slice,cols)+'</tbody>';
   $('grid').innerHTML=h;
+  measureHeader();                     // --hdr-h לשורת הסינון הדביקה
   renderPager(disp.length,pages);
   updateCounts();
   renderHiddenBar();
   try{ syncScroll(); }catch(e){}
+  restoreFocus();                      // שחזור הסמן/ההדגשה אחרי הבנייה
 }
-// עדכון רק גוף הטבלה (בלי לבנות מחדש את שורת הסינון) — כדי לשמור פוקוס בכתיבה
-function renderBody(){
-  const b=$('gridbody'); if(!b){ render(); return; }
+// ציור גוף הטבלה בלבד (בלי לבנות מחדש את הכותרת/שורת הסינון)
+function paintBody(){
+  const b=$('gridbody'); if(!b) return;
   const {disp,pages,slice}=computeSlice();
   b.innerHTML=buildRows(slice,GRID.columns);
   renderPager(disp.length,pages);
   updateCounts();
+}
+// עדכון רק גוף הטבלה (בלי לבנות מחדש את שורת הסינון) — כדי לשמור פוקוס בכתיבה
+function renderBody(){
+  if(!$('gridbody')){ render(); return; }
+  captureFocus(); paintBody(); restoreFocus();
+}
+
+// --- כותרת דביקה: מודדים את גובה שורה 1 כדי ששורת הסינון תידבק בדיוק מתחתיה ---
+// גובה שורה 1 אינו קבוע (שם השדה + שם ה-target בשורה שנייה), ולכן מודדים ולא מקבעים.
+function measureHeader(){
+  const t=$('grid'); if(!t||!t.tHead) return;
+  const r1=t.tHead.rows[0]; if(!r1) return;
+  // Math.round ולא ceil: עיגול למעלה משאיר חריץ שדרכו נראות שורות הגוף,
+  // ואילו חפיפה של שבריר פיקסל מוסתרת ע"י הרקע האטום של ה-th.
+  HDR_H  =Math.round(r1.getBoundingClientRect().height);
+  HDR_ALL=Math.round(t.tHead.getBoundingClientRect().height);
+  if(HDR_H) t.style.setProperty('--hdr-h',HDR_H+'px');
+}
+
+// --- שרידות פוקוס: נלכד בתחילת render ומשוחזר בסופו ---
+function captureFocus(){
+  restore=null;
+  const el=document.activeElement, g=$('grid');
+  if(!el || el.tagName!=='INPUT' || !g || !g.contains(el)) return;
+  if(el.hasAttribute('data-fci')){ restore={el:el, fci:+el.getAttribute('data-fci')}; return; }
+  const tr=el.closest('tr[data-gi]'); if(!tr) return;
+  let s=null,e=null;
+  try{ s=el.selectionStart; e=el.selectionEnd; }catch(_){}
+  restore={el:el, gi:+tr.dataset.gi, ci:+el.getAttribute('data-ci'), start:s, end:e};
+}
+// השורה המוצגת הקרובה ל-gi המבוקש (אחרי מחיקה/סינון/מעבר עמוד) + מקומה ברשימה
+function nearestDisplayed(gi){
+  const disp=displayed(); if(!disp.length) return null;
+  for(let i=0;i<disp.length;i++) if(disp[i][0]>=gi) return {gi:disp[i][0], idx:i};
+  return {gi:disp[disp.length-1][0], idx:disp.length-1};
+}
+function markActiveRow(){
+  const b=$('gridbody'); if(!b) return;
+  const cur=b.querySelector('tr.rowsel'); if(cur) cur.classList.remove('rowsel');
+  if(activeGi==null) return;
+  const tr=b.querySelector('tr[data-gi="'+activeGi+'"]');
+  if(tr) tr.classList.add('rowsel');
+}
+function restoreFocus(){
+  const r=restore; restore=null;
+  // האלמנט שרד (שדה סינון ב-renderBody) — אסור לגעת בסמן, אחרת הוא יקפוץ לסוף
+  // המחרוזת בכל תו שמוקלד.
+  if(r && r.el && document.activeElement===r.el){ markActiveRow(); return; }
+  if(!r){ markActiveRow(); return; }
+  if(r.fci!=null){
+    const f=document.querySelector('#grid input[data-fci="'+r.fci+'"]');
+    if(f){ f.focus(); const L=f.value.length; try{ f.setSelectionRange(L,L); }catch(_){} }
+    markActiveRow(); return;
+  }
+  const b=$('gridbody'); if(!b){ markActiveRow(); return; }
+  let inp=b.querySelector('tr[data-gi="'+r.gi+'"] input[data-ci="'+r.ci+'"]');
+  if(!inp){                                  // נמחקה / סוננה / עברה עמוד
+    const n=nearestDisplayed(r.gi); if(!n){ activeGi=null; markActiveRow(); return; }
+    const p=Math.floor(n.idx/PAGE_SIZE);
+    if(p!==page){ page=p; paintBody(); }     // paintBody ולא render — למנוע רקורסיה
+    inp=$('gridbody').querySelector('tr[data-gi="'+n.gi+'"] input[data-ci="'+r.ci+'"]');
+  }
+  if(!inp){ markActiveRow(); return; }
+  activeGi=+inp.closest('tr').dataset.gi; activeCi=r.ci;
+  inp.focus({preventScroll:true});
+  if(r.start!=null){ try{ inp.setSelectionRange(r.start,r.end); }catch(_){} }
+  ensureVisible(inp); markActiveRow();
+}
+// גלילה מינימלית כדי שהתא ייראה — מתחת לכותרת הדביקה ובתוך רוחב הקופסה.
+// דלתאות *יחסיות* על scrollLeft בכוונה: במכל RTL דפדפנים מודרניים משתמשים בטווח
+// [-max,0] וישנים ב-[0,max], ודלתא יחסית אגנוסטית לסימן. אין להחליף ב-scrollIntoView
+// שתדחוף את השורה מתחת לכותרת הדביקה.
+function ensureVisible(el){
+  const wrap=document.querySelector('.tablewrap'); if(!wrap||!el) return;
+  const er=el.getBoundingClientRect(), wr=wrap.getBoundingClientRect();
+  if(er.top < wr.top+HDR_ALL)    wrap.scrollTop  -= (wr.top+HDR_ALL-er.top);
+  else if(er.bottom > wr.bottom) wrap.scrollTop  += (er.bottom-wr.bottom);
+  if(er.right > wr.right)        wrap.scrollLeft += (er.right-wr.right);
+  else if(er.left < wr.left)     wrap.scrollLeft -= (wr.left-er.left);
+}
+
+// --- ניווט מקלדת בין תאים ---
+// mode: 'start' = סמן בתחילת הערך, אחרת בסופו. אין select-all בכוונה: upd() כותב
+// למודל בכל תו ואין undo, ולכן הקשה אחת בטעות הייתה מוחקת תא שלם.
+function focusCell(gi,ci,mode){
+  const b=$('gridbody'); if(!b) return false;
+  const inp=b.querySelector('tr[data-gi="'+gi+'"] input[data-ci="'+ci+'"]');
+  if(editMode) setEdit(false);   // ניווט תמיד יוצא ממצב עריכה
+  if(!inp) return false;
+  activeGi=gi; activeCi=ci;
+  inp.focus({preventScroll:true});
+  try{
+    const L=inp.value.length;
+    if(mode==='start') inp.setSelectionRange(0,0); else inp.setSelectionRange(L,L);
+  }catch(_){}
+  ensureVisible(inp); markActiveRow();
+  return true;
+}
+function sliceIdx(slice,gi){ for(let i=0;i<slice.length;i++) if(slice[i][0]===gi) return i; return -1; }
+// מעבר שורה באותה עמודה; בקצה העמוד מדלג לעמוד הבא/הקודם ונוחת בשורה הראשונה/אחרונה
+function moveRow(gi,ci,d){
+  const {pages,slice}=computeSlice();
+  const i=sliceIdx(slice,gi); if(i<0) return false;
+  const ni=i+d;
+  if(ni>=0 && ni<slice.length) return focusCell(slice[ni][0],ci,'end');
+  if(d>0 && page<pages-1){ page++; render(); const s=computeSlice().slice;
+                           return s.length ? focusCell(s[0][0],ci,'end') : false; }
+  if(d<0 && page>0){ page--; render(); const s=computeSlice().slice;
+                     return s.length ? focusCell(s[s.length-1][0],ci,'end') : false; }
+  return false;   // קצה הטבלה — לא עושים כלום
+}
+function pageJump(d,ci){
+  const {pages}=computeSlice(); const np=page+d;
+  if(np<0||np>=pages) return;
+  page=np; render(); const s=computeSlice().slice;
+  if(s.length) focusCell(s[0][0],ci,'end');
+}
+function gridKey(e){
+  if(e.isComposing || e.altKey || e.metaKey) return;   // הקלדה עם IME / קיצורי מערכת
+  const inp=e.target;
+  if(!inp || inp.tagName!=='INPUT' || !inp.hasAttribute('data-ci')) return;  // לא שורת הסינון
+  const tr=inp.closest('tr[data-gi]'); if(!tr) return;
+  const gi=+tr.dataset.gi, ci=+inp.getAttribute('data-ci');
+  // visCols() ולא colOrder — עמודה מוסתרת אינה קיימת ב-DOM, ולכן ניווט אליה
+  // היה נתקע בשקט (focusCell לא מוצא את השדה).
+  const vis=visCols();
+  const pos=vis.indexOf(ci); if(pos<0) return;         // ניווט לפי מיקום חזותי
+  const k=e.key;
+  // RTL: עמודה 0 היא הימנית, ולכן ימינה = pos-1 (הערך הקודם ברשימה הגלויה).
+  const step=np=>{ if(np<0||np>=vis.length) return; e.preventDefault();
+                   focusCell(gi,vis[np],'end'); };
+
+  // F2 = כניסה/יציאה ממצב עריכה בתוך התא. במצב עריכה החצים האופקיים מזיזים את
+  // הסמן בתוך הטקסט; בברירת המחדל הם עוברים בין תאים במהירות.
+  if(k==='F2'){ e.preventDefault(); setEdit(!editMode, inp); return; }
+  if(k==='Escape' && editMode){ e.preventDefault(); setEdit(false, inp); return; }
+
+  if(k==='ArrowRight'){ if(!editMode) step(pos-1); return; }   // במצב עריכה — סמן (ברירת הדפדפן)
+  if(k==='ArrowLeft' ){ if(!editMode) step(pos+1); return; }
+  // אנכי, Enter ו-Tab תמיד מנווטים ויוצאים ממצב עריכה — כך אין מלכודת
+  if(k==='ArrowDown' ){ e.preventDefault(); setEdit(false); moveRow(gi,ci, 1); return; }
+  if(k==='ArrowUp'   ){ e.preventDefault(); setEdit(false); moveRow(gi,ci,-1); return; }
+  if(k==='Enter'     ){ e.preventDefault(); setEdit(false); moveRow(gi,ci, e.shiftKey?-1:1); return; }
+  if(k==='PageDown'  ){ e.preventDefault(); setEdit(false); pageJump( 1,ci); return; }
+  if(k==='PageUp'    ){ e.preventDefault(); setEdit(false); pageJump(-1,ci); return; }
+  if(k==='Tab'       ){ setEdit(false); return; }      // סדר ה-Tab הטבעי נשמר
+  // Home/End נשארים למשמעות הטקסט הטבעית; קצה השורה הוא Ctrl+חץ
+  if(e.ctrlKey && k==='ArrowRight'){ e.preventDefault(); focusCell(gi,vis[0],'end'); return; }
+  if(e.ctrlKey && k==='ArrowLeft' ){ e.preventDefault(); focusCell(gi,vis[vis.length-1],'end'); return; }
+}
+// מצב עריכה מסומן חזותית על התא, אחרת המשתמש לא יבין למה החצים "לא זזים".
+function setEdit(on, inp){
+  const was=editMode;
+  editMode=!!on;
+  const cur=inp || document.activeElement;
+  const prev=document.querySelector('#gridbody td.editing');
+  if(prev) prev.classList.remove('editing');
+  if(editMode && cur && cur.tagName==='INPUT' && cur.hasAttribute('data-ci')){
+    const td=cur.closest('td'); if(td) td.classList.add('editing');
+    if(!was){ const L=cur.value.length; try{ cur.setSelectionRange(L,L); }catch(_){} }
+  }
+}
+// focusin (ולא focus — הוא אינו מתבעבע) מכסה עכבר, Tab וניווט החצים במסלול אחד.
+// לא מנקים ב-focusout: לחיצה על "בדוק מחדש"/הפייג'ר מוציאה פוקוס מהטבלה, ואיבוד
+// הסימון בדיוק ברגע הבנייה מחדש הוא ההיפך מהמבוקש.
+function gridFocus(e){
+  const inp=e.target;
+  if(!inp || inp.tagName!=='INPUT' || !inp.hasAttribute('data-ci')) return;
+  const tr=inp.closest('tr[data-gi]'); if(!tr) return;
+  const gi=+tr.dataset.gi, ci=+inp.getAttribute('data-ci');
+  // מעבר לתא אחר (עכבר/Tab) מבטל מצב עריכה — אחרת החצים "נתקעים" בתא החדש
+  if(editMode && (gi!==activeGi || ci!==activeCi)) setEdit(false);
+  activeGi=gi; activeCi=ci;
+  markActiveRow();
+}
+// #grid הוא ה-<table> עצמו ו-render() רק מציב innerHTML — האלמנט לא מוחלף, ולכן
+// שני ה-listeners נקשרים פעם אחת ושורדים כל בנייה מחדש.
+function bindGrid(){
+  const g=$('grid'); if(!g||g.__keys) return;
+  g.__keys=true;
+  g.addEventListener('keydown',gridKey);
+  g.addEventListener('focusin',gridFocus);
 }
 // גלילה אופקית נגישה: פס עליון מסונכרן + גלילה עם Shift+גלגלת (בנוסף לפס התחתון של הקופסה)
 function syncScroll(){
@@ -918,7 +1183,7 @@ function syncScroll(){
   wrap.addEventListener('wheel',e=>{
     if(e.shiftKey && wrap.scrollWidth>wrap.clientWidth){ wrap.scrollLeft+=(e.deltaY||e.deltaX); e.preventDefault(); }
   },{passive:false});
-  window.addEventListener('resize',()=>{ if(grid) inner.style.width=grid.scrollWidth+'px'; });
+  window.addEventListener('resize',()=>{ measureHeader(); if(grid) inner.style.width=grid.scrollWidth+'px'; });
 }
 function renderPager(n,pages){
   if(pages<=1){ $('pager').innerHTML=''; return; }
@@ -1062,6 +1327,7 @@ async function remap(){
   if(!res) return;
   const openState=document.querySelector('.mapcard') && document.querySelector('.mapcard').open;
   Object.assign(GRID,res); page=0;
+  activeGi=null; activeCi=null; restore=null;   // גם GRID.columns הוחלף — ci שינה משמעות
   renderBanner(); renderMapping(); render();
   const d=document.querySelector('.mapcard'); if(d) d.open = openState!==false;
   flash('ok','המיפוי עודכן — הטבלה חושבה מחדש.');
@@ -1072,18 +1338,33 @@ function renderJournal(){
   const box=$('journalbar'); if(!box) return;
   if(!GRID.journal){ box.innerHTML=''; box.className=''; return; }
   box.className='jbar';
+  // המטבעות נבחרים במסך ההעלאה ומוצגים כאן לקריאה בלבד — המיישם חייב לראות על
+  // מה טיוב המט"ח והאיזון יפעלו, ובפרט שמטבע משני ריק = בדיקת משני כבויה.
+  const cur=GRID.currency||{}, cp=cur.primary||'', cs=cur.secondary||'';
   box.innerHTML=
    '<span class="jt">{{ icon("balance",17)|safe }} תנועות יומן</span>'+
-   '<div class="fld"><label>מטבע ראשי</label><input id="j-primary" value="ILS"></div>'+
-   '<div class="fld"><label>מטבע משני</label><input id="j-secondary" value="USD"></div>'+
+   '<div class="fld"><label>מטבע ראשי</label>'+
+    '<span class="ro" title="נקבע במסך ההעלאה">'+esc(cp||'—')+'</span></div>'+
+   '<div class="fld"><label>מטבע משני</label>'+
+    '<span class="ro" title="נקבע במסך ההעלאה — ריק = ללא בדיקת מטבע משני">'+
+    esc(cs||'ללא')+'</span></div>'+
    '<div class="fld"><label>סף איזון ראשי</label><input id="j-maxp" type="number" step="0.01" value="1"></div>'+
    '<div class="fld"><label>סף איזון משני</label><input id="j-maxs" type="number" step="0.01" value="1"></div>'+
    '<button class="b-jchk" onclick="journalFx()">{{ icon("coins",15)|safe }}טיוב מט"ח</button>'+
    '<button class="b-jchk" onclick="journalCheck()">{{ icon("check-list",15)|safe }}בדיקת תנועות</button>'+
-   '<button class="b-jbal" onclick="journalBalance()">{{ icon("balance",15)|safe }}איזון תנועות</button>';
+   '<button class="b-jbal" onclick="journalBalance()">{{ icon("balance",15)|safe }}איזון תנועות</button>'+
+   // בקובץ גדול הטבלה מציגה רק שורות בעייתיות, אך הבדיקה רצה על כל הקובץ —
+   // בלי ההסבר הזה הסיכומים ב-toast נראים לא תואמים למה שמוצג.
+   (GRID.mode==='errors'
+     ? '<div class="jnote">הבדיקה והאיזון מתבצעים על <b>כל '+GRID.total+' השורות</b> שבקובץ; '+
+       'בטבלה מוצגות רק השורות הבעייתיות. הסיכומים מתייחסים לקובץ כולו.</div>'
+     : '');
 }
+// המטבעות מגיעים מה-payload (נבחרו בהעלאה); הספים מה-DOM (כיול פר-לחיצה).
+// השרת מעדיף בכל מקרה את המטבעות ששמורים אצלו — ראה _journal_endpoint.
 function journalOpts(){
-  return {secondary: ($('j-secondary')||{}).value||'', primary: ($('j-primary')||{}).value||'',
+  const c=GRID.currency||{};
+  return {secondary: c.secondary||'', primary: c.primary||'',
           max_primary: ($('j-maxp')||{}).value||'0', max_secondary: ($('j-maxs')||{}).value||'0'};
 }
 async function journalFx(){ await journalRun('/journal/fx','טיוב מט"ח'); }
@@ -1137,7 +1418,9 @@ async function showAll(){
   const res=await post('/grid/all',collect()); if(!res)return;
   GRID.rows=res.rows; GRID.server_valid=0; GRID.overflow=0; GRID.total=res.total;
   GRID.total_warn=res.total_warn; GRID.warnings=res.warnings; GRID.warn_count=res.warn_count;
-  GRID.mode='all'; page=0; onlyProblems=false; updateToggleBtn();
+  GRID.mode='all'; page=0; onlyProblems=false;
+  activeGi=null; activeCi=null; restore=null;   // GRID.rows הוחלף — אינדקסים מיקומיים
+  updateToggleBtn();
   renderBanner(); render();
   flash('ok','נטענו כל '+res.total+' השורות.');
 }
@@ -1212,6 +1495,10 @@ document.addEventListener('keydown',function(ev){
 });
 updateToggleBtn(); updateUndoBtn();
 fillBulkSelect(); renderBanner(); renderMapping(); renderJournal(); render();
+bindGrid();                              // keydown+focusin — פעם אחת, שורד כל render
+// הגופן נטען אסינכרונית: המדידה הראשונה תופסת גופן חלופי נמוך יותר, ולכן מודדים
+// שוב כשהגופן מוכן — אחרת שורת הסינון הדביקה לא מתיישרת בדיוק בטעינה הראשונה.
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(measureHeader);
 </script>
 {{ theme_js|safe }}
 </body></html>
@@ -1224,10 +1511,11 @@ fillBulkSelect(); renderBanner(); renderMapping(); renderJournal(); render();
 @app.route("/")
 def index():
     return render_template_string(UPLOAD, screens=core.available_screens(), error=None,
-                                  brand=brand_html(), auth_on=_auth_on())
+                                  brand=brand_html(), auth_on=_auth_on(),
+                                  journal_screens=_journal_screens())
 
 
-def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None):
+def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None, opts=None):
     """
     ליבת בניית תגובת הטבלה — משותפת ל-/process ול-/grid/remap.
     פותר את המיפוי (עם overrides ידניים), מריץ ולידציה, מפצל קטן/גדול, שומר את
@@ -1267,6 +1555,10 @@ def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None):
         "screen": screen, "df": df, "overrides": dict(overrides or {}),
         "valid": server_valid, "reserved": reserved, "overflow": overflow_items,
         "source_name": source_name or prev.get("source_name", ""),
+        # מטבעות ההסבה. הבדיקה is not None ולא "opts or {}" בכוונה: /grid/remap קורא
+        # ל-_build_grid עם run_id קיים ובלי opts, וכתיבת המילון מחליפה אותו כולו —
+        # ולכן בלי ההורשה כאן כל מיפוי מחדש היה מוחק את המטבע בשקט.
+        "opts": dict(opts) if opts is not None else dict(prev.get("opts") or {}),
         "created": time.time(),
     }
     _prune_runs()
@@ -1290,6 +1582,8 @@ def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None):
         "unmatched_required": req_missing, "unmatched_optional": opt_missing,
         "journal": mapping.get("journal"),  # תפקידי עמודות להסבת תנועות יומן
         "source_name": RUNS[run_id].get("source_name", ""),
+        # מטבעות ההסבה שנבחרו במסך ההעלאה (ראה RUNS[...]["opts"])
+        "currency": dict(RUNS[run_id].get("opts") or {}),
     }
 
 
@@ -1300,6 +1594,10 @@ def process():
     header_row = (request.form.get("header_row") or "").strip()
     header_row = int(header_row) if header_row.isdigit() else None
     upload = request.files.get("file")
+    # מטבעות ההסבה. בלי ברירות מחדל בשרת: מטבע משני ריק הוא דגל מכוון שמכבה את
+    # בדיקת/איזון המטבע המשני, ומטבע ראשי ריק מטופל בבטחה ב-_journal_fx.
+    cur = {"primary": (request.form.get("cur_primary") or "").strip(),
+           "secondary": (request.form.get("cur_secondary") or "").strip()}
 
     if not upload or not upload.filename:
         return _upload_error("לא נבחר קובץ.")
@@ -1314,7 +1612,7 @@ def process():
             expected_sources=core._expected_sources(mapping),
         )
         payload = _build_grid(screen, mapping, df, overrides=None,
-                              source_name=upload.filename)
+                              source_name=upload.filename, opts=cur)
     except core.UserError as e:
         return _upload_error(str(e))
     except Exception as e:  # noqa: BLE001
@@ -1341,6 +1639,78 @@ def grid_remap():
     return jsonify(payload)
 
 
+def _merge_all_rows(run, mapping, data):
+    """
+    מאחד את שורות הלקוח (המוצגות, כולל העריכות) עם השורות ששמורות בשרת ואינן
+    מוצגות — `run["valid"]` (תקינות) ו-`run["overflow"]` (שגויות). בקובץ גדול
+    (מעל FULL_GRID_LIMIT) הלקוח מחזיק רק את השורות הבעייתיות, ולכן כל חישוב
+    שתלוי בקובץ *כולו* (קיבוץ תנועות יומן, איזון) חייב לעבור דרך כאן.
+
+    מחזיר (inputs, excel, origins) כאשר origins[i] הוא תג המקור של השורה:
+      ("client", idx) — שורה שהלקוח שלח; idx = מקומה המקורי ברשימת הלקוח.
+      ("hidden", None) — שורה ששמורה בשרת ואינה מוצגת.
+
+    המיון לפי excel_row אינו קוסמטי: jrn.auto_balance מוסיף את הפרש האיזון
+    ל*שורה הראשונה* בצד החסר, ולכן סדר השורות בתוך תנועה קובע איזו שורה מקבלת
+    את ההשלמה. מיון לסדר הקובץ המקורי מבטיח תוצאה זהה לזו של קובץ קטן שנטען במלואו.
+    """
+    targets = [c["target"] for c in core.all_columns(mapping)]
+    inputs = list(data.get("rows") or [])
+    excel = list(data.get("excel_rows") or [])
+    excel = excel[:len(inputs)] + [None] * (len(inputs) - len(excel))   # יישור לאורך שורות הקלט
+    origins = [("client", i) for i in range(len(inputs))]
+
+    for rec in run.get("valid", []):
+        vals = rec["values"]
+        inputs.append({targets[k]: (vals[k] if k < len(vals) else "") for k in range(len(targets))})
+        excel.append(rec.get("excel_row"))
+        origins.append(("hidden", None))
+    for excel_row, values, _reason in run.get("overflow", []):
+        inputs.append(dict(values))
+        excel.append(excel_row)
+        origins.append(("hidden", None))
+
+    order = sorted(range(len(inputs)), key=lambda i: excel[i] if excel[i] is not None else 0)
+    return ([inputs[i] for i in order], [excel[i] for i in order],
+            [origins[i] for i in order])
+
+
+def _split_processed(run, mapping, rows_out, origins):
+    """
+    מפצל את תוצאות העיבוד של הסט המלא (ראה _merge_all_rows):
+    - מחזיר את שורות הלקוח *באותו מספר ובאותו סדר* שבו נשלחו. זה תנאי הכרחי:
+      בצד הלקוח journalRun() עושה GRID.rows=res.rows ואינדקסי השורות מיקומיים.
+    - מחזיר לשרת את השורות שאינן מוצגות, עם הערכים המתוקנים (סכומים מאוזנים,
+      סוג תנועה, טיוב מט"ח), כדי שיגיעו לקובץ הפלט. שורה נסתרת יכולה לעבור
+      מתקינה לשגויה ולהפך — הבנייה מחדש מטפלת בשני הכיוונים.
+
+    בשונה מ-/grid/all, כאן *אין* לרוקן את המאגר בשרת: הלקוח ממשיך להציג רק את
+    השורות הבעייתיות, ולכן הנסתרות חייבות להישאר — אחרת ייעלמו מהפלט.
+    """
+    client_rows = [None] * sum(1 for kind, _ in origins if kind == "client")
+    hidden = []
+    for pos, (kind, idx) in enumerate(origins):
+        if kind == "client":
+            client_rows[idx] = rows_out[pos]
+        else:
+            hidden.append(rows_out[pos])
+
+    hidden_valid = [r for r in hidden if r["valid"]]
+    run["valid"] = core.grid_valid_records(hidden_valid)
+    run["overflow"] = [
+        (r["excel_row"], {c["target"]: c["value"] for c in r["cells"]},
+         _first_reason(r["cells"]))
+        for r in hidden if not r["valid"]
+    ]
+    # מפתחות הכפילות של השורות שנשארו נסתרות (כמו ב-_build_grid). במסך היומן
+    # key_fields ריק ולכן זו תמיד קבוצה ריקה — אבל בלי החישוב מחדש התכונה
+    # תישבר בשקט אם ייווסף מיפוי יומן עם key_fields.
+    key_fields = mapping.get("key_fields") or []
+    run["reserved"] = ({core.row_key(r["cells"], key_fields) for r in hidden_valid}
+                       if key_fields else set())
+    return client_rows
+
+
 @app.route("/grid/all", methods=["POST"])
 def grid_all():
     """טוען את *כל* השורות לטבלה (כולל התקינות ששמורות בשרת), עם שמירת העריכות."""
@@ -1350,22 +1720,8 @@ def grid_all():
         return jsonify(error="הריצה פגה מהזיכרון — טען מחדש את הקובץ."), 400
     try:
         mapping = core.load_mapping(run["screen"])
-        targets = [c["target"] for c in core.all_columns(mapping)]
-
         # שורות מוצגות (עם העריכות של המשתמש) + שורות תקינות שמורות + overflow
-        inputs = list(data.get("rows") or [])
-        excel = list(data.get("excel_rows") or [])
-        for rec in run.get("valid", []):
-            vals = rec["values"]
-            inputs.append({targets[k]: (vals[k] if k < len(vals) else "") for k in range(len(targets))})
-            excel.append(rec.get("excel_row"))
-        for excel_row, values, _reason in run.get("overflow", []):
-            inputs.append(dict(values))
-            excel.append(excel_row)
-
-        order = sorted(range(len(inputs)), key=lambda i: excel[i] if excel[i] is not None else 0)
-        inputs = [inputs[i] for i in order]
-        excel = [excel[i] for i in order]
+        inputs, excel, _origins = _merge_all_rows(run, mapping, data)
         rows_out = core.evaluate_grid(mapping, inputs, excel_rows=excel)
     except core.UserError as e:
         return jsonify(error=str(e)), 400
@@ -1552,15 +1908,30 @@ def _journal_endpoint(do_balance=False, do_fx=False):
         mapping = core.load_mapping(run["screen"])
         if not (mapping.get("journal")):
             return jsonify(error="המסך אינו מסך תנועות יומן."), 400
-        rows_dicts = list(data.get("rows") or [])
+        # בדיקות היומן מתבצעות על *כל* הרשומות — גם אלו שאינן מוצגות בטבלה
+        # (קובץ מעל FULL_GRID_LIMIT). בלי זה התנועות מקובצות חלקית ומדווח חוסר
+        # איזון שאינו קיים. שים לב: אין להעביר reserved_keys ל-evaluate_grid
+        # (בתוך _journal_process), כי השורות הנסתרות נמצאות בסט הנבדק ומפתחותיהן
+        # יסמנו אותן ככפולות של עצמן.
+        rows_dicts, excel_rows, origins = _merge_all_rows(run, mapping, data)
+        # ספי האיזון מגיעים מהטבלה (כיול פר-לחיצה), אבל המטבעות הם תכונה של
+        # *הטעינה* — נבחרו בהעלאה ונשמרים בשרת. הבדיקה היא נוכחות מפתח ולא
+        # truthiness: מטבע משני שרוקן במכוון חייב לנצח, אחרת היינו נופלים לברירת
+        # המחדל של הלקוח ומפעילים מחדש בדיקות שהמשתמש כיבה.
+        opts = dict(data.get("opts") or {})
+        stored = run.get("opts") or {}
+        for k in ("primary", "secondary"):
+            if k in stored:
+                opts[k] = stored.get(k) or ""
         rows_out, summary = _journal_process(
-            mapping, rows_dicts, data.get("excel_rows"), data.get("opts") or {},
+            mapping, rows_dicts, excel_rows, opts,
             do_balance, do_fx)
+        client_rows = _split_processed(run, mapping, rows_out, origins)
     except core.UserError as e:
         return jsonify(error=str(e)), 400
     except Exception as e:  # noqa: BLE001
         return jsonify(error=f"שגיאה בעיבוד תנועות: {e}"), 400
-    return jsonify(rows=rows_out, summary=summary)
+    return jsonify(rows=client_rows, summary=summary)
 
 
 @app.route("/journal/check", methods=["POST"])
@@ -2053,8 +2424,15 @@ def history_open(load_id):
         # העמודות כבר בשמות ה-target; ממפים כל target לעמודה בעלת אותו שם
         overrides = {c["target"]: c["target"]
                      for c in core.all_columns(mapping) if c["target"] in df.columns}
+        # תמונת-מצב שנשמרה לפני התכונה חסרה "currency" — נופלים לברירות המחדל
+        # ההיסטוריות (ILS/USD), בדיוק הערכים שהיו מקובעים בטבלה קודם. .get פר-מפתח
+        # ולא "or": תמונה חדשה שבה המשני רוקן במכוון חייבת להיפתח עם משני כבוי.
+        snap_cur = snap.get("currency") or {}
+        cur = {"primary": snap_cur.get("primary", "ILS"),
+               "secondary": snap_cur.get("secondary", "USD")}
         payload = _build_grid(screen, mapping, df, overrides=overrides,
-                              source_name=snap.get("source_name") or "")
+                              source_name=snap.get("source_name") or "",
+                              opts=cur)
     except core.UserError as e:
         return _upload_error(str(e))
     except Exception as e:  # noqa: BLE001
@@ -2363,7 +2741,8 @@ def logout():
 
 def _upload_error(msg):
     return render_template_string(UPLOAD, screens=core.available_screens(), error=msg,
-                                  brand=brand_html(), auth_on=_auth_on())
+                                  brand=brand_html(), auth_on=_auth_on(),
+                                  journal_screens=_journal_screens())
 
 
 if __name__ == "__main__":

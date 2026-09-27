@@ -47,10 +47,6 @@ journal:
   # (למשל "entered" או "accounted"); ריק = הערך הראשון שנמצא.
   dc_by_header: true
   dc_prefer: "accounted"   # SUM1 = מטבע מקומי -> העדף "Accounted Currency" כשקיים
-  # סוג תנועה לפי הסכום הראשי: 0 -> הש, אחרת -> מ
-  transtype: FNCPATNAME
-  transtype_zero: "הש"
-  transtype_nonzero: "מ"
   # מס' החשבון בכרטסת מופיע בעמודה B בשורת כותרת-המקטע בלבד — יועבר לכל שורות
   # התנועה שמתחתיו (רלוונטי רק כשמזוהה מבנה כרטסת; אחרת לא משפיע).
   account_ffill: "B"
@@ -66,13 +62,27 @@ exclude_if_all_zero: [SUM1, SUM2, SUM5]
 copy_when_empty:
   - {from: SUM2, to: SUM5}
 
+# ערכים קבועים שנבחרים פעם אחת במסך ההעלאה ומוזרמים לכל השורות בטעינה — רק
+# לתאים ריקים. ניתנים לעריכה פר-תא בטבלה, והעריכה שורדת כל בדיקה/הפקה/שמירה.
+# המפתח (dname/transtype) הוא שם השדה בטופס ההעלאה; הערך הוא שדה פריוריטי.
+upload_constants:
+  dname: DNAME
+  transtype: FNCPATNAME
+
+# סדר *התצוגה* בטבלה בלבד — לנוחות המיישם. אינו משפיע על קובץ הפלט: הקובץ נכתב
+# תמיד לפי סדר columns: שלמטה, כדי להתאים להגדרת ה-Interface XXXX_LOADGL.
+# שדה שאינו ברשימה מוצג אחריה, בסדר של columns:. המשתמש יכול לסדר מחדש בגרירה.
+view_order: [NOTES, FNCNUM, LINE, BALDATE, CURDATE, FNCDATE, ACCNAME, DEBIT,
+             SUM1, SUM2, SUM5, CODE5, DETAILS, IVNUM, FNCREF2, FNCPATNAME, DNAME]
+
 columns:
   # מס' תנועת היומן = מספר הכותרת (מאגד את שורות התנועה). "תנועה" בכרטסת הוא מספר
   # השורה/התזוזה — ולכן הקיבוץ לאיזון הוא לפי "כותרת", לא לפי "תנועה".
   - {source: ["מס. תנועת היומן", "מס תנועת היומן", "מספר תנועת יומן", "מס תנועה יומן", "מס. תנועה יומן", "מספר תנועה יומן", "מס תנועה", "כותרת"], target: FNCNUM, transform: [strip]}
   - {target: LINE, generate: rownum}                                   # מספור שורות רץ אוטומטי
-  # סוג תנועה — נגזר אוטומטית מהסכום (הש/מ), אך אם קיים במקור נטען ממנו
-  - {source: ["סוג תנועה"], target: FNCPATNAME, transform: [strip]}
+  # סוג תנועה — נקבע במסך ההעלאה (upload_constants) ומוזרם לכל השורות; ניתן
+  # לעריכה פר-תא. אין כאן source: הערך אינו נלקח מהקובץ, וכפתורי היומן אינם נוגעים בו.
+  - {target: FNCPATNAME, manual: true}
   - {source: ["אסמכתא", "אסמ'", "אסמ"], target: IVNUM, transform: [strip, blank_if_zero], format: ref}
   - {source: ["אסמכתא 2", "אסמ'2", "אסמ2"], target: FNCREF2, transform: [strip, blank_if_zero]}
   - {source: ["ת. למאזן", "תאריך מאזן"], target: BALDATE, type: date}
@@ -94,7 +104,8 @@ columns:
   - {source: ["סכום במטבע משני USD", "סכום במטבע משני", "סכום דולרי"], target: SUM2, transform: [strip]}
   - {source: ['מט"ח', "מטח", "מטבע"], target: CODE3, max_length: 3, transform: [strip],
      value_map: {"$": "USD", "€": "EUR", "£": "GBP", "₪": "ILS"}, lookup: currencies}
-  - {source: ["תוכנת מקור"], target: DNAME, default: "", transform: [strip]}
+  # תוכנת מקור — נקבעת במסך ההעלאה (upload_constants), ניתנת לעריכה פר-תא
+  - {target: DNAME, manual: true}
   - {source: ['אסמכתא 1 שורת ת"י', "אסמכתא 1 שורת תי"], target: FNCIREF1, transform: [strip]}
   - {source: ['אסמכתא 2 שורת ת"י', "אסמכתא 2 שורת תי"], target: FNCIREF2, transform: [strip]}
   - {source: ['פרטים שורת ת"י', "פרטים שורת תי", "פרטים"], target: DETAILS, max_length: 24, transform: [strip]}

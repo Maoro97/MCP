@@ -406,6 +406,27 @@ def rows_from_dataframe(df, mapping, resolved):
     return rows
 
 
+def apply_upload_constants(mapping, rows, values):
+    """
+    מזרים ערכים קבועים שנבחרו במסך ההעלאה (upload_constants שבמיפוי) לתאים
+    *ריקים בלבד* — ערך שהגיע מעמודת מקור, או שהמיישם הקליד בטבלה, לא נדרס.
+
+    נקראת פעם אחת בזמן בניית השורות (‎_build_grid‎) ולא מתוך evaluate_grid:
+    הזרמה בכל ולידציה הייתה ממלאת מחדש תא שהמיישם רוקן בכוונה.
+    """
+    consts = mapping.get("upload_constants") or {}
+    if not consts:
+        return rows
+    for key, target in consts.items():
+        val = str(values.get(key) or "").strip()
+        if not val:
+            continue                     # ריק = לא מזריקים כלום
+        for row in rows:
+            if _cell_blank(row.get(target)):
+                row[target] = val
+    return rows
+
+
 def _is_zero_amount(value):
     """True אם הערך ריק או שווה מספרית ל-0 (למשל '', '0', '0.00')."""
     s = str(value or "").strip()
@@ -1119,18 +1140,23 @@ def resolve_columns(df, columns, overrides=None):
     for col in columns:
         t = col["target"]
         aliases = _source_aliases(col.get("source"))
-        if not aliases:
-            continue  # עמודת ערך קבוע — אין מקור
         required_missing = col.get("required") and col.get("default") in (None, "")
-        if t in overrides:  # בחירה ידנית מהממשק
+        # בחירה מפורשת גוברת — *גם* על עמודה בלי source. זה נבדק לפני בדיקת
+        # הכינויים בכוונה: פתיחה מההיסטוריה מעבירה overrides זהותיים לכל שדה
+        # שקיים בתמונת-המצב, וכשהבדיקה הייתה אחרי "if not aliases: continue"
+        # עמודות ידניות (הערות למיישם, תוכנת מקור, סוג תנועה) דולגו — וכל עריכת
+        # תא בהן אבדה בפתיחה מחדש.
+        if t in overrides:
             val = overrides[t]
             if val and val in valid_cols:
                 resolved[t] = val
             elif required_missing:
                 unmatched_required.append(t)
-            else:
+            elif aliases:
                 unmatched_optional.append(t)
             continue
+        if not aliases:
+            continue  # עמודת ערך קבוע / ידנית — אין מקור ואין מה לפתור
         actual = next((lookup[_norm_header(a)] for a in aliases if _norm_header(a) in lookup), None)
         if actual is not None:
             resolved[t] = actual

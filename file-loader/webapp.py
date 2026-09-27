@@ -2114,8 +2114,13 @@ def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None, o
     }
 
 
-@app.route("/process", methods=["POST"])
+@app.route("/process", methods=["GET", "POST"])
 def process():
+    # /process מרנדר את הטבלה *בתוך* תגובת ה-POST, ולכן שורת הכתובת של הדפדפן
+    # נשארת עליו. כל כניסה חוזרת לכתובת (מועדפים, היסטוריה, שחזור טאבים) היא
+    # GET — ו-POST-בלבד החזיר "405 Method Not Allowed" באנגלית. מפנים הביתה.
+    if request.method == "GET":
+        return redirect("/")
     screen = (request.form.get("screen") or "").strip()
     sheet = (request.form.get("sheet") or "").strip() or None
     header_row = (request.form.get("header_row") or "").strip()
@@ -3285,6 +3290,14 @@ def login():
 def logout():
     session.clear()
     return redirect("/login")
+
+
+@app.errorhandler(405)
+def _method_not_allowed(e):
+    """כל מסלול POST-בלבד שנפתח בניווט דפדפן — הביתה במקום שגיאה באנגלית."""
+    if request.path.startswith(_AUTH_JSON_PREFIXES) or request.is_json:
+        return jsonify(error="שיטת הבקשה אינה נתמכת בכתובת הזו."), 405
+    return redirect("/")
 
 
 def _upload_error(msg):

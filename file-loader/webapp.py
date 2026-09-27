@@ -1834,10 +1834,12 @@ function renderJournal(){
     ' title="כל השורות שנבחרו יקבלו את מס\' התנועה של השורה *העליונה* שנבחרה.'+
     ' מספור השורות נשאר רץ על כל הקובץ.">{{ icon("check-circle",15)|safe }}קיבוץ תנועה</button>'+
    '<span class="hchip" id="selinfo" style="display:none"></span>'+
+   // הגרשיים ב«מט"ח» חייבים להיות &quot; — גרש כפול גולמי בתוך title="..."
+   // קוטע את האטריביוט, והשאר נבלע כאטריביוטים מדומים.
    '<button class="b-jchk" onclick="journalFx()"'+
-    ' title="כרגע: מחיקת מטבע עסקה שזהה למטבע הראשי, והעתקת סכום המט\"ח לסכום'+
-    ' המשני כשמטבע העסקה = המטבע המשני. זו הלוגיקה של «טיוב מט\"ח», ללא שינוי.'+
-    ' שערי מט\"ח *אינם* נמשכים ואין חישוב מחדש של סכומים — כללי העדכון טרם הוגדרו."'+
+    ' title="כרגע: מחיקת מטבע עסקה שזהה למטבע הראשי, והעתקת סכום המט&quot;ח לסכום'+
+    ' המשני כשמטבע העסקה = המטבע המשני. זו הלוגיקה של «טיוב מט&quot;ח», ללא שינוי.'+
+    ' שערי מט&quot;ח *אינם* נמשכים ואין חישוב מחדש של סכומים — כללי העדכון טרם הוגדרו."'+
     '>{{ icon("coins",15)|safe }}עדכון מט"ח</button>'+
    '<button class="b-jchk" onclick="openErrFix()">{{ icon("alert",15)|safe }}תיקון שגיאות</button>'+
    '<button class="b-jbal" onclick="journalBalance()">{{ icon("balance",15)|safe }}איזון תנועות</button>'+
@@ -2027,6 +2029,17 @@ def index():
                                   journal_screens=_journal_screens())
 
 
+def _drop_warnings(df):
+    """שורות שסוננו ע"י require_source — מוצגות כאזהרה במקום להיעלם בשקט."""
+    n = (getattr(df, "attrs", None) or {}).get("dropped_rows") or 0
+    if not n:
+        return []
+    by = ", ".join((df.attrs.get("dropped_by") or [])) or "שדות עוגן"
+    return ["%d שורות מהקובץ לא נטענו לטבלה: הן ריקות בשדה %s. "
+            "בייצוא יומן שבו מס' התנועה מופיע רק בשורה הראשונה של כל תנועה — "
+            "יש להשלים אותו בכל השורות לפני ההעלאה." % (n, by)]
+
+
 def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None, opts=None,
                 excel_rows=None):
     """
@@ -2096,7 +2109,7 @@ def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None, o
         "rows": _slim_rows(displayed), "server_valid": len(server_valid),
         "overflow": len(overflow_items), "total": total, "total_warn": total_warn,
         "warnings": warnings, "warn_count": warn_count,
-        "map_warnings": core.mapping_field_warnings(mapping, screen),
+        "map_warnings": core.mapping_field_warnings(mapping, screen) + _drop_warnings(df),
         "excel_columns": [c for c in df.columns if not str(c).startswith("__")],
         "assignment": assignment,
         "unmatched_required": req_missing, "unmatched_optional": opt_missing,

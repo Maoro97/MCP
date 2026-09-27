@@ -147,9 +147,18 @@ _ENCODINGS = {"windows-1255": "cp1255", "utf-8": "utf-8"}
 _EXTENSIONS = {"tab": "txt", "comma": "csv", "pipe": "txt"}
 
 
+# סימני קיצור בעברית: גרש/גרשיים (עברי ולטיני, ישר ומסולסל) ונקודת קיצור.
+# "מס' תנועה", "מס׳ תנועה" ו-"מס. תנועה" הם אותה כותרת, וקובצי פריוריטי/אקסל
+# משתמשים בכל הצורות. בלי נרמול היה צריך למנות כל איות ברשימת הכינויים — ובפועל
+# עמודה לא זוהתה, השדה נשאר ריק, וכל השורות נפסלו.
+_ABBR_MARKS = "'׳’ʼ\"״“”."
+
+
 def _norm_header(text) -> str:
-    """נרמול כותרת עמודה לצורך התאמה (הסרת תווים נסתרים ורווחים מיותרים)."""
-    return transforms.clean_whitespace(transforms.strip_hidden(str(text)))
+    """נרמול כותרת עמודה לצורך התאמה (הסרת תווים נסתרים, סימני קיצור ורווחים)."""
+    t = transforms.strip_hidden(str(text))
+    t = "".join(c for c in t if c not in _ABBR_MARKS)
+    return transforms.clean_whitespace(t)
 
 
 # ---------------------------------------------------------------------------
@@ -612,7 +621,14 @@ def preprocess_journal_df(df, mapping):
         if anchors:
             def _row_ok(r):
                 return all(any(not _cell_empty(r[n]) for n in group) for group in anchors)
+            before = len(df)
             df = df[df.apply(_row_ok, axis=1)].reset_index(drop=True)
+            # הסינון נועד להעיף שורות כותרת/יתרה בכרטסת, אבל ביצוא יומן רגיל
+            # מס' התנועה מופיע לעיתים רק בשורה הראשונה של כל תנועה — ואז הוא
+            # מוחק חצי מהקובץ. בלי החיווי הזה השורות פשוט נעלמו בשקט.
+            if len(df) < before:
+                df.attrs["dropped_rows"] = before - len(df)
+                df.attrs["dropped_by"] = list(require)
 
     # (1b) סינון נוסף אופציונלי לפי כמות הערכים בשורה
     if min_vals:
@@ -679,16 +695,27 @@ def preprocess_journal_df(df, mapping):
     if ccol is None and jc.get("combined_autodetect"):
         ccol = _detect_combined_dc_col(df)
     if ccol is not None:
-        amt, dc = [], []
+        amt, dc, filled = [], [], 0
         for _, row in df.iterrows():
             v = row[ccol]
             if _cell_empty(v):
                 amt.append(""); dc.append("")
                 continue
+            filled += 1
             num = _extract_number(v)
             amt.append(abs(num) if num is not None else "")
             dc.append(_dc_from_text(v))
-        df[DERIVED_AMOUNT_PRIMARY], df[DERIVED_DC] = amt, dc
+        # עמודת "חובה/זכות" שמכילה *רק* את התווית, והסכום יושב בעמודה נפרדת,
+        # היא הפריסה הישראלית הרגילה — ולא עמודה משולבת. combined_source מתאים
+        # לפי *כותרת* בלבד, ולכן בלי הבדיקה הזו הוא היה כותב __AMOUNT_PRIMARY__
+        # ריק, וזה גובר על עמודת הסכום האמיתית (הוא הכינוי הראשון של SUM1) —
+        # כל הסכומים היו מתרוקנים וכל השורות נפסלות. התווית עצמה כן שימושית,
+        # ולכן __DC__ נכתב בנפרד. הסף זהה ל-_detect_combined_dc_col (מחצית).
+        nums = sum(1 for a in amt if a != "")
+        if filled and nums >= 0.5 * filled:
+            df[DERIVED_AMOUNT_PRIMARY] = amt
+        if any(d for d in dc):
+            df[DERIVED_DC] = dc
 
     # (6) עמודות חובה/זכות לפי *כותרת*: קובץ עם עמודות נפרדות שכותרתן מכילה
     #     Credit/Debit (או זכות/חובה) — לכל היותר אחת מהן מכילה מספר בשורה.

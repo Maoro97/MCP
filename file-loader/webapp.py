@@ -2023,6 +2023,9 @@ if(document.fonts && document.fonts.ready) document.fonts.ready.then(measureHead
 # ---------------------------------------------------------------------------
 # נתיבים
 # ---------------------------------------------------------------------------
+CR = chr(13).encode("ascii")   # תו CR, נבנה בלי תו בריחה
+
+
 def _mapping_signature():
     """sha256 מקוצר של כל קבצי המיפוי — מזהה אם המיפוי שבענן הוא זה שלפניי."""
     h = hashlib.sha256()
@@ -2031,7 +2034,9 @@ def _mapping_signature():
         if name.endswith((".yaml", ".yml")):
             h.update(name.encode("utf-8"))
             with open(os.path.join(d, name), "rb") as f:
-                h.update(f.read())
+                # נרמול סופי-שורה: עותק העבודה בוינדוס הוא CRLF והענן מושך LF,
+                # ובלי זה אותה גרסה בדיוק מניבה חתימות שונות וההשוואה חסרת ערך.
+                h.update(f.read().replace(CR, b""))
     return h.hexdigest()[:12]
 
 

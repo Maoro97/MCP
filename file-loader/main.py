@@ -595,7 +595,14 @@ def preprocess_journal_df(df, mapping):
         if acc_col is not None:
             accn = df[acc_col]
             acc_mask = accn.map(lambda v: not _cell_empty(v))
-            ok = bool(acc_mask.any())
+            # account_ffill מצביע על עמודה לפי *מיקום* ("B"), ולכן בקובץ שאינו
+            # כרטסת הוא תופס עמודה שרירותית — מס' שורה, תאריך — ו-__ACCOUNT__
+            # גובר על עמודת החשבון האמיתית (הוא הכינוי הראשון של ACCNAME).
+            # התכונה המגדירה של כרטסת: מס' החשבון מופיע רק בשורות כותרת-המקטע,
+            # כלומר במיעוט השורות. נמדד על קבצים אמיתיים: כרטסת 8.5%, כל שאר
+            # פריסות היומן 100%. הבדיקה הזו אינה תלויה בזיהוי עמודת מס' התנועה,
+            # ולכן היא חלה גם כשהכותרת שלה לא מוכרת — שם הבאג היה חשוף לגמרי.
+            ok = bool(acc_mask.any()) and float(acc_mask.mean()) <= 0.5
             by_t = {c["target"]: c for c in all_columns(mapping)}
             fcol = by_t.get("FNCNUM")
             if ok and fcol:

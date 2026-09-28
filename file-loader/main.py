@@ -14,6 +14,7 @@ main.py — כלי הכנת קבצי טעינה לממשקי File Load של Prio
 """
 
 import argparse
+import codecs
 import os
 import re
 import sys
@@ -1033,20 +1034,41 @@ def _finalize_raw(raw, header_row, expected_sources, name):
     return df
 
 
+def _decode_delimited(data):
+    """מפענח בייטים של קובץ טקסט מופרד.
+
+    בדיקת BOM קודמת לכול: ייצוא "טבלת טעינה" מפריוריטי יוצא
+    UTF-16LE עם BOM, ואילו cp1255 הוא קידוד חד-בייתי שכמעט אינו נכשל אף
+    פעם — ולכן הוא "הצליח" לפענח את הקובץ לג'יבריש עם תו NUL בין כל שתי
+    אותיות. אז מנתח ה-CSV נפל על "new-line character seen in unquoted field"
+    והקובץ הוצג כלא ניתן לקריאה. מאותה סיבה נפסלת כל תוצאה שיש בה NUL.
+    UTF-32 נבדק לפני UTF-16 — ה-BOM שלו פותח באותם שני בייטים.
+    """
+    NUL = chr(0)   # tab-delimited text never contains it; mojibake always does
+    for bom, enc in ((codecs.BOM_UTF8, "utf-8-sig"),
+                     (codecs.BOM_UTF32_LE, "utf-32"), (codecs.BOM_UTF32_BE, "utf-32"),
+                     (codecs.BOM_UTF16_LE, "utf-16"), (codecs.BOM_UTF16_BE, "utf-16")):
+        if data.startswith(bom):
+            try:
+                return data.decode(enc)
+            except (UnicodeDecodeError, LookupError):
+                break
+    for enc in ("cp1255", "utf-8-sig", "utf-8"):  # פריוריטי און-פרם בד"כ windows-1255
+        try:
+            text = data.decode(enc)
+        except UnicodeDecodeError:
+            continue
+        if NUL not in text:
+            return text
+    return data.decode("cp1255", errors="replace")
+
+
 def _read_delimited_raw(source, name):
     """קורא קובץ טקסט מופרד (.txt/.dat/.csv/.tsv). מזהה קידוד ומפריד אוטומטית."""
     import csv
     import io as _io
     data = open(source, "rb").read() if isinstance(source, str) else source.read()
-    text = None
-    for enc in ("cp1255", "utf-8-sig", "utf-8"):  # פריוריטי און-פרם בד"כ windows-1255
-        try:
-            text = data.decode(enc)
-            break
-        except UnicodeDecodeError:
-            continue
-    if text is None:
-        text = data.decode("cp1255", errors="replace")
+    text = _decode_delimited(data)
     sample = "\n".join(text.splitlines()[:20])
     delim = "\t"
     try:  # ניחוש מפריד (טאב / פסיק / נקודה-פסיק / pipe)

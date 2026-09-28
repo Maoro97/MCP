@@ -14,7 +14,6 @@ main.py — כלי הכנת קבצי טעינה לממשקי File Load של Prio
 """
 
 import argparse
-import codecs
 import os
 import re
 import sys
@@ -148,18 +147,9 @@ _ENCODINGS = {"windows-1255": "cp1255", "utf-8": "utf-8"}
 _EXTENSIONS = {"tab": "txt", "comma": "csv", "pipe": "txt"}
 
 
-# סימני קיצור בעברית: גרש/גרשיים (עברי ולטיני, ישר ומסולסל) ונקודת קיצור.
-# "מס' תנועה", "מס׳ תנועה" ו-"מס. תנועה" הם אותה כותרת, וקובצי פריוריטי/אקסל
-# משתמשים בכל הצורות. בלי נרמול היה צריך למנות כל איות ברשימת הכינויים — ובפועל
-# עמודה לא זוהתה, השדה נשאר ריק, וכל השורות נפסלו.
-_ABBR_MARKS = "'׳’ʼ\"״“”."
-
-
 def _norm_header(text) -> str:
-    """נרמול כותרת עמודה לצורך התאמה (הסרת תווים נסתרים, סימני קיצור ורווחים)."""
-    t = transforms.strip_hidden(str(text))
-    t = "".join(c for c in t if c not in _ABBR_MARKS)
-    return transforms.clean_whitespace(t)
+    """נרמול כותרת עמודה לצורך התאמה (הסרת תווים נסתרים ורווחים מיותרים)."""
+    return transforms.clean_whitespace(transforms.strip_hidden(str(text)))
 
 
 # ---------------------------------------------------------------------------
@@ -416,27 +406,6 @@ def rows_from_dataframe(df, mapping, resolved):
     return rows
 
 
-def apply_upload_constants(mapping, rows, values):
-    """
-    מזרים ערכים קבועים שנבחרו במסך ההעלאה (upload_constants שבמיפוי) לתאים
-    *ריקים בלבד* — ערך שהגיע מעמודת מקור, או שהמיישם הקליד בטבלה, לא נדרס.
-
-    נקראת פעם אחת בזמן בניית השורות (‎_build_grid‎) ולא מתוך evaluate_grid:
-    הזרמה בכל ולידציה הייתה ממלאת מחדש תא שהמיישם רוקן בכוונה.
-    """
-    consts = mapping.get("upload_constants") or {}
-    if not consts:
-        return rows
-    for key, target in consts.items():
-        val = str(values.get(key) or "").strip()
-        if not val:
-            continue                     # ריק = לא מזריקים כלום
-        for row in rows:
-            if _cell_blank(row.get(target)):
-                row[target] = val
-    return rows
-
-
 def _is_zero_amount(value):
     """True אם הערך ריק או שווה מספרית ל-0 (למשל '', '0', '0.00')."""
     s = str(value or "").strip()
@@ -596,14 +565,7 @@ def preprocess_journal_df(df, mapping):
         if acc_col is not None:
             accn = df[acc_col]
             acc_mask = accn.map(lambda v: not _cell_empty(v))
-            # account_ffill מצביע על עמודה לפי *מיקום* ("B"), ולכן בקובץ שאינו
-            # כרטסת הוא תופס עמודה שרירותית — מס' שורה, תאריך — ו-__ACCOUNT__
-            # גובר על עמודת החשבון האמיתית (הוא הכינוי הראשון של ACCNAME).
-            # התכונה המגדירה של כרטסת: מס' החשבון מופיע רק בשורות כותרת-המקטע,
-            # כלומר במיעוט השורות. נמדד על קבצים אמיתיים: כרטסת 8.5%, כל שאר
-            # פריסות היומן 100%. הבדיקה הזו אינה תלויה בזיהוי עמודת מס' התנועה,
-            # ולכן היא חלה גם כשהכותרת שלה לא מוכרת — שם הבאג היה חשוף לגמרי.
-            ok = bool(acc_mask.any()) and float(acc_mask.mean()) <= 0.5
+            ok = bool(acc_mask.any())
             by_t = {c["target"]: c for c in all_columns(mapping)}
             fcol = by_t.get("FNCNUM")
             if ok and fcol:
@@ -629,14 +591,7 @@ def preprocess_journal_df(df, mapping):
         if anchors:
             def _row_ok(r):
                 return all(any(not _cell_empty(r[n]) for n in group) for group in anchors)
-            before = len(df)
             df = df[df.apply(_row_ok, axis=1)].reset_index(drop=True)
-            # הסינון נועד להעיף שורות כותרת/יתרה בכרטסת, אבל ביצוא יומן רגיל
-            # מס' התנועה מופיע לעיתים רק בשורה הראשונה של כל תנועה — ואז הוא
-            # מוחק חצי מהקובץ. בלי החיווי הזה השורות פשוט נעלמו בשקט.
-            if len(df) < before:
-                df.attrs["dropped_rows"] = before - len(df)
-                df.attrs["dropped_by"] = list(require)
 
     # (1b) סינון נוסף אופציונלי לפי כמות הערכים בשורה
     if min_vals:
@@ -703,27 +658,16 @@ def preprocess_journal_df(df, mapping):
     if ccol is None and jc.get("combined_autodetect"):
         ccol = _detect_combined_dc_col(df)
     if ccol is not None:
-        amt, dc, filled = [], [], 0
+        amt, dc = [], []
         for _, row in df.iterrows():
             v = row[ccol]
             if _cell_empty(v):
                 amt.append(""); dc.append("")
                 continue
-            filled += 1
             num = _extract_number(v)
             amt.append(abs(num) if num is not None else "")
             dc.append(_dc_from_text(v))
-        # עמודת "חובה/זכות" שמכילה *רק* את התווית, והסכום יושב בעמודה נפרדת,
-        # היא הפריסה הישראלית הרגילה — ולא עמודה משולבת. combined_source מתאים
-        # לפי *כותרת* בלבד, ולכן בלי הבדיקה הזו הוא היה כותב __AMOUNT_PRIMARY__
-        # ריק, וזה גובר על עמודת הסכום האמיתית (הוא הכינוי הראשון של SUM1) —
-        # כל הסכומים היו מתרוקנים וכל השורות נפסלות. התווית עצמה כן שימושית,
-        # ולכן __DC__ נכתב בנפרד. הסף זהה ל-_detect_combined_dc_col (מחצית).
-        nums = sum(1 for a in amt if a != "")
-        if filled and nums >= 0.5 * filled:
-            df[DERIVED_AMOUNT_PRIMARY] = amt
-        if any(d for d in dc):
-            df[DERIVED_DC] = dc
+        df[DERIVED_AMOUNT_PRIMARY], df[DERIVED_DC] = amt, dc
 
     # (6) עמודות חובה/זכות לפי *כותרת*: קובץ עם עמודות נפרדות שכותרתן מכילה
     #     Credit/Debit (או זכות/חובה) — לכל היותר אחת מהן מכילה מספר בשורה.
@@ -1034,41 +978,20 @@ def _finalize_raw(raw, header_row, expected_sources, name):
     return df
 
 
-def _decode_delimited(data):
-    """מפענח בייטים של קובץ טקסט מופרד.
-
-    בדיקת BOM קודמת לכול: ייצוא "טבלת טעינה" מפריוריטי יוצא
-    UTF-16LE עם BOM, ואילו cp1255 הוא קידוד חד-בייתי שכמעט אינו נכשל אף
-    פעם — ולכן הוא "הצליח" לפענח את הקובץ לג'יבריש עם תו NUL בין כל שתי
-    אותיות. אז מנתח ה-CSV נפל על "new-line character seen in unquoted field"
-    והקובץ הוצג כלא ניתן לקריאה. מאותה סיבה נפסלת כל תוצאה שיש בה NUL.
-    UTF-32 נבדק לפני UTF-16 — ה-BOM שלו פותח באותם שני בייטים.
-    """
-    NUL = chr(0)   # tab-delimited text never contains it; mojibake always does
-    for bom, enc in ((codecs.BOM_UTF8, "utf-8-sig"),
-                     (codecs.BOM_UTF32_LE, "utf-32"), (codecs.BOM_UTF32_BE, "utf-32"),
-                     (codecs.BOM_UTF16_LE, "utf-16"), (codecs.BOM_UTF16_BE, "utf-16")):
-        if data.startswith(bom):
-            try:
-                return data.decode(enc)
-            except (UnicodeDecodeError, LookupError):
-                break
-    for enc in ("cp1255", "utf-8-sig", "utf-8"):  # פריוריטי און-פרם בד"כ windows-1255
-        try:
-            text = data.decode(enc)
-        except UnicodeDecodeError:
-            continue
-        if NUL not in text:
-            return text
-    return data.decode("cp1255", errors="replace")
-
-
 def _read_delimited_raw(source, name):
     """קורא קובץ טקסט מופרד (.txt/.dat/.csv/.tsv). מזהה קידוד ומפריד אוטומטית."""
     import csv
     import io as _io
     data = open(source, "rb").read() if isinstance(source, str) else source.read()
-    text = _decode_delimited(data)
+    text = None
+    for enc in ("cp1255", "utf-8-sig", "utf-8"):  # פריוריטי און-פרם בד"כ windows-1255
+        try:
+            text = data.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    if text is None:
+        text = data.decode("cp1255", errors="replace")
     sample = "\n".join(text.splitlines()[:20])
     delim = "\t"
     try:  # ניחוש מפריד (טאב / פסיק / נקודה-פסיק / pipe)
@@ -1196,23 +1119,18 @@ def resolve_columns(df, columns, overrides=None):
     for col in columns:
         t = col["target"]
         aliases = _source_aliases(col.get("source"))
+        if not aliases:
+            continue  # עמודת ערך קבוע — אין מקור
         required_missing = col.get("required") and col.get("default") in (None, "")
-        # בחירה מפורשת גוברת — *גם* על עמודה בלי source. זה נבדק לפני בדיקת
-        # הכינויים בכוונה: פתיחה מההיסטוריה מעבירה overrides זהותיים לכל שדה
-        # שקיים בתמונת-המצב, וכשהבדיקה הייתה אחרי "if not aliases: continue"
-        # עמודות ידניות (הערות למיישם, תוכנת מקור, סוג תנועה) דולגו — וכל עריכת
-        # תא בהן אבדה בפתיחה מחדש.
-        if t in overrides:
+        if t in overrides:  # בחירה ידנית מהממשק
             val = overrides[t]
             if val and val in valid_cols:
                 resolved[t] = val
             elif required_missing:
                 unmatched_required.append(t)
-            elif aliases:
+            else:
                 unmatched_optional.append(t)
             continue
-        if not aliases:
-            continue  # עמודת ערך קבוע / ידנית — אין מקור ואין מה לפתור
         actual = next((lookup[_norm_header(a)] for a in aliases if _norm_header(a) in lookup), None)
         if actual is not None:
             resolved[t] = actual

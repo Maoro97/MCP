@@ -11,7 +11,6 @@ webapp.py — ממשק וובי מקומי להכנת קבצי טעינה לפר
 """
 
 import base64
-import hashlib
 import hmac
 import io
 import os
@@ -65,14 +64,14 @@ AUTH_MISCONFIGURED = _REQUIRE_AUTH and not AUTH_PASS
 
 # נתיבי JSON (נקראים ב-fetch) — עליהם נחזיר 401/503 במקום הפניה לעמוד התחברות
 _AUTH_JSON_PREFIXES = ("/grid/", "/journal/", "/rates/fetch")
-_AUTH_OPEN_ENDPOINTS = {"login", "logout", "static", "health"}
+_AUTH_OPEN_ENDPOINTS = {"login", "logout", "static"}
 
 
 @app.before_request
 def _require_login():
     # פריסה בענן ללא סיסמה — חוסמים הכל (חוץ מקבצים סטטיים) עד להגדרת APP_PASSWORD.
     if AUTH_MISCONFIGURED:
-        if request.endpoint in ("static", "health"):
+        if request.endpoint == "static":
             return None
         if request.path.startswith(_AUTH_JSON_PREFIXES):
             return jsonify(error="האפליקציה פרוסה בענן ללא סיסמה. הגדר APP_PASSWORD "
@@ -94,19 +93,11 @@ WEB_OUTPUT = os.path.join(core.OUTPUT_DIR, "web")
 os.makedirs(WEB_OUTPUT, exist_ok=True)   # נדרש גם בהרצת production (gunicorn) שלא עוברת דרך __main__
 _RUN_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
-# בקבצים עד גודל זה — *כל* השורות נשלחות לטבלה וניתנות לעריכה.
+# בקבצים עד גודל זה — כל השורות ניתנות לעריכה בטבלה.
 # מעל זה — מוצגות רק השורות השגויות (התקינות נשמרות בשרת) כדי לא להעמיס על הדפדפן.
-#
-# 15,000 = תקרת העבודה שנקבעה בפועל; קובץ גדול מזה מפוצל לאצוות של 15,000.
-# המשקל הנמדד (JOURNAL, 30 עמודות): ~620 בייט לשורה אחרי הקיטום ב-_slim_rows,
-# כלומר ~9MB HTML ל-15,000 שורות (לפני הקיטום זה היה 31.6MB). תמונת-הטבלה
-# להיסטוריה במידה הזו היא 7.6-13.5MB — בתוך תקרת db._MAX_BLOB (25MB), שמדלגת
-# על בלוב גדול ממנה *בשקט*. לכן אין להעלות את התקרה בלי למדוד מחדש את שניהם.
-FULL_GRID_LIMIT = 15000
+FULL_GRID_LIMIT = 1500
 # תקרת שורות שגויות שנשלחות לדפדפן בבת אחת (השאר נכנסות ישירות ל-rejected).
-# שווה ל-FULL_GRID_LIMIT בכוונה: אם הדפדפן מסוגל להציג 15,000 שורות במצב מלא,
-# אין סיבה לקטום שורות *בעייתיות* מתחת למספר הזה ולזרוק אותן בשקט ל-rejected.
-DISPLAY_CAP = FULL_GRID_LIMIT
+DISPLAY_CAP = 8000
 
 # מאגר ריצות בזיכרון (כלי מקומי, משתמש יחיד): run_id -> נתוני הריצה
 RUNS = {}
@@ -359,16 +350,6 @@ def _inject_design_system():
             "theme_head": THEME_HEAD}
 
 
-def _get_run(run_id):
-    """שליפת ריצה + רענון חותמת הזמן. בלי הרענון _prune_runs מפנה את הריצה
-    *הישנה ביותר בהעלאה* ולא את הישנה ביותר בשימוש — כלומר קובץ שעובדים עליו
-    שעה יכול להיפנות בגלל 40 העלאות חדשות."""
-    run = RUNS.get(run_id)
-    if run is not None:
-        run["created"] = time.time()
-    return run
-
-
 def _prune_runs():
     if len(RUNS) > _RUNS_MAX:  # ניקוי ריצות ישנות
         for old in sorted(RUNS, key=lambda k: RUNS[k]["created"])[:len(RUNS) - _RUNS_MAX]:
@@ -418,28 +399,7 @@ def _columns_meta(mapping):
 
 
 def _first_reason(cells):
-    return next((c["error"] for c in cells if c.get("error")), "")
-
-
-# המפתחות האלה הם ~72% ממשקל המנה שנשלחת לדפדפן:
-#   target            — מיותר: הלקוח גוזר אותו מ-GRID.columns[ci]. היישור מובטח
-#                       כי evaluate_grid ו-_columns_meta רצים שניהם על all_columns.
-#   error/warning=None — 30 עמודות × ~30 בייט לשורה, כמעט בכל שורה תקינה.
-# נמדד על JOURNAL (30 עמודות), 15,000 שורות: 31.6MB -> 8.9MB.
-#
-# חייבת להיות הפעולה *האחרונה* לפני ההחזרה לדפדפן: קוראים פנימיים בשרת
-# (core.row_key, core.grid_valid_records, evaluate_grid עצמו) ניגשים ל-target
-# בסאבסקריפט ישיר. אין לקרוא לה מתוך evaluate_grid.
-def _slim_rows(rows):
-    """מקטין את מנת ה-JSON שנשלחת לדפדפן. משנה את השורות במקום ומחזיר אותן."""
-    for r in rows:
-        for c in r["cells"]:
-            c.pop("target", None)
-            if not c.get("error"):
-                c.pop("error", None)
-            if not c.get("warning"):
-                c.pop("warning", None)
-    return rows
+    return next((c["error"] for c in cells if c["error"]), "")
 
 
 def _sample_warnings(mapping, valid_records, limit=40):
@@ -591,9 +551,8 @@ UPLOAD = """
      <input type="text" id="sheet" name="sheet" placeholder="ברירת מחדל: הראשון"></div>
     <div><label for="header_row">שורת כותרת (רשות)</label>
      <input type="number" id="header_row" name="header_row" min="1" placeholder="זיהוי אוטומטי"></div>
-    {# שדות שרלוונטיים רק למסכי תנועות יומן: מטבעות ההסבה + ערכים קבועים לכל
-       השורות. מצב ההתחלה מחושב בשרת לפי המסך שנבחר כברירת מחדל, כדי שלא יהיה
-       הבהוב של השדות לפני שה-JS רץ. ההצגה/הסתרה: syncCur() למטה. #}
+    {# מטבעות ההסבה — רלוונטיים רק למסכי תנועות יומן. מצב ההתחלה מחושב בשרת לפי
+       המסך שנבחר כברירת מחדל, כדי שלא יהיה הבהוב של השדות לפני שה-JS רץ. #}
     {% set jrn0 = screens and screens[0] in journal_screens %}
     <div class="curfld"{% if not jrn0 %} style="display:none"{% endif %}>
      <label for="cur_primary">מטבע ראשי</label>
@@ -603,14 +562,6 @@ UPLOAD = """
      <label for="cur_secondary">מטבע משני (רשות)</label>
      <input type="text" id="cur_secondary" name="cur_secondary" value="USD" autocomplete="off"
             placeholder="ריק = ללא מטבע משני"></div>
-    <div class="curfld"{% if not jrn0 %} style="display:none"{% endif %}>
-     <label for="const_dname">תוכנת מקור</label>
-     <input type="text" id="const_dname" name="const_dname" value="" maxlength="8"
-            autocomplete="off" placeholder="ריק = לא ייכתב"></div>
-    <div class="curfld"{% if not jrn0 %} style="display:none"{% endif %}>
-     <label for="const_transtype">סוג תנועה</label>
-     <input type="text" id="const_transtype" name="const_transtype" value="" maxlength="5"
-            autocomplete="off" placeholder="למשל: מ"></div>
    </div>
    <label>קובץ קלט</label>
    <div class="drop" id="drop"><span class="ico">{{ icon('file',28)|safe }}</span>
@@ -663,8 +614,7 @@ GRID = """
   --tot-bg:var(--surface-3);--tot-fg:var(--muted);
   /* ריחוף ושורה פעילה — נגזרים מהטוקן accent ולכן עובדים בשני מצבי התצוגה */
   --row-hover:color-mix(in srgb,var(--accent) 5%,transparent);
-  --row-sel:color-mix(in srgb,var(--accent) 14%,transparent);
-  --row-pick:color-mix(in srgb,var(--accent) 9%,transparent)}
+  --row-sel:color-mix(in srgb,var(--accent) 14%,transparent)}
  .apphead .ttl h1{margin:0}.apphead .ttl .sub{margin:0}
  .wrap{max-width:1460px;margin:0 auto;padding:22px 18px 90px}
  h1{font-size:23px;font-weight:800;margin:0 0 3px;letter-spacing:-.01em}
@@ -688,17 +638,12 @@ GRID = """
  a.back:hover{color:var(--text)}
  .chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer}.chk input{width:16px;height:16px;accent-color:var(--brand)}
  .banner{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);color:var(--brand);border-radius:12px;padding:11px 15px;margin:8px 0;font-size:14px}
- .tablewrap{overflow:auto;overflow-anchor:none;max-height:calc(100vh - 230px);border:1px solid var(--border);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}
+ .tablewrap{overflow:auto;max-height:calc(100vh - 230px);border:1px solid var(--border);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}
  /* פס-גלילה אופקי עליון — לזוז בין העמודות בלי לרדת לתחתית הטבלה */
  .topscroll{overflow-x:auto;overflow-y:hidden;height:15px;margin-bottom:4px;border:1px solid var(--border);
   border-radius:8px;background:var(--surface-2)}
  .topscroll>div{height:1px}
- /* table-layout:fixed הוא תנאי לגלילה הווירטואלית: תחת auto רוחב העמודות
-    מחושב מהשורות *המצוירות*, ולכן הוא היה קופץ בכל גלילה. width:max-content
-    + min-width:100% ולא width:100%: עם width:100% רוחבים שסכומם אינו רוחב
-    המכל מתפרשים כיחסים, והמדידה שלנו הייתה הופכת ליחס במקום לפיקסלים. */
- table{border-collapse:separate;border-spacing:0;font-size:14px;
-  table-layout:fixed;width:max-content;min-width:100%}
+ table{border-collapse:separate;border-spacing:0;width:100%;font-size:14px}
  th,td{border-bottom:1px solid var(--border);border-left:1px solid var(--border);padding:0;text-align:right;white-space:nowrap}
  th{background:var(--surface-2);padding:10px 12px;position:sticky;top:0;z-index:6}
  th .tgt{font-weight:700}th .src{display:block;font-weight:400;color:var(--muted);font-size:11.5px;direction:ltr}
@@ -710,22 +655,14 @@ GRID = """
  th.col.dragover{background:rgba(99,102,241,.14);box-shadow:inset 0 0 0 2px var(--brand)}
  th.col.dragging{opacity:.4}
  th.rownum,td.rownum{background:var(--surface-2);color:var(--muted);text-align:center;font-size:12px;min-width:44px;padding:6px}
- th.act,td.act{text-align:center;min-width:82px;padding:2px}
- td.act input[type=checkbox],th.act input[type=checkbox]{margin-inline-end:4px;
-  vertical-align:middle;cursor:pointer;accent-color:var(--accent)}
- /* שורות המרווח של הגלילה הווירטואלית — אינן שורות נתונים ואין לצבוע אותן */
- tbody tr.vspacer td{padding:0;border:0;background:transparent}
- tbody tr.vspacer:hover td{background:transparent}
+ th.act,td.act{text-align:center;min-width:66px;padding:2px}
  tbody tr:hover td:not(.bad):not(.warn):not(.ign-cell){background:var(--row-hover)}
  /* השורה הפעילה — חייבת לבוא *אחרי* כלל הריחוף: שני הכללים שקולים בספציפיות
     (:not תורם את ספציפיות הארגומנט) ולכן סדר המקור מכריע. */
- /* שורה מסומנת לקיבוץ. חייבת לבוא *לפני* rowsel כדי שהשורה הפעילה תנצח —
-    אותה תלות סדר-מקור שמתועדת למעלה לגבי hover. */
- tbody tr.rowpick td:not(.bad):not(.warn):not(.ign-cell){background:var(--row-pick)}
  tbody tr.rowsel td:not(.bad):not(.warn):not(.ign-cell){background:var(--row-sel)}
  /* מנצח את tr.rowbad/tr.rowign, אך בלי background — כדי שרקע השגיאה ישרוד */
  tbody tr.rowsel td.rownum{color:var(--accent);font-weight:800;box-shadow:inset 0 0 0 2px var(--accent)}
- td input{border:0;background:transparent;width:100%;min-width:0;padding:9px 11px;font:inherit;color:inherit;outline:none;border-radius:6px}
+ td input{border:0;background:transparent;width:100%;min-width:110px;padding:9px 11px;font:inherit;color:inherit;outline:none;border-radius:6px}
  td.bad{background:var(--bad-bg);position:relative}td.bad input{color:var(--bad-fg);font-weight:600}
  td.bad::after{content:"!";position:absolute;top:2px;left:5px;color:var(--red);font-weight:800;font-size:11px}
  td.warn{background:var(--warn-bg);position:relative}td.warn input{color:var(--warn-fg);font-weight:600}
@@ -764,17 +701,6 @@ GRID = """
  .modal-bg{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:80;align-items:center;justify-content:center}
  .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);
   padding:24px;width:min(440px,92vw)}
- .modal.wide{width:min(580px,93vw)}
- .errlist{display:flex;flex-direction:column;gap:8px;margin:14px 0 4px;max-height:46vh;overflow:auto}
- .erritem{display:flex;align-items:center;gap:10px;text-align:right;width:100%;
-  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);
-  padding:11px 13px;cursor:pointer;font:inherit;color:inherit;transition:.12s}
- .erritem:hover{border-color:var(--accent);background:var(--accent-soft)}
- .erritem .n{background:var(--bad-bg);color:var(--bad-fg);border-radius:999px;
-  padding:2px 10px;font-weight:700;font-size:13px;flex:none}
- .erritem .t{flex:1;font-weight:600}
- .errsample{color:var(--muted);font-size:12.5px;background:var(--surface-2);
-  border:1px dashed var(--border-strong);border-radius:9px;padding:9px 12px;margin:10px 0}
  .modal h3{margin:0 0 8px;font-size:19px}.modal p{margin:0 0 16px;color:var(--muted);font-size:14px}
  .modal input{width:100%;padding:12px 13px;border:1.5px solid var(--border);border-radius:12px;font:inherit;font-size:15px;
   background:var(--surface-2);color:var(--text)}
@@ -818,6 +744,9 @@ GRID = """
   border:1px dashed var(--border-strong);border-radius:9px;padding:7px 11px;margin-top:2px}
  .b-jchk{background:var(--surface);color:var(--text);border:1px solid var(--border-strong)}.b-jchk:hover{background:var(--surface-2)}
  .b-jbal{background:var(--accent);color:var(--accent-fg)}.b-jbal:hover{background:var(--accent-hover)}
+ .bar2{margin-top:-6px;padding:10px 14px}.tool-lbl{font-weight:700;color:var(--muted);font-size:14px}
+ .bar2 .mini{padding:7px 10px;border:1.5px solid var(--border);border-radius:9px;background:var(--surface-2);color:var(--text);font-family:inherit;font-size:14px}
+ .bar2 .mini#bulkval{min-width:200px}
  /* כפתור הסתרת עמודה בכותרת */
  th.col .hidecol{position:absolute;left:14px;top:3px;cursor:pointer;color:var(--muted);opacity:0;
   font-size:12px;line-height:1;padding:2px 4px;border-radius:5px;transition:.12s;z-index:5}
@@ -833,7 +762,7 @@ GRID = """
  .hchip:hover{border-color:var(--accent);color:var(--accent)}
  .hchip b{font-size:14px;line-height:1}
  tr.filterrow th{padding:4px 6px;position:sticky;top:var(--hdr-h,42px);z-index:5}
- tr.filterrow input{width:100%;min-width:0;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font:inherit;font-size:13px}
+ tr.filterrow input{width:100%;min-width:90px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font:inherit;font-size:13px}
 </style></head><body>
  <header class="topbar">
   <div style="display:flex;align-items:center;gap:12px;min-width:0">
@@ -862,6 +791,12 @@ GRID = """
   <button class="b-save" onclick="saveLoad()" title="שמור את הטעינה בהיסטוריה לאחזור עתידי">{{ icon('check-circle',15)|safe }}שמירה בהיסטוריה</button>
   <a class="back" href="/history">{{ icon('history',15)|safe }}היסטוריה</a>
  </div>
+ <div class="bar bar2">
+  <span class="tool-lbl">עדכון גורף</span>
+  <select id="bulkcol" class="mini"></select>
+  <input id="bulkval" class="mini" placeholder="ערך חדש לכל השורות">
+  <button class="b-check" onclick="bulkUpdate()">החל על הכל</button>
+ </div>
  <div id="banner"></div><div id="mapping"></div><div id="journalbar"></div>
  <div id="hiddenbar"></div><div id="toast" class="toast"></div>
  <div class="legend">
@@ -875,13 +810,6 @@ GRID = """
  <div class="tablewrap"><table id="grid"></table></div>
  <div class="pager" id="pager"></div>
  <p class="hint" id="dlarea"></p>
- <div id="errmodal" class="modal-bg" onclick="if(event.target===this)closeErrFix()">
-  <div class="modal wide">
-   <h3>🔧 תיקון שגיאות</h3>
-   <div id="errbody"></div>
-   <div class="modal-btns"><button class="b-check" onclick="closeErrFix()">סגירה</button></div>
-  </div>
- </div>
  <div id="savemodal" class="modal-bg" onclick="if(event.target===this)closeSaveModal()">
   <div class="modal">
    <h3>💾 שמירה בהיסטוריה</h3>
@@ -898,35 +826,9 @@ GRID = """
  </div>
 <script>
 const GRID = {{ grid|tojson }};
-// --- גלילה וירטואלית ---
-// כל השורות נגללות ברצף, אך מצוירות רק אלו שנראות (+רזרבה), עם שורות-מרווח
-// למעלה ולמטה ששומרות על גובה הגלילה האמיתי. בלי זה 15,000 שורות = ~1.4 מיליון
-// אלמנטים ו-110MB של HTML בהשמה אחת ל-innerHTML.
-const OVERSCAN = 10;
-let ROW_H   = 0;            // גובה שורה — אחיד כי th,td הם white-space:nowrap
-let vStart  = 0, vEnd = 0;  // גבולות החלון המצויר (אינדקסים ברשימת המוצגות)
-let DISP    = null;         // מטמון displayed()
-let DISP_IX = null;         // gi -> אינדקס תצוגה
-let FILTERED = false;       // האם פעיל סינון/onlyProblems (קובע מסלול מהיר)
-// סדר התצוגה ההתחלתי לפי view_order שבמיפוי — תצוגה בלבד, אינו סדר הייצוא.
-// שדה שאינו ברשימה נספח בסוף בסדר המיפוי; שם ברשימה שאינו קיים במסך מדולג.
-// seen מוחזק על ci (ולא על target) כי all_columns() עלול להחזיר target כפול
-// ממסך-משנה, וכל עמודה חייבת להופיע בדיוק פעם אחת.
-function initColOrder(){
-  const all=GRID.columns.map((_,i)=>i), want=GRID.view_order||[];
-  if(!want.length) return all;
-  const byT=new Map();
-  GRID.columns.forEach((c,i)=>{ if(!byT.has(c.target)) byT.set(c.target,i); });
-  const seen=new Set(), out=[];
-  for(const t of want){
-    const i=byT.get(t);
-    if(i===undefined){ console.warn('view_order: אין עמודה בשם',t); continue; }
-    if(!seen.has(i)){ out.push(i); seen.add(i); }
-  }
-  for(const i of all) if(!seen.has(i)) out.push(i);
-  return out;
-}
-let colOrder = initColOrder();                  // סדר תצוגה בלבד
+const PAGE_SIZE = 100;
+let page = 0;
+let colOrder = GRID.columns.map((_, i) => i);   // סדר תצוגה/ייצוא של העמודות
 let colWidths = {};                             // רוחב מותאם לעמודה (ci -> px)
 let colFilter = {};                             // סינון לכל עמודה (ci -> טקסט)
 let hiddenCols = new Set();                     // עמודות שהוסתרו (לא מוצגות ולא מיוצאות)
@@ -941,113 +843,23 @@ let restore  = null;   // צילום הפוקוס שנלכד לפני render/pai
 let HDR_H    = 0;      // גובה שורת הכותרת הראשונה (px) — לשורת הסינון הדביקה
 let HDR_ALL  = 0;      // גובה כל ה-thead — היסט הגלילה כדי לא להסתיר תא מתחתיו
 let editMode = false;  // F2 — במצב עריכה החצים האופקיים מזיזים סמן ולא עוברים תא
-let STATS    = null;   // מונים מקובצים, מחושבים בעצלתיים ומתאפסים בכל שינוי
 
-// כל השמה ל-GRID.rows חייבת לעבור כאן. r.valid ו-c.warning משתנים *רק* מתשובת
-// שרת (הקלדה/fillDown/undo משנים ערכים בלבד), ולכן דגל שמחושב פעם
-// אחת לכל שורה הוא נכון. r.ignore כן משתנה בלקוח ולכן *אינו* חלק מהדגל.
-// בלי זה, 15,000 שורות = ~1.4 מיליון קריאות תא בכל הקשה בשדה סינון.
-function setRows(rows){
-  // אורך זהה = משמעות ה-gi נשמרה (זה החוזה של /journal/* ו-/grid/validate),
-  // ולכן הבחירה שורדת: אפשר לקבץ ואז ללחוץ «איזון תנועות» בלי לאבד אותה.
-  const same = GRID.rows && rows && GRID.rows.length===rows.length;
-  GRID.rows = rows || [];
-  for(const r of GRID.rows) r._warn = r.cells.some(c=>c.warning);
-  if(!same && typeof SEL!=='undefined') clearSel();
-  STATS = null; invalidateDisp();
-  return GRID.rows;
+// עדכון גורף — קובע ערך זהה לכל השורות בעמודה נבחרת
+function fillBulkSelect(){
+  const sel=$('bulkcol'); if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML=GRID.columns.map((c,ci)=>c.constant?'':'<option value="'+ci+'">'+esc(c.target)+'</option>').join('');
+  if(cur) sel.value=cur;
 }
-function bumpStats(){ STATS = null; invalidateDisp(); }   // שינוי ignore / מחיקת שורה
-
-// --- בחירת שורות מרובה (לקיבוץ תנועה) ---
-// מוחזק על gi, בעקביות עם activeGi/delRow/fillDown. הסימון *נגזר* מ-SEL בזמן
-// buildRows ולעולם אינו נשמר ב-DOM — ולכן שורה שחוזרת לחלון חוזרת מסומנת בחינם.
-let SEL=new Set(), SEL_ANCHOR=null;
-function clearSel(){ SEL.clear(); SEL_ANCHOR=null; syncSelBar(); }
-function syncSelBar(){
-  const n=SEL.size, b=$('btn-group'), c=$('selinfo');
-  if(b) b.disabled = n<2;
-  if(c){
-    c.style.display = n ? 'inline-flex' : 'none';
-    c.innerHTML='נבחרו '+n+' שורות <b title="נקה בחירה" style="cursor:pointer"'+
-                ' onclick="clearSel();renderBody()">✕</b>';
-  }
-  const h=$('selall');
-  if(h){ h.checked = n>0 && n===dispCount(); h.indeterminate = n>0 && n<dispCount(); }
-}
-// שינוי בתיבת סימון. shift מרחיב טווח מהעוגן האחרון — בסדר *התצוגה*, שהוא מה
-// שהמשתמש רואה, ולא בסדר gi.
-function pickRow(gi,on,shift){
-  if(shift && SEL_ANCHOR!=null){
-    const a=displayIdx(SEL_ANCHOR), b=displayIdx(gi);
-    if(a>=0 && b>=0){
-      for(let i=Math.min(a,b); i<=Math.max(a,b); i++){
-        const t=rowAt(i); if(t){ if(on) SEL.add(t[0]); else SEL.delete(t[0]); }
-      }
-      syncSelBar(); renderBody(); return;
-    }
-  }
-  if(on) SEL.add(gi); else SEL.delete(gi);
-  SEL_ANCHOR=gi;
-  syncSelBar(); renderBody();
-}
-function pickAll(on){
-  SEL.clear();
-  if(on){
-    const n=dispCount();
-    if(n>5000 && !confirm('לסמן '+n.toLocaleString()+' שורות?')){ syncSelBar(); return; }
-    for(let i=0;i<n;i++){ const t=rowAt(i); if(t) SEL.add(t[0]); }
-  }
-  SEL_ANCHOR=null; syncSelBar(); renderBody();
-}
-// עמודת מס' התנועה נגזרת מהמיפוי ולא מקודדת קשיח
-function ciOf(t){
-  if(!t) return -1;
-  for(let i=0;i<GRID.columns.length;i++) if(GRID.columns[i].target===t) return i;
-  return -1;
-}
-function groupTxn(){
-  const ci=ciOf((GRID.journal||{}).txn);
-  if(ci<0){ flash('err','לא נמצאה עמודת מס\' תנועת היומן.'); return; }
-  const gis=[...SEL].sort((a,b)=>a-b);        // "הראשונה" = העליונה, לא הראשונה שנלחצה
-  if(gis.length<2){ flash('err','יש לבחור לפחות שתי שורות.'); return; }
-  const first=GRID.rows[gis[0]] && GRID.rows[gis[0]].cells[ci];
-  const val=first ? String(first.value||'') : '';
-  if(!val.trim()){ flash('err','לשורה העליונה שנבחרה אין מס\' תנועה — הזן ערך ואז קבץ.'); return; }
+function bulkUpdate(){
+  const sel=$('bulkcol'); if(!sel||sel.value==='') return;
+  const ci=+sel.value, val=($('bulkval')||{}).value||'';
   const changes=[];
-  for(const gi of gis){
-    const c=GRID.rows[gi] && GRID.rows[gi].cells[ci];
-    if(c && c.value!==val){ changes.push({gi:gi,prev:c.value}); c.value=val; }
-  }
-  if(!changes.length){ flash('err','כל השורות שנבחרו כבר באותה תנועה.'); return; }
-  // ci אחד בלבד — בדיוק מה ש-undo() יודע לשחזר
-  pushUndo({type:'group',ci:ci,changes:changes,
-            label:'קיבוץ '+gis.length+' שורות לתנועה «'+val+'»'});
-  render();
-  flash('ok','קובצו '+gis.length+' שורות לתנועה «'+esc(val)+'». '+
-            'מספור השורות נשאר רץ על כל הקובץ.');
+  GRID.rows.forEach((r,idx)=>{ if(r.cells[ci] && r.cells[ci].value!==val){ changes.push({gi:idx,prev:r.cells[ci].value}); r.cells[ci].value=val; } });
+  if(changes.length) pushUndo({type:'bulk',ci,changes,label:'עדכון גורף «'+(GRID.columns[ci].title||GRID.columns[ci].target)+'» ('+changes.length+' שורות)'});
+  render(); flash('ok','עודכנו '+changes.length+' שורות בעמודה '+GRID.columns[ci].target+'.');
 }
-function stats(){
-  if(STATS) return STATS;
-  let invalid=0, warned=0, ignored=0, problem=0;
-  for(const r of GRID.rows){
-    if(r.ignore){ ignored++; continue; }
-    if(!r.valid) invalid++;
-    if(r._warn) warned++;
-    if(!r.valid || r._warn) problem++;
-  }
-  STATS = {invalid:invalid, warned:warned, ignored:ignored, problem:problem};
-  return STATS;
-}
-
-// השהיית-זנב על ציור הגוף בלבד: ערך השדה מתעדכן מיידית ולכן ההקלדה לא מרגישה
-// איטית, אבל displayed() (שהוא O(שורות)) אינו רץ על כל תו.
-let _ftmr=null;
-function setFilter(ci,v){
-  if(v) colFilter[ci]=v; else delete colFilter[ci];
-  clearTimeout(_ftmr);
-  _ftmr=setTimeout(()=>{ resetScroll(); renderBody(); },120);
-}
+function setFilter(ci,v){ if(v) colFilter[ci]=v; else delete colFilter[ci]; page=0; renderBody(); }
 function matchesFilters(r){
   for(const ci in colFilter){
     const cell=r.cells[ci];
@@ -1057,39 +869,9 @@ function matchesFilters(r){
 }
 
 // --- שינוי רוחב עמודה בגרירה ---
-// תחת table-layout:fixed הרוחב נקבע ע"י ה-<col>, ולכן שינוי רוחב הוא כתיבה
-// אחת במקום מעבר על כל שדות העמודה.
 function applyWidth(ci,w){
-  const col=document.querySelector('#grid col[data-ci="'+ci+'"]'); if(col) col.style.width=w+'px';
-  const th=document.querySelector('th[data-ci="'+ci+'"]'); if(th) th.style.width=w+'px';
-}
-
-// --- קיבוע רוחב העמודות ---
-// נמדד פעם אחת על *מדגם פרוס מכל הקובץ* ולא על החלון הראשון: עמודה שערכיה
-// הארוכים יושבים בשורה 9,000 הייתה נשארת צרה לנצח. W_MAX מונע מעמודת טקסט
-// חופשי (הערות/פרטים) לבלוע את כל הרוחב.
-let colAuto={};                       // ci -> רוחב שנמדד (px)
-const W_MIN=90, W_MAX=360, W_ACT=96, W_NUM=48;
-function measureSample(){
-  const t=$('grid'), b=$('gridbody');
-  if(!t||!b||!t.tHead||!GRID.rows.length) return;
-  const n=GRID.rows.length, k=Math.min(200,n), idx=[];
-  for(let i=0;i<k;i++) idx.push(Math.floor(i*n/k));
-  const keep=b.innerHTML;
-  t.style.tableLayout='auto';
-  b.innerHTML=buildRows(idx.map(i=>[i,GRID.rows[i]]),GRID.columns);
-  for(const th of t.tHead.rows[0].cells){
-    const a=th.getAttribute('data-ci'); if(a===null) continue;
-    colAuto[+a]=Math.max(W_MIN,Math.min(W_MAX,Math.round(th.getBoundingClientRect().width)));
-  }
-  t.style.tableLayout='fixed';
-  b.innerHTML=keep;
-}
-function colgroupHtml(){
-  let h='<colgroup><col style="width:'+W_ACT+'px"><col style="width:'+W_NUM+'px">';
-  for(const ci of visCols())
-    h+='<col data-ci="'+ci+'" style="width:'+(colWidths[ci]||colAuto[ci]||140)+'px">';
-  return h+'</colgroup>';
+  document.querySelectorAll('input[data-ci="'+ci+'"]').forEach(i=>i.style.minWidth=w+'px');
+  const th=document.querySelector('th[data-ci="'+ci+'"]'); if(th) th.style.minWidth=w+'px';
 }
 function startResize(e,ci){
   e.preventDefault(); e.stopPropagation();
@@ -1107,144 +889,42 @@ function startResize(e,ci){
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 function overall(){
-  // שקול בדיוק לספירה הישנה: good == כל השורות פחות השגויות-שאינן-מסומנות
-  const s=stats();
+  let good=0,bad=0;
+  for(const r of GRID.rows){ if(r.valid || r.ignore) good++; else bad++; }
   return {total:GRID.server_valid+GRID.rows.length+GRID.overflow,
-          valid:GRID.server_valid+GRID.rows.length-s.invalid,
-          invalid:s.invalid+GRID.overflow};
-}
-// המטמון מתבטל פעם אחת לכל פעולת משתמש (render/paintBody/setRows/bumpStats),
-// בדיוק כמו שהיום displayed() מחושב מחדש. מטפל הגלילה *לעולם* אינו מבטל אותו,
-// ולכן גלילה היא O(חלון) ולא O(שורות).
-function invalidateDisp(){ DISP=null; DISP_IX=null; }
-function syncFiltered(){ FILTERED = onlyProblems || Object.keys(colFilter).length>0; }
-function dispList(){
-  if(!DISP){ DISP=displayed(); DISP_IX=new Map(); DISP.forEach((p,i)=>DISP_IX.set(p[0],i)); }
-  return DISP;
-}
-function dispCount(){ return FILTERED ? dispList().length : GRID.rows.length; }
-function rowAt(i){
-  if(!FILTERED){ const r=GRID.rows[i]; return r?[i,r]:null; }
-  return dispList()[i]||null;
-}
-function displayIdx(gi){
-  if(gi==null) return -1;
-  if(!FILTERED) return (gi>=0 && gi<GRID.rows.length)?gi:-1;
-  dispList(); const i=DISP_IX.get(gi); return i===undefined?-1:i;
+          valid:GRID.server_valid+good, invalid:bad+GRID.overflow};
 }
 function displayed(){
-  const out=[], filt=Object.keys(colFilter).length>0;
+  const out=[];
   GRID.rows.forEach((r,gi)=>{
-    if(onlyProblems && (r.ignore || (r.valid && !r._warn))) return;
-    if(filt && !matchesFilters(r)) return;
-    out.push([gi,r]);
+    const attention = !r.ignore && (!r.valid || r.cells.some(c=>c.warning));
+    if((!onlyProblems || attention) && matchesFilters(r)) out.push([gi,r]);
   });
   return out;
 }
 // כפתור-toggle: מציג הכל / רק שורות בעייתיות. בקובץ גדול (errors) — טוען קודם את הכל מהשרת.
 function toggleView(){
-  // במצב errors לדפדפן *אין* את השורות התקינות, ולכן מושכים אותן מהשרת קודם.
-  // אחרי showAll() ה-toggle מתהפך חופשי לשני הכיוונים.
-  if(GRID.mode==='errors' && !onlyProblems){ showAll(); return; }
-  onlyProblems=!onlyProblems; resetScroll(); render();
+  if(GRID.mode==='errors'){ showAll(); return; }
+  onlyProblems=!onlyProblems; page=0; render(); updateToggleBtn();
 }
 function updateToggleBtn(){
   const b=$('toggleview'); if(!b) return;
-  if(onlyProblems){
-    b.innerHTML='{{ icon("check-list",15)|safe }}<span>הצג את כל השורות</span>';
-    b.title='חזרה לתצוגת כל '+GRID.rows.length.toLocaleString()+' השורות'; return;
-  }
-  if(GRID.mode==='errors'){
-    // אומרים במפורש שזו נסיעה לשרת, כדי שההמתנה לא תהיה הפתעה
-    b.innerHTML='{{ icon("check-list",15)|safe }}<span>טען את כל השורות מהשרת</span>';
-    b.title='הקובץ גדול מהתקרה — השורות התקינות שמורות בשרת וייטענו לטבלה'; return;
-  }
-  const n=stats().problem;   // המקום היחיד שבו המספר הזה נראה במצב "הכל מוצג"
-  b.innerHTML='{{ icon("search",15)|safe }}<span>הצג רק שורות בעייתיות ('+n+')</span>';
-  b.title = n? '' : 'אין שורות בעייתיות';
+  b.innerHTML = (GRID.mode==='errors' || onlyProblems)
+    ? '{{ icon("check-list",15)|safe }}<span>הצג את כל השורות</span>'
+    : '{{ icon("search",15)|safe }}<span>הצג רק שורות בעייתיות</span>';
 }
-// שורת גוף i תופסת [i*h,(i+1)*h) במרחב התוכן של .tablewrap, והכותרת הדביקה
-// מכסה את HDR_ALL הפיקסלים הראשונים של הצפייה — ולכן ההיסטים מתבטלים זה את זה.
-function windowFor(){
-  const wrap=document.querySelector('.tablewrap');
-  const h=ROW_H||37, n=dispCount();
-  const st=wrap?wrap.scrollTop:0, ch=wrap?wrap.clientHeight:600;
-  let a=Math.floor(st/h)-OVERSCAN;        if(a<0) a=0;
-  let b=Math.ceil((st+ch)/h)+OVERSCAN;    if(b>n) b=n;
-  if(b<a) b=a;
-  return {start:a,end:b,count:n,padTop:a*h,padBottom:Math.max(0,(n-b)*h)};
-}
-// שורת המרווח *אינה* נושאת data-gi, ולכן היא בלתי-נראית לכל חיפושי השורות
-// (markActiveRow/captureFocus/focusCell/gridKey/gridFocus) מעצם הבנייה.
-function vspacer(px,nc){
-  return px>0 ? '<tr class="vspacer"><td colspan="'+nc+'" style="height:'+px+
-                'px;padding:0;border:0"></td></tr>' : '';
-}
-function resetScroll(){
-  const wrap=document.querySelector('.tablewrap');
-  if(wrap) wrap.scrollTop=0;
-  vStart=0; vEnd=0;
-}
-function scrollToDisplayIdx(i){
-  const wrap=document.querySelector('.tablewrap'); if(!wrap) return;
-  const h=ROW_H||37, top=i*h, bot=top+h;
-  const view=wrap.clientHeight-HDR_ALL;
-  if(top < wrap.scrollTop) wrap.scrollTop=top;
-  else if(bot > wrap.scrollTop+view) wrap.scrollTop=bot-view;
-  paintWindow(true);   // אירוע ה-scroll טרם נורה — מציירים מיד
-}
-// שמירת הפוקוס סביב החלפת גוף הטבלה. מצומצם בכוונה לעומת captureFocus/
-// restoreFocus: בלי קפיצת עמודים ובלי nearestDisplayed — רק אותו תא, אם הוא
-// עדיין בחלון. בלי זה, גלילה שנגרמה מ-ensureVisible הייתה הורגת את השדה שהתמקד.
-function keepFocusThrough(fn){
-  const el=document.activeElement;
-  let gi=null, ci=null, a=null, b=null;
-  const body=$('gridbody');
-  if(el && el.tagName==='INPUT' && body && body.contains(el) && el.hasAttribute('data-ci')){
-    const tr=el.closest('tr[data-gi]');
-    if(tr){ gi=+tr.dataset.gi; ci=+el.getAttribute('data-ci');
-            try{ a=el.selectionStart; b=el.selectionEnd; }catch(_){} }
-  }
-  fn();
-  if(gi==null) return;
-  const nb=$('gridbody'); if(!nb) return;
-  const inp=nb.querySelector('tr[data-gi="'+gi+'"] input[data-ci="'+ci+'"]');
-  if(!inp) return;
-  inp.focus({preventScroll:true});
-  if(a!=null){ try{ inp.setSelectionRange(a,b); }catch(_){} }
-}
-function paintWindow(force){
-  const w=windowFor();
-  // יציאה מוקדמת כשהחלון לא זז: דחיפת גלילה של כמה פיקסלים (ensureVisible)
-  // כמעט אף פעם אינה מזיזה אותו, ולכן הפוקוס פשוט לא נוגע.
-  if(!force && w.start===vStart && w.end===vEnd) return;
-  vStart=w.start; vEnd=w.end;
-  const b=$('gridbody'); if(!b) return;
-  const nc=visCols().length+2, rows=[];
-  for(let i=w.start;i<w.end;i++){ const t=rowAt(i); if(t) rows.push(t); }
-  keepFocusThrough(()=>{
-    b.innerHTML=vspacer(w.padTop,nc)+buildRows(rows,GRID.columns)+vspacer(w.padBottom,nc);
-  });
-  markActiveRow(); syncSelBar();
-  if(!ROW_H){
-    const tr=b.querySelector('tr[data-gi]');
-    if(tr){ ROW_H=Math.round(tr.getBoundingClientRect().height)||37; paintWindow(true); }
-  }
-}
-let vTick=false;
-function onVScroll(){
-  if(vTick) return; vTick=true;
-  requestAnimationFrame(()=>{ vTick=false; paintWindow(); });
+function computeSlice(){
+  const disp=displayed();
+  const pages=Math.max(1,Math.ceil(disp.length/PAGE_SIZE));
+  if(page>=pages) page=pages-1; if(page<0) page=0;
+  return {disp,pages,slice:disp.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE)};
 }
 function buildRows(slice,cols){
   let h='';
   for(const [gi,r] of slice){
-    const problem = !r.valid || r._warn;
-    let rowcls = r.ignore ? 'rowign' : (r.valid ? '' : 'rowbad');
-    if(SEL.has(gi)) rowcls += ' rowpick';
-    let act='<input type="checkbox" data-sel="'+gi+'" title="בחר שורה (Shift לטווח)"'+
-            (SEL.has(gi)?' checked':'')+'>'+
-            '<span class="del" title="מחק שורה" onclick="delRow('+gi+')">🗑</span>';
+    const problem = !r.valid || r.cells.some(c=>c.warning);
+    const rowcls = r.ignore ? 'rowign' : (r.valid ? '' : 'rowbad');
+    let act='<span class="del" title="מחק שורה" onclick="delRow('+gi+')">🗑</span>';
     if(problem) act+='<span class="ign" title="'+(r.ignore?'בטל התעלמות':'התעלם מהבעיה — ייצא בכל זאת')+
        '" onclick="toggleIgnore('+gi+')">'+(r.ignore?'↩':'🚫')+'</span>';
     h+='<tr data-gi="'+gi+'" class="'+rowcls+'"><td class="act">'+act+'</td><td class="rownum">'+r.excel_row+'</td>';
@@ -1256,7 +936,7 @@ function buildRows(slice,cols){
       else if(cell.warning) cls='warn '+cls;
       const title=cell.error?' title="'+esc(cell.error)+'"':(cell.warning?' title="'+esc(cell.warning)+'"':'');
       const ro=c.constant?' readonly':'';
-      const wst='';   // הרוחב נקבע ב-<colgroup>; min-width פר-תא היה גולש מהתא
+      const wst=colWidths[ci]?' style="min-width:'+colWidths[ci]+'px"':'';
       const fd=c.constant?'':'<span class="filldown" title="מלא ערך זה לכל השורות בעמודה" onclick="fillDown('+gi+','+ci+')">⤓</span>';
       h+='<td class="'+cls+'"'+title+'><input data-ci="'+ci+'" value="'+esc(cell.value)+'"'+ro+wst+
          ' onfocus="cellFocus('+gi+','+ci+',this.value)"'+
@@ -1272,12 +952,10 @@ function buildRows(slice,cols){
 function render(){
   captureFocus();                      // חייב להיות ראשון — לפני שה-DOM נמחק
   const cols=GRID.columns;
-  syncFiltered(); invalidateDisp();
-  let h=colgroupHtml()+'<thead><tr><th class="act">'+
-        '<input type="checkbox" id="selall" title="סמן / נקה את כל השורות המוצגות"'+
-        ' onchange="pickAll(this.checked)"></th><th class="rownum">#</th>';
+  const {disp,pages,slice}=computeSlice();
+  let h='<thead><tr><th class="act"></th><th class="rownum">#</th>';
   for(const ci of visCols()){ const c=cols[ci];
-    const w=colWidths[ci]?' style="width:'+colWidths[ci]+'px"':'';
+    const w=colWidths[ci]?' style="min-width:'+colWidths[ci]+'px"':'';
     h+='<th class="col" draggable="true" data-ci="'+ci+'"'+w+' ondragstart="dragStart(event,'+ci+
        ')" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropCol(event,'+ci+
        ')" ondragend="dragEnd(event)"><span class="rez" title="גרור לשינוי רוחב" onmousedown="startResize(event,'+ci+
@@ -1291,11 +969,10 @@ function render(){
   h+='<tr class="filterrow"><th class="act"></th><th class="rownum">🔎</th>';   // סינון קבוע לכל עמודה
   for(const ci of visCols())
     h+='<th><input data-fci="'+ci+'" value="'+esc(colFilter[ci]||'')+'" placeholder="סנן" oninput="setFilter('+ci+',this.value)"></th>';
-  h+='</tr></thead><tbody id="gridbody"></tbody>';
+  h+='</tr></thead><tbody id="gridbody">'+buildRows(slice,cols)+'</tbody>';
   $('grid').innerHTML=h;
   measureHeader();                     // --hdr-h לשורת הסינון הדביקה
-  vStart=vEnd=0; paintWindow(true);    // גוף הטבלה מצויר בחלון, לא בעמוד
-  renderPager(dispCount());
+  renderPager(disp.length,pages);
   updateCounts();
   renderHiddenBar();
   try{ syncScroll(); }catch(e){}
@@ -1304,10 +981,9 @@ function render(){
 // ציור גוף הטבלה בלבד (בלי לבנות מחדש את הכותרת/שורת הסינון)
 function paintBody(){
   const b=$('gridbody'); if(!b) return;
-  syncFiltered(); invalidateDisp();
-  vStart=vEnd=0;                 // מכריח ציור מחדש גם אם הגבולות במקרה זהים
-  paintWindow(true);
-  renderPager(dispCount());
+  const {disp,pages,slice}=computeSlice();
+  b.innerHTML=buildRows(slice,GRID.columns);
+  renderPager(disp.length,pages);
   updateCounts();
 }
 // עדכון רק גוף הטבלה (בלי לבנות מחדש את שורת הסינון) — כדי לשמור פוקוס בכתיבה
@@ -1341,7 +1017,7 @@ function captureFocus(){
 }
 // השורה המוצגת הקרובה ל-gi המבוקש (אחרי מחיקה/סינון/מעבר עמוד) + מקומה ברשימה
 function nearestDisplayed(gi){
-  const disp=dispList(); if(!disp.length) return null;
+  const disp=displayed(); if(!disp.length) return null;
   for(let i=0;i<disp.length;i++) if(disp[i][0]>=gi) return {gi:disp[i][0], idx:i};
   return {gi:disp[disp.length-1][0], idx:disp.length-1};
 }
@@ -1367,7 +1043,8 @@ function restoreFocus(){
   let inp=b.querySelector('tr[data-gi="'+r.gi+'"] input[data-ci="'+r.ci+'"]');
   if(!inp){                                  // נמחקה / סוננה / עברה עמוד
     const n=nearestDisplayed(r.gi); if(!n){ activeGi=null; markActiveRow(); return; }
-    scrollToDisplayIdx(n.idx);               // paintWindow, לא render — למנוע רקורסיה
+    const p=Math.floor(n.idx/PAGE_SIZE);
+    if(p!==page){ page=p; paintBody(); }     // paintBody ולא render — למנוע רקורסיה
     inp=$('gridbody').querySelector('tr[data-gi="'+n.gi+'"] input[data-ci="'+r.ci+'"]');
   }
   if(!inp){ markActiveRow(); return; }
@@ -1394,13 +1071,8 @@ function ensureVisible(el){
 // למודל בכל תו ואין undo, ולכן הקשה אחת בטעות הייתה מוחקת תא שלם.
 function focusCell(gi,ci,mode){
   const b=$('gridbody'); if(!b) return false;
+  const inp=b.querySelector('tr[data-gi="'+gi+'"] input[data-ci="'+ci+'"]');
   if(editMode) setEdit(false);   // ניווט תמיד יוצא ממצב עריכה
-  let inp=b.querySelector('tr[data-gi="'+gi+'"] input[data-ci="'+ci+'"]');
-  if(!inp){                      // השורה מחוץ לחלון — לגלול, לצייר, ואז למקד
-    const i=displayIdx(gi); if(i<0) return false;
-    scrollToDisplayIdx(i);
-    inp=$('gridbody').querySelector('tr[data-gi="'+gi+'"] input[data-ci="'+ci+'"]');
-  }
   if(!inp) return false;
   activeGi=gi; activeCi=ci;
   inp.focus({preventScroll:true});
@@ -1411,20 +1083,24 @@ function focusCell(gi,ci,mode){
   ensureVisible(inp); markActiveRow();
   return true;
 }
-// מעבר שורה באותה עמודה. focusCell מטפל ביעד שמחוץ לחלון (גולל ומצייר),
-// ולכן ענפי קפיצת-העמוד שהיו כאן נעלמו.
+function sliceIdx(slice,gi){ for(let i=0;i<slice.length;i++) if(slice[i][0]===gi) return i; return -1; }
+// מעבר שורה באותה עמודה; בקצה העמוד מדלג לעמוד הבא/הקודם ונוחת בשורה הראשונה/אחרונה
 function moveRow(gi,ci,d){
-  const i=displayIdx(gi); if(i<0) return false;
-  const ni=i+d; if(ni<0||ni>=dispCount()) return false;
-  const t=rowAt(ni); return t ? focusCell(t[0],ci,'end') : false;
+  const {pages,slice}=computeSlice();
+  const i=sliceIdx(slice,gi); if(i<0) return false;
+  const ni=i+d;
+  if(ni>=0 && ni<slice.length) return focusCell(slice[ni][0],ci,'end');
+  if(d>0 && page<pages-1){ page++; render(); const s=computeSlice().slice;
+                           return s.length ? focusCell(s[0][0],ci,'end') : false; }
+  if(d<0 && page>0){ page--; render(); const s=computeSlice().slice;
+                     return s.length ? focusCell(s[s.length-1][0],ci,'end') : false; }
+  return false;   // קצה הטבלה — לא עושים כלום
 }
-// PageUp/PageDown = קפיצת *מסך*, כדי שישמרו על משמעותם בלי עמודים
-function pageJump(d,ci,gi){
-  const wrap=document.querySelector('.tablewrap');
-  const per=Math.max(1,Math.floor(((wrap?wrap.clientHeight:600)-HDR_ALL)/(ROW_H||37)));
-  const i=displayIdx(gi); if(i<0) return;
-  let ni=i+d*per; if(ni<0) ni=0; if(ni>=dispCount()) ni=dispCount()-1;
-  const t=rowAt(ni); if(t) focusCell(t[0],ci,'end');
+function pageJump(d,ci){
+  const {pages}=computeSlice(); const np=page+d;
+  if(np<0||np>=pages) return;
+  page=np; render(); const s=computeSlice().slice;
+  if(s.length) focusCell(s[0][0],ci,'end');
 }
 function gridKey(e){
   if(e.isComposing || e.altKey || e.metaKey) return;   // הקלדה עם IME / קיצורי מערכת
@@ -1452,8 +1128,8 @@ function gridKey(e){
   if(k==='ArrowDown' ){ e.preventDefault(); setEdit(false); moveRow(gi,ci, 1); return; }
   if(k==='ArrowUp'   ){ e.preventDefault(); setEdit(false); moveRow(gi,ci,-1); return; }
   if(k==='Enter'     ){ e.preventDefault(); setEdit(false); moveRow(gi,ci, e.shiftKey?-1:1); return; }
-  if(k==='PageDown'  ){ e.preventDefault(); setEdit(false); pageJump( 1,ci,gi); return; }
-  if(k==='PageUp'    ){ e.preventDefault(); setEdit(false); pageJump(-1,ci,gi); return; }
+  if(k==='PageDown'  ){ e.preventDefault(); setEdit(false); pageJump( 1,ci); return; }
+  if(k==='PageUp'    ){ e.preventDefault(); setEdit(false); pageJump(-1,ci); return; }
   if(k==='Tab'       ){ setEdit(false); return; }      // סדר ה-Tab הטבעי נשמר
   // Home/End נשארים למשמעות הטקסט הטבעית; קצה השורה הוא Ctrl+חץ
   if(e.ctrlKey && k==='ArrowRight'){ e.preventDefault(); focusCell(gi,vis[0],'end'); return; }
@@ -1491,17 +1167,6 @@ function bindGrid(){
   g.__keys=true;
   g.addEventListener('keydown',gridKey);
   g.addEventListener('focusin',gridFocus);
-  // תיבות הסימון נושאות data-sel ולא data-ci, ולכן gridKey/gridFocus מתעלמים
-  // מהן לגמרי — ניווט המקלדת אינו דורש שום שינוי.
-  g.addEventListener('change',e=>{
-    const t=e.target;
-    if(!t || t.type!=='checkbox' || !t.hasAttribute('data-sel')) return;
-    pickRow(+t.getAttribute('data-sel'), t.checked, !!window._shiftDown);
-  });
-  g.addEventListener('click',e=>{
-    const t=e.target;
-    if(t && t.type==='checkbox' && t.hasAttribute('data-sel')) window._shiftDown=e.shiftKey;
-  },true);
 }
 // גלילה אופקית נגישה: פס עליון מסונכרן + גלילה עם Shift+גלגלת (בנוסף לפס התחתון של הקופסה)
 function syncScroll(){
@@ -1514,158 +1179,30 @@ function syncScroll(){
   if(wrap.__sync) return;
   wrap.__sync=true; let lock=false;
   top.addEventListener('scroll',()=>{if(lock)return;lock=true;wrap.scrollLeft=top.scrollLeft;lock=false;});
-  // מאזין אחד לשני הצירים: אופקי מסונכרן מיידית, אנכי מווסת ב-rAF. מאזין שני
-  // היה יוצר סדר בלתי-צפוי מול המשמר wrap.__sync שכבר קיים כאן.
-  wrap.addEventListener('scroll',()=>{
-    if(!lock){ lock=true; top.scrollLeft=wrap.scrollLeft; lock=false; }
-    onVScroll();
-  });
+  wrap.addEventListener('scroll',()=>{if(lock)return;lock=true;top.scrollLeft=wrap.scrollLeft;lock=false;});
   wrap.addEventListener('wheel',e=>{
     if(e.shiftKey && wrap.scrollWidth>wrap.clientWidth){ wrap.scrollLeft+=(e.deltaY||e.deltaX); e.preventDefault(); }
   },{passive:false});
-  window.addEventListener('resize',()=>{
-    measureHeader(); ROW_H=0; paintWindow(true);   // clientHeight השתנה — גם החלון
-    if(grid) inner.style.width=grid.scrollWidth+'px';
-  });
+  window.addEventListener('resize',()=>{ measureHeader(); if(grid) inner.style.width=grid.scrollWidth+'px'; });
 }
-// אין יותר עמודים — הסרגל הוא מונה שורות + קפיצה לשורה. בלי הקפיצה, הגעה
-// לשורה 12,345 מתוך 15,000 היא גרירה של ידית-גלילה בגובה 0.3%.
-function renderPager(n){
-  const p=$('pager'); if(!p) return;
-  if(!n){ p.innerHTML=''; return; }
-  p.innerHTML='<span>מוצגות <b>'+n.toLocaleString()+'</b> שורות</span>'+
-    '<span>· מעבר לשורה <input id="pgjump" type="number" min="1" max="'+n+
-      '" style="width:6em;text-align:center" title="מספר השורה בתצוגה הנוכחית'+
-      ' (לא מספר השורה בקובץ המקור)" onchange="gotoRow(this.value)"'+
-      ' onkeydown="if(event.key===\'Enter\')gotoRow(this.value)"></span>';
-}
-function gotoRow(v){
-  let i=(parseInt(v,10)||1)-1;
-  if(i<0) i=0; if(i>=dispCount()) i=dispCount()-1;
-  scrollToDisplayIdx(i);
-  const t=rowAt(i);
-  if(t) focusCell(t[0], activeCi!=null?activeCi:visCols()[0], 'end');
+function renderPager(n,pages){
+  if(pages<=1){ $('pager').innerHTML=''; return; }
+  $('pager').innerHTML='<button onclick="page--;render()" '+(page===0?'disabled':'')+'>הקודם</button>'+
+    '<span>עמוד '+(page+1)+' מתוך '+pages+' ('+n+' שורות)</span>'+
+    '<button onclick="page++;render()" '+(page>=pages-1?'disabled':'')+'>הבא</button>';
 }
 function updateCounts(){
-  const o=overall(), s=stats();
+  const o=overall();
   $('p-tot').textContent='סה״כ '+o.total; $('p-ok').textContent='תקינות '+o.valid; $('p-bad').textContent='שגויות '+o.invalid;
-  $('p-warn').textContent='אזהרות '+s.warned; $('p-warn').style.display = s.warned? '' : 'none';
-  $('p-ign').textContent='מיוצאות למרות בעיה '+s.ignored; $('p-ign').style.display = s.ignored? '' : 'none';
-  updateToggleBtn();                       // זול עכשיו — מציג את מספר הבעייתיות
+  const warned=GRID.rows.filter(r=>!r.ignore && r.cells.some(c=>c.warning)).length;
+  $('p-warn').textContent='אזהרות '+warned; $('p-warn').style.display = warned? '' : 'none';
+  const ign=GRID.rows.filter(r=>r.ignore).length;
+  $('p-ign').textContent='מיוצאות למרות בעיה '+ign; $('p-ign').style.display = ign? '' : 'none';
 }
 function upd(gi,ci,val){ GRID.rows[gi].cells[ci].value=val; }
 
-// ===== תיקון שגיאות =====
-// פורמט ההערות (ראה _journal_process בשרת): "<ידני> ⚠ <אוטומטית> · <אוטומטית>".
-// הפיצול חייב להיות *מודע-סוגריים*: אותו מפריד " · " משמש גם בתוך הערת חוסר
-// האיזון ("מטבע ראשי חסר 12.40 · מטבע משני חסר 3.00"), ופיצול נאיבי היה מייצר
-// שני סוגי שגיאה מדומים במקום אחד.
-function splitNotes(str){
-  const out=[]; let d=0, cur='';
-  for(const ch of String(str||'')){
-    if(ch==='(') d++; else if(ch===')') d--;
-    if(ch==='·' && d===0){ if(cur.trim()) out.push(cur.trim()); cur=''; continue; }
-    cur+=ch;
-  }
-  if(cur.trim()) out.push(cur.trim());
-  return out;
-}
-function autoNotes(v){                       // תואם ל-_strip_auto_note בשרת
-  const t=String(v||''), i=t.indexOf('⚠');
-  return i<0 ? [] : splitNotes(t.slice(i+1));
-}
-// נרמול: "מטבע ראשי חסר 12.40" ו-"... 3.00" מתקפלים לסוג אחד.
-// 'other:' נשמר בכוונה — סוג שיתווסף בשרת יוצג ולא ייבלע.
-function errKind(n){
-  if(/^תנועה לא מאוזנת/.test(n)) return 'unbalanced';
-  if(/^תאריך מאזן/.test(n))      return 'date_balance';
-  if(/^תאריך אסמכתא/.test(n))    return 'date_ref';
-  if(/^כל הסכומים 0/.test(n))    return 'all_zero';
-  return 'other:'+n;
-}
-const ERR_LABEL={unbalanced:'תנועה לא מאוזנת', date_balance:'תאריך מאזן אינו אחיד',
-                 date_ref:'תאריך אסמכתא אינו אחיד', all_zero:'כל הסכומים 0 — לא תיטען'};
-const ERR_FILTER={unbalanced:'תנועה לא מאוזנת', date_balance:'תאריך מאזן',
-                  date_ref:'תאריך אסמכתא', all_zero:'כל הסכומים 0'};
-// מרשם התיקונים: kind -> [{id,label,run(gis)}]. ריק עד שיתקבל מיפוי
-// השגיאה->התיקון. כל תיקון חייב לדחוף pushUndo עם ci *אחד* (מגבלת undo()).
-const ERR_FIX={};
-function errCensus(){
-  const ci=ciOf(GRID.notes_target||''); if(ci<0) return {ci:-1,list:[]};
-  const by=new Map();
-  GRID.rows.forEach((r,gi)=>{
-    const cell=r.cells[ci]; if(!cell) return;
-    for(const n of autoNotes(cell.value)){
-      const k=errKind(n);
-      let e=by.get(k);
-      if(!e){ e={kind:k,label:ERR_LABEL[k]||n,count:0,sample:n,gis:[]}; by.set(k,e); }
-      e.count++; if(e.gis[e.gis.length-1]!==gi) e.gis.push(gi);
-    }
-  });
-  return {ci:ci, list:[...by.values()].sort((a,b)=>b.count-a.count)};
-}
-function openErrFix(){
-  const c=errCensus();
-  if(c.ci<0){ flash('err','אין עמודת הערות למיישם במסך הזה.'); return; }
-  // סינון על עמודה מוסתרת היה חל בלי שיראו אותו
-  if(hiddenCols.has(c.ci)){ hiddenCols.delete(c.ci); render();
-    flash('ok','עמודת ההערות הוחזרה לתצוגה.'); }
-  renderErrStep1(c);
-  $('errmodal').classList.add('show');
-}
-function closeErrFix(){ $('errmodal').classList.remove('show'); }
-function renderErrStep1(c){
-  const b=$('errbody');
-  if(!c.list.length){
-    b.innerHTML='<p class="muted">לא נמצאו שגיאות בעמודת ההערות. '+
-                'הרץ «בדיקת תנועות» כדי לאתר בעיות.</p>';
-    return;
-  }
-  let h='<p class="muted">נמצאו '+c.list.length+' סוגי שגיאה. בחר סוג כדי לראות '+
-        'את הפרטים ולצמצם את הטבלה אליו.</p><div class="errlist">';
-  c.list.forEach((e,i)=>{
-    h+='<button class="erritem" onclick="errStep2('+i+')">'+
-       '<span class="n">'+e.count+'</span><span class="t">'+esc(e.label)+'</span></button>';
-  });
-  $('errbody').innerHTML=h+'</div>';
-  window._errCensus=c;
-}
-function errStep2(i){
-  const c=window._errCensus, e=c.list[i]; if(!e) return;
-  const fixes=ERR_FIX[e.kind]||[];
-  let h='<p><b>'+esc(e.label)+'</b> — '+e.count+' מופעים ב-'+e.gis.length+' שורות.</p>'+
-        '<div class="errsample">דוגמה מהטבלה: '+esc(e.sample)+'</div>';
-  if(fixes.length){
-    h+='<div class="errlist">';
-    fixes.forEach((f,j)=>{ h+='<button class="erritem" onclick="errRun('+i+','+j+')">'+
-                              '<span class="t">'+esc(f.label)+'</span></button>'; });
-    h+='</div>';
-  }else{
-    h+='<p class="muted">כללי התיקון האוטומטי לסוג שגיאה זה טרם הוגדרו.</p>';
-  }
-  h+='<div class="modal-btns" style="justify-content:flex-start">'+
-     '<button class="b-save" onclick="errFocus('+i+')">סנן והצג רק שורות אלו</button>'+
-     '<button class="b-check" onclick="renderErrStep1(window._errCensus)">חזרה</button></div>';
-  $('errbody').innerHTML=h;
-}
-// צמצום הטבלה לשורות של הסוג + סימונן — כך שכל תיקון שיתווסף למרשם יקבל
-// את קבוצת השורות מוכנה, והקיבוץ/מילוי-עמודה מתחברים אליה מיד.
-function errFocus(i){
-  const c=window._errCensus, e=c.list[i]; if(!e) return;
-  const pat=ERR_FILTER[e.kind]||e.sample;
-  colFilter[c.ci]=pat;
-  SEL=new Set(e.gis); SEL_ANCHOR=null;
-  closeErrFix(); resetScroll(); render();
-  flash('ok','מוצגות '+e.gis.length+' שורות עם «'+esc(e.label)+'» (ומסומנות לפעולה).');
-}
-function errRun(i,j){
-  const c=window._errCensus, e=c.list[i]; if(!e) return;
-  const f=(ERR_FIX[e.kind]||[])[j]; if(!f) return;
-  closeErrFix(); f.run(e.gis.slice());
-}
-
 // ===== ביטול פעולה אחרונה (UNDO) =====
-// מחסנית פעולות הפיכות: עריכת תא, מילוי-עמודה וקיבוץ תנועה. כל פעולה שומרת את
+// מחסנית פעולות הפיכות: עריכת תא, מילוי-עמודה, ועדכון גורף. כל פעולה שומרת את
 // הערכים הקודמים כדי שנוכל לשחזר אותם. Ctrl+Z מפעיל אף הוא.
 let UNDO=[]; const UNDO_MAX=200; let _cellPrev=null;
 function pushUndo(entry){ UNDO.push(entry); if(UNDO.length>UNDO_MAX) UNDO.shift(); updateUndoBtn(); }
@@ -1694,9 +1231,7 @@ async function fillDown(gi,ci){
   const src=GRID.rows[gi] && GRID.rows[gi].cells[ci];
   if(!src) return;
   const val=src.value; let n=0; const changes=[];
-  // dispList() ולא החלון המצויר: המילוי חייב לחול על *כל* השורות המוצגות.
-  // טעות כאן הייתה ממלאת ~60 שורות במקום 15,000, בשקט.
-  const visible=new Set(dispList().map(x=>x[0]));
+  const visible=new Set(displayed().map(x=>x[0]));   // אינדקסים של השורות המוצגות
   GRID.rows.forEach((r,idx)=>{ if(visible.has(idx) && r.cells[ci] && r.cells[ci].value!==val){ changes.push({gi:idx,prev:r.cells[ci].value}); r.cells[ci].value=val; n++; } });
   const nm=GRID.columns[ci].title||GRID.columns[ci].target;
   if(changes.length) pushUndo({type:'fill',ci,changes,label:'מילוי עמודה «'+nm+'» ('+n+' שורות)'});
@@ -1704,23 +1239,16 @@ async function fillDown(gi,ci){
   await revalidate();
   flash('ok','מולא "'+esc(val)+'" ל-'+n+(filtered?' שורות מסוננות':' שורות')+' בעמודה «'+esc(nm)+'».');
 }
-function delRow(gi){
-  GRID.rows.splice(gi,1);
-  // ה-gi של כל שורה אחריה זז באחד — ממפים מחדש במקום לנקות, כדי שמחיקת שורת
-  // זבל אחת לא תפיל בחירה של עשרות שורות.
-  SEL=new Set([...SEL].filter(g=>g!==gi).map(g=>g>gi?g-1:g));
-  if(SEL_ANCHOR===gi) SEL_ANCHOR=null;
-  bumpStats(); syncSelBar(); render();
-}
-function toggleIgnore(gi){ GRID.rows[gi].ignore=!GRID.rows[gi].ignore; bumpStats(); render(); }
+function delRow(gi){ GRID.rows.splice(gi,1); render(); }
+function toggleIgnore(gi){ GRID.rows[gi].ignore=!GRID.rows[gi].ignore; render(); }
 function ignoreAllWarnings(){
   let n=0;
-  GRID.rows.forEach(r=>{ if(!r.ignore && r.valid && r._warn){ r.ignore=true; n++; } });
-  bumpStats(); render();
+  GRID.rows.forEach(r=>{ if(!r.ignore && r.valid && r.cells.some(c=>c.warning)){ r.ignore=true; n++; } });
+  render();
   flash(n?'ok':'err', n? (n+' שורות אזהרה סומנו — ייכללו בייצוא ללא התראה.') : 'אין שורות אזהרה להתעלמות.');
 }
 
-// --- גרירת עמודות לשינוי סדר התצוגה (אינו משפיע על קובץ הפלט) ---
+// --- גרירת עמודות לשינוי סדר הייצוא ---
 let dragFromCi=null;
 function dragStart(e,ci){ dragFromCi=ci; e.currentTarget.classList.add('dragging');
   e.dataTransfer.effectAllowed='move'; }
@@ -1740,7 +1268,7 @@ function hideCol(ci){
   const c=GRID.columns[ci];
   if(c && c.required){ flash('err','לא ניתן להסתיר שדה חובה («'+esc(colName(ci))+'»).'); return; }
   if(visCols().length<=1){ flash('err','חייבת להישאר לפחות עמודה אחת מוצגת.'); return; }
-  hiddenCols.add(ci); delete colFilter[ci]; resetScroll(); render();
+  hiddenCols.add(ci); delete colFilter[ci]; page=0; render();
   flash('ok','העמודה «'+esc(colName(ci))+'» הוסתרה — לא תיכלל בייצוא.');
 }
 function showCol(ci){ hiddenCols.delete(ci); render(); }
@@ -1762,7 +1290,7 @@ function renderHiddenBar(){
 // --- ביטול כל הסינונים בטבלה ---
 function clearFilters(){
   const had=Object.keys(colFilter).length;
-  colFilter={}; resetScroll(); render();
+  colFilter={}; page=0; render();
   flash(had?'ok':'err', had? ('בוטלו '+had+' סינונים.') : 'אין סינונים פעילים.');
 }
 
@@ -1798,7 +1326,7 @@ async function remap(){
   const res=await post('/grid/remap',{run_id:GRID.run_id, assignment:collectAssignment()});
   if(!res) return;
   const openState=document.querySelector('.mapcard') && document.querySelector('.mapcard').open;
-  Object.assign(GRID,res); setRows(GRID.rows); clearSel(); resetScroll();
+  Object.assign(GRID,res); page=0;
   activeGi=null; activeCi=null; restore=null;   // גם GRID.columns הוחלף — ci שינה משמעות
   renderBanner(); renderMapping(); render();
   const d=document.querySelector('.mapcard'); if(d) d.open = openState!==false;
@@ -1813,10 +1341,6 @@ function renderJournal(){
   // המטבעות נבחרים במסך ההעלאה ומוצגים כאן לקריאה בלבד — המיישם חייב לראות על
   // מה טיוב המט"ח והאיזון יפעלו, ובפרט שמטבע משני ריק = בדיקת משני כבויה.
   const cur=GRID.currency||{}, cp=cur.primary||'', cs=cur.secondary||'';
-  // ערכים קבועים: 29 עמודות פלט ו-DNAME יושב במקום 22, וניתן להסתיר/לסדר עמודות —
-  // ולכן "איזה קבוע הוחל בטעינה הזו" יכול להיעלם מהעין. הסרגל מציג את הקבוע של
-  // זמן הטעינה, ולא בהכרח את מה שיש בתאים כרגע (הם ניתנים לעריכה).
-  const kv=GRID.consts||{};
   box.innerHTML=
    '<span class="jt">{{ icon("balance",17)|safe }} תנועות יומן</span>'+
    '<div class="fld"><label>מטבע ראשי</label>'+
@@ -1824,25 +1348,10 @@ function renderJournal(){
    '<div class="fld"><label>מטבע משני</label>'+
     '<span class="ro" title="נקבע במסך ההעלאה — ריק = ללא בדיקת מטבע משני">'+
     esc(cs||'ללא')+'</span></div>'+
-   '<div class="fld"><label>תוכנת מקור</label>'+
-    '<span class="ro" title="נקבע במסך ההעלאה — ניתן לעריכה בתא עצמו">'+esc(kv.dname||'—')+'</span></div>'+
-   '<div class="fld"><label>סוג תנועה</label>'+
-    '<span class="ro" title="נקבע במסך ההעלאה — ניתן לעריכה בתא עצמו">'+esc(kv.transtype||'—')+'</span></div>'+
    '<div class="fld"><label>סף איזון ראשי</label><input id="j-maxp" type="number" step="0.01" value="1"></div>'+
    '<div class="fld"><label>סף איזון משני</label><input id="j-maxs" type="number" step="0.01" value="1"></div>'+
+   '<button class="b-jchk" onclick="journalFx()">{{ icon("coins",15)|safe }}טיוב מט"ח</button>'+
    '<button class="b-jchk" onclick="journalCheck()">{{ icon("check-list",15)|safe }}בדיקת תנועות</button>'+
-   '<button class="b-jchk" id="btn-group" disabled onclick="groupTxn()"'+
-    ' title="כל השורות שנבחרו יקבלו את מס\' התנועה של השורה *העליונה* שנבחרה.'+
-    ' מספור השורות נשאר רץ על כל הקובץ.">{{ icon("check-circle",15)|safe }}קיבוץ תנועה</button>'+
-   '<span class="hchip" id="selinfo" style="display:none"></span>'+
-   // הגרשיים ב«מט"ח» חייבים להיות &quot; — גרש כפול גולמי בתוך title="..."
-   // קוטע את האטריביוט, והשאר נבלע כאטריביוטים מדומים.
-   '<button class="b-jchk" onclick="journalFx()"'+
-    ' title="כרגע: מחיקת מטבע עסקה שזהה למטבע הראשי, והעתקת סכום המט&quot;ח לסכום'+
-    ' המשני כשמטבע העסקה = המטבע המשני. זו הלוגיקה של «טיוב מט&quot;ח», ללא שינוי.'+
-    ' שערי מט&quot;ח *אינם* נמשכים ואין חישוב מחדש של סכומים — כללי העדכון טרם הוגדרו."'+
-    '>{{ icon("coins",15)|safe }}עדכון מט"ח</button>'+
-   '<button class="b-jchk" onclick="openErrFix()">{{ icon("alert",15)|safe }}תיקון שגיאות</button>'+
    '<button class="b-jbal" onclick="journalBalance()">{{ icon("balance",15)|safe }}איזון תנועות</button>'+
    // בקובץ גדול הטבלה מציגה רק שורות בעייתיות, אך הבדיקה רצה על כל הקובץ —
    // בלי ההסבר הזה הסיכומים ב-toast נראים לא תואמים למה שמוצג.
@@ -1858,14 +1367,13 @@ function journalOpts(){
   return {secondary: c.secondary||'', primary: c.primary||'',
           max_primary: ($('j-maxp')||{}).value||'0', max_secondary: ($('j-maxs')||{}).value||'0'};
 }
-// השם השתנה ל«עדכון מט"ח», הלוגיקה לא. ראה ה-tooltip בסרגל.
-async function journalFx(){ await journalRun('/journal/fx','עדכון מט"ח'); }
+async function journalFx(){ await journalRun('/journal/fx','טיוב מט"ח'); }
 async function journalCheck(){ await journalRun('/journal/check','נבדקו התנועות'); }
 async function journalBalance(){ await journalRun('/journal/balance','בוצע איזון תנועות'); }
 async function journalRun(url,label){
   const body=collect(); body.opts=journalOpts();
   const res=await post(url,body); if(!res)return;
-  setRows(res.rows); render();
+  GRID.rows=res.rows; render();
   const s=res.summary||{};
   const bad = s.unbalanced||s.date_issues||s.zero_rows;
   flash(bad? 'err':'ok',
@@ -1881,20 +1389,10 @@ async function journalRun(url,label){
 function renderBanner(){
   let b='';
   (GRID.map_warnings||[]).forEach(w=>{ b+='<div class="msg warnbox">🛈 '+esc(w)+'</div>'; });
-  const lim=(GRID.full_grid_limit||0).toLocaleString();
   if(GRID.mode==='errors')
-    b+='<div class="banner">📁 הקובץ גדול מ-'+lim+' שורות: '+GRID.server_valid.toLocaleString()+
-       ' שורות תקינות נשמרו בשרת ויכללו בקובץ הטעינה, וכאן מוצגות '+
-       GRID.rows.length.toLocaleString()+' השורות שדורשות תיקון'+
-       (GRID.overflow>0?(' (ועוד '+GRID.overflow.toLocaleString()+
-         ' שורות שגויות שלא נכנסו לתצוגה — הן ייצאו ישירות לקובץ השורות הפסולות)'):'')+'. '+
-       '<b>שים לב:</b> בקובץ הפלט השורות ששמורות בשרת מופיעות <b>לפני</b> השורות שבטבלה, '+
-       'ולכן הסדר אינו סדר הקובץ המקורי. מומלץ לפצל את הקובץ לאצוות של '+lim+' שורות.</div>';
-  else if(GRID.rows.length>2000)
-    b+='<div class="banner">📁 כל '+GRID.rows.length.toLocaleString()+' השורות נטענו לטבלה '+
-       'וניתנות לעריכה בגלילה רציפה. מצוירות רק השורות שנראות על המסך, ולכן '+
-       'חיפוש הדפדפן (Ctrl+F) מוצא רק את הגלוי — לאיתור ערך השתמש בשורת הסינון '+
-       'שמתחת לכותרות. הכפתור «הצג רק שורות בעייתיות» מצמצם למה שדורש תיקון.</div>';
+    b+='<div class="banner">📁 קובץ גדול: '+GRID.server_valid.toLocaleString()+
+       ' שורות תקינות נשמרו בשרת ויכללו בקובץ הטעינה. כאן מוצגות רק '+GRID.rows.length+
+       ' השורות שדורשות תיקון'+(GRID.overflow>0?(' (ועוד '+GRID.overflow+' שורות שגויות שלא נכנסות לתצוגה)'):'')+'.</div>';
   if(GRID.total_warn>0)
     b+='<div class="msg warnbox">⚠ '+GRID.total_warn+' שורות עם אזהרות פורמט (טלפון/דוא"ל לא תקין). '+
        'האזהרות אינן פוסלות — השורות ייכללו בקובץ הטעינה, אך מומלץ לבדוק ולתקן.</div>';
@@ -1904,20 +1402,11 @@ function renderBanner(){
   $('banner').innerHTML=b;
 }
 function collect(){
-  // cells[ci] <-> GRID.columns[ci] — השרת מסיר את target מכל תא כדי לקטום את
-  // המנה (ראה _slim_rows), ולכן שם השדה נגזר מהאינדקס. היישור נבדק פעם אחת
-  // באתחול, כי אי-התאמה הייתה כותבת ערכים לשדות פריוריטי הלא-נכונים *בשקט*.
-  const T=GRID.columns;
   return {screen:GRID.screen, run_id:GRID.run_id,
-    rows:GRID.rows.map(r=>{const o={};r.cells.forEach((c,ci)=>{o[T[ci].target]=c.value;});return o;}),
+    rows:GRID.rows.map(r=>{const o={};r.cells.forEach(c=>o[c.target]=c.value);return o;}),
     excel_rows:GRID.rows.map(r=>r.excel_row),
     ignore:GRID.rows.map(r=>!!r.ignore),                 // שורות שסומנו להתעלמות
-    // כמה שורות השרת מחזיק ואינן בדפדפן — כדי שההפקה תסרב אם הריצה פגה מהזיכרון
-    server_valid:GRID.server_valid||0, overflow:GRID.overflow||0,
-    // אין order: בכוונה — סדר *התצוגה* בטבלה מנותק מסדר *הייצוא*. קובץ הטעינה
-    // נכתב תמיד לפי סדר columns: שבמיפוי, כדי שיתאים להגדרת ה-Interface
-    // בפריוריטי; גרירת עמודה היא תצוגה בלבד. hidden כן נשלח: עמודה מוסתרת
-    // אינה מיוצאת (reorder_for_export מטפל ב-order=None יחד עם hidden).
+    order:visCols().map(ci=>GRID.columns[ci].target),    // סדר עמודות לייצוא (ללא מוסתרות)
     hidden:[...hiddenCols].map(ci=>GRID.columns[ci] && GRID.columns[ci].target).filter(Boolean)};
 }
 function keepIgnore(newRows){   // שמירת סימוני ההתעלמות אחרי רענון מהשרת
@@ -1927,22 +1416,23 @@ function keepIgnore(newRows){   // שמירת סימוני ההתעלמות אח
 }
 async function showAll(){
   const res=await post('/grid/all',collect()); if(!res)return;
-  setRows(res.rows); GRID.server_valid=0; GRID.overflow=0; GRID.total=res.total;
+  GRID.rows=res.rows; GRID.server_valid=0; GRID.overflow=0; GRID.total=res.total;
   GRID.total_warn=res.total_warn; GRID.warnings=res.warnings; GRID.warn_count=res.warn_count;
-  GRID.mode='all'; resetScroll(); onlyProblems=false;
+  GRID.mode='all'; page=0; onlyProblems=false;
   activeGi=null; activeCi=null; restore=null;   // GRID.rows הוחלף — אינדקסים מיקומיים
-  renderBanner(); render();                    // updateToggleBtn נקרא מתוך updateCounts
+  updateToggleBtn();
+  renderBanner(); render();
   flash('ok','נטענו כל '+res.total+' השורות.');
 }
 async function revalidate(){
   const res=await post('/grid/validate',collect()); if(!res)return;
-  setRows(keepIgnore(res.rows)); render();
+  GRID.rows=keepIgnore(res.rows); render();
   const o=overall();
   flash(o.invalid===0?'ok':'err', o.invalid===0?'✓ כל השורות תקינות — אפשר לייצר קובץ טעינה.':
         'נותרו '+o.invalid+' שורות עם שגיאות לתיקון.');
 }
 function showDownloads(res, saved){
-  if(res.rows){ setRows(keepIgnore(res.rows)); GRID.server_valid=res.server_valid; GRID.overflow=res.overflow; render(); }
+  if(res.rows){ GRID.rows=keepIgnore(res.rows); GRID.server_valid=res.server_valid; GRID.overflow=res.overflow; render(); }
   let html='';
   if(res.files && res.files.length){   // מסמך: קובץ אב + מסכי-משנה
     res.files.forEach(f=>{ html+='<a class="dl" href="/download/'+res.run_id+'/f/'+encodeURIComponent(f.name)+'">⬇ '+esc(f.label)+'</a>'; });
@@ -2004,12 +1494,7 @@ document.addEventListener('keydown',function(ev){
   }
 });
 updateToggleBtn(); updateUndoBtn();
-renderBanner(); renderMapping(); renderJournal(); render();
-measureSample(); render();      // קיבוע רוחב העמודות מתוך מדגם, ואז ציור סופי
-// אי-התאמה בין מספר התאים למספר העמודות שוברת את מפתוח collect() לפי אינדקס,
-// והתוצאה הייתה קובץ טעינה שגוי בשקט — לכן בודקים פעם אחת וצורחים.
-if(GRID.rows.length && GRID.rows[0].cells.length!==GRID.columns.length)
-  flash('err','אי-התאמה בין עמודות הטבלה לנתונים — טען את הקובץ מחדש.');
+fillBulkSelect(); renderBanner(); renderMapping(); renderJournal(); render();
 bindGrid();                              // keydown+focusin — פעם אחת, שורד כל render
 // הגופן נטען אסינכרונית: המדידה הראשונה תופסת גופן חלופי נמוך יותר, ולכן מודדים
 // שוב כשהגופן מוכן — אחרת שורת הסינון הדביקה לא מתיישרת בדיוק בטעינה הראשונה.
@@ -2023,37 +1508,6 @@ if(document.fonts && document.fonts.ready) document.fonts.ready.then(measureHead
 # ---------------------------------------------------------------------------
 # נתיבים
 # ---------------------------------------------------------------------------
-CR = chr(13).encode("ascii")   # תו CR, נבנה בלי תו בריחה
-
-
-def _mapping_signature():
-    """sha256 מקוצר של כל קבצי המיפוי — מזהה אם המיפוי שבענן הוא זה שלפניי."""
-    h = hashlib.sha256()
-    d = core.MAPPINGS_DIR
-    for name in sorted(os.listdir(d)):
-        if name.endswith((".yaml", ".yml")):
-            h.update(name.encode("utf-8"))
-            with open(os.path.join(d, name), "rb") as f:
-                # נרמול סופי-שורה: עותק העבודה בוינדוס הוא CRLF והענן מושך LF,
-                # ובלי זה אותה גרסה בדיוק מניבה חתימות שונות וההשוואה חסרת ערך.
-                h.update(f.read().replace(CR, b""))
-    return h.hexdigest()[:12]
-
-
-@app.route("/health")
-def health():
-    """בדיקה פתוחה: *איזו גרסה* רצה בענן. בלי זה אי אפשר להבדיל בין "התיקון לא
-    עובד" לבין "הפריסה עוד לא עלתה" — וזה עלה כבר פעמיים. אין כאן מידע רגיש:
-    מזהה ה-commit, מספר המסכים, וטביעת אצבע של קבצי המיפוי."""
-    return jsonify(
-        ok=True,
-        commit=(os.environ.get("VERCEL_GIT_COMMIT_SHA")
-                or os.environ.get("RENDER_GIT_COMMIT") or "local")[:7],
-        screens=len(core.available_screens()),
-        mappings=_mapping_signature(),
-    )
-
-
 @app.route("/")
 def index():
     return render_template_string(UPLOAD, screens=core.available_screens(), error=None,
@@ -2061,35 +1515,15 @@ def index():
                                   journal_screens=_journal_screens())
 
 
-def _drop_warnings(df):
-    """שורות שסוננו ע"י require_source — מוצגות כאזהרה במקום להיעלם בשקט."""
-    n = (getattr(df, "attrs", None) or {}).get("dropped_rows") or 0
-    if not n:
-        return []
-    by = ", ".join((df.attrs.get("dropped_by") or [])) or "שדות עוגן"
-    return ["%d שורות מהקובץ לא נטענו לטבלה: הן ריקות בשדה %s. "
-            "בייצוא יומן שבו מס' התנועה מופיע רק בשורה הראשונה של כל תנועה — "
-            "יש להשלים אותו בכל השורות לפני ההעלאה." % (n, by)]
-
-
-def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None, opts=None,
-                excel_rows=None):
+def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None, opts=None):
     """
     ליבת בניית תגובת הטבלה — משותפת ל-/process ול-/grid/remap.
     פותר את המיפוי (עם overrides ידניים), מריץ ולידציה, מפצל קטן/גדול, שומר את
     הריצה (כולל ה-DataFrame הגולמי כדי לאפשר מיפוי מחדש), ומחזיר payload מלא.
     """
     df = core.preprocess_journal_df(df, mapping)   # סינון שורות + איחוד חובה/זכות/סימן (יומן)
-    prev = RUNS.get(run_id) or {}
-    # אפשרויות הריצה (מטבעות + ערכים קבועים מההעלאה). הבדיקה is not None ולא
-    # "opts or {}" בכוונה: /grid/remap קורא ל-_build_grid עם run_id קיים ובלי
-    # opts, וכתיבת RUNS[run_id] מחליפה את המילון כולו — ולכן בלי ההורשה כאן כל
-    # מיפוי מחדש היה מוחק את הבחירות בשקט.
-    opts_eff = dict(opts) if opts is not None else dict(prev.get("opts") or {})
     resolved, req_missing, opt_missing = core.resolve_columns(df, core.all_columns(mapping), overrides)
-    rows_in = core.rows_from_dataframe(df, mapping, resolved)
-    core.apply_upload_constants(mapping, rows_in, opts_eff)   # ערכים קבועים מההעלאה
-    rows_out = core.evaluate_grid(mapping, rows_in, excel_rows=excel_rows)
+    rows_out = core.evaluate_grid(mapping, core.rows_from_dataframe(df, mapping, resolved))
     key_fields = mapping.get("key_fields") or []
     total = len(rows_out)
 
@@ -2115,12 +1549,16 @@ def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None, o
             for r in invalid_rows if id(r) not in shown
         ]
 
+    prev = RUNS.get(run_id) or {}
     run_id = run_id or uuid.uuid4().hex
     RUNS[run_id] = {
         "screen": screen, "df": df, "overrides": dict(overrides or {}),
         "valid": server_valid, "reserved": reserved, "overflow": overflow_items,
         "source_name": source_name or prev.get("source_name", ""),
-        "opts": opts_eff,          # חושב למעלה, לפני הזרמת הערכים הקבועים
+        # מטבעות ההסבה. הבדיקה is not None ולא "opts or {}" בכוונה: /grid/remap קורא
+        # ל-_build_grid עם run_id קיים ובלי opts, וכתיבת המילון מחליפה אותו כולו —
+        # ולכן בלי ההורשה כאן כל מיפוי מחדש היה מוחק את המטבע בשקט.
+        "opts": dict(opts) if opts is not None else dict(prev.get("opts") or {}),
         "created": time.time(),
     }
     _prune_runs()
@@ -2134,38 +1572,23 @@ def _build_grid(screen, mapping, df, overrides, run_id=None, source_name=None, o
     return {
         "screen": screen, "run_id": run_id, "interface": mapping.get("interface_name"),
         "mode": "errors" if total > FULL_GRID_LIMIT else "all",
-        "full_grid_limit": FULL_GRID_LIMIT,   # לבאנר: "הקובץ גדול מ-N שורות"
         "columns": _columns_meta(mapping), "key_fields": key_fields,
-        # סדר תצוגה מומלץ (שמות target) — תצוגה בלבד, ראה collect()
-        "view_order": mapping.get("view_order") or [],
-        "rows": _slim_rows(displayed), "server_valid": len(server_valid),
+        "rows": displayed, "server_valid": len(server_valid),
         "overflow": len(overflow_items), "total": total, "total_warn": total_warn,
         "warnings": warnings, "warn_count": warn_count,
-        "map_warnings": core.mapping_field_warnings(mapping, screen) + _drop_warnings(df),
+        "map_warnings": core.mapping_field_warnings(mapping, screen),
         "excel_columns": [c for c in df.columns if not str(c).startswith("__")],
         "assignment": assignment,
         "unmatched_required": req_missing, "unmatched_optional": opt_missing,
-        "journal": mapping.get("journal"),
-        # עמודת ההערות למיישם — דיאלוג «תיקון שגיאות» סורק אותה
-        "notes_target": _notes_target(mapping) or "",  # תפקידי עמודות להסבת תנועות יומן
+        "journal": mapping.get("journal"),  # תפקידי עמודות להסבת תנועות יומן
         "source_name": RUNS[run_id].get("source_name", ""),
-        # מטבעות ההסבה שנבחרו במסך ההעלאה (ראה RUNS[...]["opts"]). מסונן בכוונה:
-        # לכל מפתח ב-payload משמעות אחת, כדי ש-GRID.currency.dname לא ייווצר.
-        "currency": {k: (RUNS[run_id].get("opts") or {}).get(k, "")
-                     for k in ("primary", "secondary")},
-        # ערכים קבועים שנבחרו בהעלאה, לפי upload_constants שבמיפוי
-        "consts": {k: (RUNS[run_id].get("opts") or {}).get(k, "")
-                   for k in (mapping.get("upload_constants") or {})},
+        # מטבעות ההסבה שנבחרו במסך ההעלאה (ראה RUNS[...]["opts"])
+        "currency": dict(RUNS[run_id].get("opts") or {}),
     }
 
 
-@app.route("/process", methods=["GET", "POST"])
+@app.route("/process", methods=["POST"])
 def process():
-    # /process מרנדר את הטבלה *בתוך* תגובת ה-POST, ולכן שורת הכתובת של הדפדפן
-    # נשארת עליו. כל כניסה חוזרת לכתובת (מועדפים, היסטוריה, שחזור טאבים) היא
-    # GET — ו-POST-בלבד החזיר "405 Method Not Allowed" באנגלית. מפנים הביתה.
-    if request.method == "GET":
-        return redirect("/")
     screen = (request.form.get("screen") or "").strip()
     sheet = (request.form.get("sheet") or "").strip() or None
     header_row = (request.form.get("header_row") or "").strip()
@@ -2174,11 +1597,7 @@ def process():
     # מטבעות ההסבה. בלי ברירות מחדל בשרת: מטבע משני ריק הוא דגל מכוון שמכבה את
     # בדיקת/איזון המטבע המשני, ומטבע ראשי ריק מטופל בבטחה ב-_journal_fx.
     cur = {"primary": (request.form.get("cur_primary") or "").strip(),
-           "secondary": (request.form.get("cur_secondary") or "").strip(),
-           # ערכים קבועים לכל השורות (ראה upload_constants בקובץ המיפוי).
-           # ריק = לא מזריקים כלום, ולכן מסכים שאינם יומן אינם מושפעים.
-           "dname": (request.form.get("const_dname") or "").strip(),
-           "transtype": (request.form.get("const_transtype") or "").strip()}
+           "secondary": (request.form.get("cur_secondary") or "").strip()}
 
     if not upload or not upload.filename:
         return _upload_error("לא נבחר קובץ.")
@@ -2206,7 +1625,7 @@ def process():
 def grid_remap():
     """מיפוי מחדש: המשתמש בחר עמודת אקסל לשדה — מחשבים את הטבלה מחדש."""
     data = request.get_json(silent=True) or {}
-    run = _get_run(data.get("run_id"))
+    run = RUNS.get(data.get("run_id"))
     if not run or run.get("df") is None:
         return jsonify(error="הריצה פגה מהזיכרון — טען מחדש את הקובץ."), 400
     try:
@@ -2296,7 +1715,7 @@ def _split_processed(run, mapping, rows_out, origins):
 def grid_all():
     """טוען את *כל* השורות לטבלה (כולל התקינות ששמורות בשרת), עם שמירת העריכות."""
     data = request.get_json(silent=True) or {}
-    run = _get_run(data.get("run_id"))
+    run = RUNS.get(data.get("run_id"))
     if not run:
         return jsonify(error="הריצה פגה מהזיכרון — טען מחדש את הקובץ."), 400
     try:
@@ -2313,10 +1732,10 @@ def grid_all():
     run["valid"], run["reserved"], run["overflow"] = [], set(), []
     warnings, warn_count = _sample_warnings(
         mapping, core.grid_valid_records([r for r in rows_out if r["valid"]]))
-    total_warn = sum(1 for r in rows_out if any(c.get("warning") for c in r["cells"]))
     return jsonify(
-        rows=_slim_rows(rows_out), server_valid=0, overflow=0, total=len(rows_out),
-        total_warn=total_warn, warnings=warnings, warn_count=warn_count,
+        rows=rows_out, server_valid=0, overflow=0, total=len(rows_out),
+        total_warn=sum(1 for r in rows_out if any(c.get("warning") for c in r["cells"])),
+        warnings=warnings, warn_count=warn_count,
     )
 
 
@@ -2398,10 +1817,12 @@ def _journal_process(mapping, rows_dicts, excel_rows, opts, do_balance, do_fx=Fa
     if do_fx:
         fx_changed = _journal_fx(mapping, rows_dicts, opts.get("primary"), opts.get("secondary"))
 
-    # סוג תנועה *אינו* נגזר כאן יותר. קודם הוא נדרס להש/מ בכל לחיצה על כל אחד
-    # משלושת הכפתורים — כולל "בדיקת תנועות", שאמור רק לדווח — ולכן ערך שהמיישם
-    # הקליד נמחק. כיום הוא נקבע פעם אחת במסך ההעלאה (upload_constants) וניתן
-    # לעריכה פר-תא; אף אחד מכפתורי היומן אינו נוגע בו.
+    # סוג תנועה לפי הסכום הראשי: 0 -> הש, אחרת -> מ
+    tt_t, tt_zero, tt_non = jc.get("transtype"), jc.get("transtype_zero"), jc.get("transtype_nonzero")
+    if tt_t and ap and (tt_zero or tt_non):
+        for rd in rows_dicts:
+            rd[tt_t] = tt_zero if core._is_zero_amount(rd.get(ap)) else tt_non
+
     db_t, dr_t = jc.get("date_balance"), jc.get("date_ref")
     zcols = mapping.get("exclude_if_all_zero") or []
 
@@ -2470,7 +1891,7 @@ def _journal_process(mapping, rows_dicts, excel_rows, opts, do_balance, do_fx=Fa
     rows_out = core.evaluate_grid(mapping, rows_dicts, excel_rows=excel_rows)
     for i in flagged:  # צביעה בכתום (שורות עם בעיה שאינה פוסלת, כמו חוסר איזון)
         for c in rows_out[i]["cells"]:
-            if c["target"] == ap and not c.get("error") and not c.get("warning"):
+            if c["target"] == ap and not c["error"] and not c["warning"]:
                 c["warning"] = "שורה לבדיקה"
     total_txn = sum(1 for k in groups if k)
     return rows_out, {"unbalanced": unbalanced, "balanced": total_txn - unbalanced,
@@ -2480,7 +1901,7 @@ def _journal_process(mapping, rows_dicts, excel_rows, opts, do_balance, do_fx=Fa
 
 def _journal_endpoint(do_balance=False, do_fx=False):
     data = request.get_json(silent=True) or {}
-    run = _get_run(data.get("run_id"))
+    run = RUNS.get(data.get("run_id"))
     if not run:
         return jsonify(error="הריצה פגה מהזיכרון — טען מחדש את הקובץ."), 400
     try:
@@ -2510,7 +1931,7 @@ def _journal_endpoint(do_balance=False, do_fx=False):
         return jsonify(error=str(e)), 400
     except Exception as e:  # noqa: BLE001
         return jsonify(error=f"שגיאה בעיבוד תנועות: {e}"), 400
-    return jsonify(rows=_slim_rows(client_rows), summary=summary)
+    return jsonify(rows=client_rows, summary=summary)
 
 
 @app.route("/journal/check", methods=["POST"])
@@ -2533,7 +1954,7 @@ def grid_validate():
     data = request.get_json(silent=True) or {}
     try:
         mapping = core.load_mapping((data.get("screen") or "").strip())
-        run = _get_run(data.get("run_id"))
+        run = RUNS.get(data.get("run_id"))
         reserved = run["reserved"] if run else set()
         rows_out = core.evaluate_grid(
             mapping, data.get("rows") or [], reserved_keys=reserved,
@@ -2543,7 +1964,7 @@ def grid_validate():
         return jsonify(error=str(e)), 400
     except Exception as e:  # noqa: BLE001
         return jsonify(error=f"שגיאה בבדיקה: {e}"), 400
-    return jsonify(rows=_slim_rows(rows_out))
+    return jsonify(rows=rows_out)
 
 
 def _produce_load(save):
@@ -2556,18 +1977,7 @@ def _produce_load(save):
     screen = (data.get("screen") or "").strip()
     try:
         mapping = core.load_mapping(screen)
-        run = _get_run(data.get("run_id"))
-        if run is None:
-            # ריצה שפגה מהזיכרון. אם הלקוח מחזיק את *כל* השורות (mode='all') אין
-            # מה לאבד וממשיכים כמקודם. אם השרת החזיק שורות — המשך שקט היה מפיק
-            # קובץ טעינה חסר *עם הודעת הצלחה*, ולכן כאן נכשלים במפורש.
-            held = int(data.get("server_valid") or 0) + int(data.get("overflow") or 0)
-            if held:
-                return jsonify(error=(
-                    "הריצה פגה מהזיכרון (השרת הופעל מחדש, או שנטענו 40 קבצים חדשים). "
-                    "%s שורות שהוחזקו בשרת אינן זמינות וקובץ הטעינה היה יוצא חסר — "
-                    "טען את הקובץ מחדש." % format(held, ","))), 400
-            run = {"valid": [], "reserved": set(), "overflow": []}
+        run = RUNS.get(data.get("run_id")) or {"valid": [], "reserved": set(), "overflow": []}
         rows_out = core.evaluate_grid(
             mapping, data.get("rows") or [], reserved_keys=run["reserved"],
             excel_rows=data.get("excel_rows"),
@@ -2588,9 +1998,8 @@ def _produce_load(save):
     still_invalid = [r for r in rows_out if not r["valid"]]
     valid_records = run["valid"] + core.grid_valid_records(now_valid)
 
-    # סדר עמודות מבוקש. ממשק הוובי *אינו* שולח order יותר (ראה collect):
-    # סדר התצוגה בטבלה מנותק מסדר הפלט, והפלט נקבע ע"י columns: שבמיפוי.
-    # המפתח נשמר לתאימות ולמסלול build_leveled_content. hidden כן מגיע משם.
+    # סדר עמודות מבוקש (אם המשתמש סידר מחדש בטבלה) — חל על קובץ הטעינה ועל rejected.
+    # לא רלוונטי למסמכים (אב/בן) שבהם הסדר קבוע לפי הרמות.
     order = data.get("order")
     hidden = data.get("hidden") or []          # עמודות שהמשתמש הסתיר — לא ייצאו
     export_mapping = mapping
@@ -2663,7 +2072,7 @@ def _produce_load(save):
     return jsonify(
         run_id=run_id, load_name=load_name, files=files,
         valid=len(valid_records), invalid=len(rejected_items),
-        rows=_slim_rows(rows_out), server_valid=len(run["valid"]), overflow=len(run["overflow"]),
+        rows=rows_out, server_valid=len(run["valid"]), overflow=len(run["overflow"]),
         saved=bool(save), load_id=load_id,
     )
 
@@ -3020,17 +2429,10 @@ def history_open(load_id):
         # ולא "or": תמונה חדשה שבה המשני רוקן במכוון חייבת להיפתח עם משני כבוי.
         snap_cur = snap.get("currency") or {}
         cur = {"primary": snap_cur.get("primary", "ILS"),
-               "secondary": snap_cur.get("secondary", "USD"),
-               # תמונת-מצב מלפני התכונה חסרה את המפתחות — ריק = אין הזרמה,
-               # וערכי התאים שבתמונה נשארים כמו שהם.
-               "dname": snap_cur.get("dname", ""),
-               "transtype": snap_cur.get("transtype", "")}
+               "secondary": snap_cur.get("secondary", "USD")}
         payload = _build_grid(screen, mapping, df, overrides=overrides,
                               source_name=snap.get("source_name") or "",
-                              opts=cur,
-                              # התמונה שומרת את מספרי השורות המקוריים; בלי זה
-                              # עמודת ‎#‎ מתחילה מ-2 בכל פתיחה מההיסטוריה.
-                              excel_rows=snap.get("excel_rows") or None)
+                              opts=cur)
     except core.UserError as e:
         return _upload_error(str(e))
     except Exception as e:  # noqa: BLE001
@@ -3335,14 +2737,6 @@ def login():
 def logout():
     session.clear()
     return redirect("/login")
-
-
-@app.errorhandler(405)
-def _method_not_allowed(e):
-    """כל מסלול POST-בלבד שנפתח בניווט דפדפן — הביתה במקום שגיאה באנגלית."""
-    if request.path.startswith(_AUTH_JSON_PREFIXES) or request.is_json:
-        return jsonify(error="שיטת הבקשה אינה נתמכת בכתובת הזו."), 405
-    return redirect("/")
 
 
 def _upload_error(msg):

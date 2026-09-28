@@ -11,6 +11,7 @@ webapp.py — ממשק וובי מקומי להכנת קבצי טעינה לפר
 """
 
 import base64
+import hashlib
 import hmac
 import io
 import os
@@ -64,14 +65,14 @@ AUTH_MISCONFIGURED = _REQUIRE_AUTH and not AUTH_PASS
 
 # נתיבי JSON (נקראים ב-fetch) — עליהם נחזיר 401/503 במקום הפניה לעמוד התחברות
 _AUTH_JSON_PREFIXES = ("/grid/", "/journal/", "/rates/fetch")
-_AUTH_OPEN_ENDPOINTS = {"login", "logout", "static"}
+_AUTH_OPEN_ENDPOINTS = {"login", "logout", "static", "health"}
 
 
 @app.before_request
 def _require_login():
     # פריסה בענן ללא סיסמה — חוסמים הכל (חוץ מקבצים סטטיים) עד להגדרת APP_PASSWORD.
     if AUTH_MISCONFIGURED:
-        if request.endpoint == "static":
+        if request.endpoint in ("static", "health"):
             return None
         if request.path.startswith(_AUTH_JSON_PREFIXES):
             return jsonify(error="האפליקציה פרוסה בענן ללא סיסמה. הגדר APP_PASSWORD "
@@ -2022,6 +2023,32 @@ if(document.fonts && document.fonts.ready) document.fonts.ready.then(measureHead
 # ---------------------------------------------------------------------------
 # נתיבים
 # ---------------------------------------------------------------------------
+def _mapping_signature():
+    """sha256 מקוצר של כל קבצי המיפוי — מזהה אם המיפוי שבענן הוא זה שלפניי."""
+    h = hashlib.sha256()
+    d = core.MAPPINGS_DIR
+    for name in sorted(os.listdir(d)):
+        if name.endswith((".yaml", ".yml")):
+            h.update(name.encode("utf-8"))
+            with open(os.path.join(d, name), "rb") as f:
+                h.update(f.read())
+    return h.hexdigest()[:12]
+
+
+@app.route("/health")
+def health():
+    """בדיקה פתוחה: *איזו גרסה* רצה בענן. בלי זה אי אפשר להבדיל בין "התיקון לא
+    עובד" לבין "הפריסה עוד לא עלתה" — וזה עלה כבר פעמיים. אין כאן מידע רגיש:
+    מזהה ה-commit, מספר המסכים, וטביעת אצבע של קבצי המיפוי."""
+    return jsonify(
+        ok=True,
+        commit=(os.environ.get("VERCEL_GIT_COMMIT_SHA")
+                or os.environ.get("RENDER_GIT_COMMIT") or "local")[:7],
+        screens=len(core.available_screens()),
+        mappings=_mapping_signature(),
+    )
+
+
 @app.route("/")
 def index():
     return render_template_string(UPLOAD, screens=core.available_screens(), error=None,
